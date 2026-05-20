@@ -1,0 +1,71 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#060a13] text-slate-100 antialiased font-sans selection:bg-brand-purple/30 selection:text-white;
+  }
+}
+
+/* Glassmorphism card utility */
+.glass-panel {
+  background: rgba(11, 15, 25, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(24, 33, 53, 0.7);
+}
+
+.glass-panel-hover:hover {
+  border-color: rgba(38, 53, 84, 0.8);
+  box-shadow: 0 4px 20px -2px rgba(82, 82, 255, 0.05);
+}
+
+/* Custom Scrollbar for modern look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #060a13;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #182135;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #263554;
+}
+
+/* Custom Glowing and Shadows matching Linear / Jira */
+.glow-purple {
+  box-shadow: 0 0 15px -2px rgba(82, 82, 255, 0.35);
+}
+
+.glow-blue {
+  box-shadow: 0 0 15px -2px rgba(59, 130, 246, 0.25);
+}
+
+.glow-orange {
+  box-shadow: 0 0 15px -2px rgba(249, 115, 22, 0.25);
+}
+
+.glow-green {
+  box-shadow: 0 0 15px -2px rgba(16, 185, 129, 0.25);
+}
+
+/* Animate pulse subtle */
+@keyframes soft-pulse {
+  0%, 100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.animate-soft-pulse {
+  animation: soft-pulse 2s infinite ease-in-out;
+}
