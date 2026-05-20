@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart, ReferenceDot } from 'recharts';
-import { Maximize2 } from 'lucide-react';
+import { Maximize2, Loader2 } from 'lucide-react';
+import { api } from '../../services/api';
 
 const mockData = [
   { name: '01/04', plan: 0, actual: 0 },
@@ -26,7 +27,7 @@ const CustomTooltip = ({ active, payload, label }) => {
               <span className="text-white font-bold">{entry.value}%</span>
             </div>
           ))}
-          {payload.length === 2 && (
+          {payload.length === 2 && payload[1].value !== null && (
             <div className="mt-2 pt-2 border-t border-[#182135] flex items-center gap-2 text-xs">
               <span className="text-slate-400 font-medium">Độ lệch:</span>
               <span className={`font-bold ${
@@ -44,14 +45,58 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function SCurveChart({ project }) {
-  // Use current project progress for the current dot if available
-  const planProgress = project.progress - project.deviation;
-  
+  const [chartData, setChartData] = useState(mockData);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const toPercentageVal = (v) => {
+    if (v === undefined || v === null || v === '') return null;
+    const num = Number(v);
+    if (isNaN(num)) return null;
+    // If the float is <= 1.0, multiply by 100.
+    return num <= 1.0 && num > 0 ? num * 100 : num;
+  };
+
+  useEffect(() => {
+    const fetchSCurve = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getSCurves(project?.PROJECT_ID || project?.id);
+        if (data && data.length > 0) {
+          const formatted = data.map(r => {
+            // format date string: e.g. 01/04/2026 -> 01/04
+            let name = r.NGÀY || '';
+            if (name.includes('/')) {
+              const parts = name.split('/');
+              if (parts.length >= 2) name = `${parts[0]}/${parts[1]}`;
+            }
+            return {
+              name,
+              plan: toPercentageVal(r['KẾ_HOẠCH_%']),
+              actual: toPercentageVal(r['THỰC_TẾ_%'])
+            };
+          });
+          setChartData(formatted);
+        } else {
+          setChartData(mockData);
+        }
+      } catch (error) {
+        console.error("Fetch S-Curve error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (project?.PROJECT_ID || project?.id) fetchSCurve();
+  }, [project?.PROJECT_ID, project?.id]);
+
+  // Find latest actual point for reference dot
+  const latestActualPoint = [...chartData].reverse().find(p => p.actual !== null && p.actual !== undefined);
+
   return (
     <div className="glass-panel p-6 rounded-xl shadow-lg border border-[#182135] h-full flex flex-col">
       <div className="flex justify-between items-center mb-6">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+        <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           ĐƯỜNG ĐỒ THỊ TIẾN ĐỘ (S-CURVE)
+          {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6b7d9b]" />}
         </h3>
         
         <div className="flex items-center gap-4">
@@ -74,7 +119,7 @@ export default function SCurveChart({ project }) {
       <div className="flex-1 w-full min-h-[300px]">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
-            data={mockData}
+            data={chartData}
             margin={{ top: 20, right: 30, left: -10, bottom: 0 }}
           >
             <defs>
@@ -124,7 +169,16 @@ export default function SCurveChart({ project }) {
             />
             
             {/* Current status point */}
-            <ReferenceDot x="01/06" y={45.2} r={5} fill="#10b981" stroke="#0b0f19" strokeWidth={2} />
+            {latestActualPoint && (
+              <ReferenceDot 
+                x={latestActualPoint.name} 
+                y={latestActualPoint.actual} 
+                r={5} 
+                fill="#10b981" 
+                stroke="#0b0f19" 
+                strokeWidth={2} 
+              />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

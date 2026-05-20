@@ -2,8 +2,11 @@ import React from 'react';
 import { Target, Activity, AlertTriangle, CalendarDays, Clock } from 'lucide-react';
 
 export default function KPIOverview({ project }) {
-  // Mock data for planning progress if not provided
-  const planProgress = project.progress - project.deviation;
+  // Map data from exact Google Sheet fields
+  const planProgress = Number(project.planProgress || 0);
+  const actualProgress = Number(project.actualProgress || 0);
+  const deviation = Number(project.delay || 0);
+  const codDays = project.cod ? Math.ceil((new Date(project.cod.split('/').reverse().join('-')) - new Date()) / (1000 * 60 * 60 * 24)) : 0;
   
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -29,7 +32,7 @@ export default function KPIOverview({ project }) {
           </div>
           <div>
             <p className="text-[10px] font-bold text-[#6b7d9b] uppercase tracking-wider">Tiến độ thực tế</p>
-            <p className="text-xl font-bold text-white tracking-tight">{project.progress.toFixed(2)}%</p>
+            <p className="text-xl font-bold text-white tracking-tight">{actualProgress.toFixed(2)}%</p>
           </div>
         </div>
         <div className="absolute right-0 top-0 bottom-0 w-[3px] bg-[#10b981]"></div>
@@ -39,7 +42,7 @@ export default function KPIOverview({ project }) {
       <div className="glass-panel p-4 rounded-xl shadow-md border border-[#182135] hover:border-[#263554] transition-all relative overflow-hidden group">
         <div className="flex items-center gap-3">
           <div className={`w-10 h-10 rounded-lg flex items-center justify-center border group-hover:scale-110 transition-transform ${
-            project.deviation < 0 
+            deviation < 0 
               ? "bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/20" 
               : "bg-[#10b981]/10 text-[#10b981] border-[#10b981]/20"
           }`}>
@@ -47,12 +50,12 @@ export default function KPIOverview({ project }) {
           </div>
           <div>
             <p className="text-[10px] font-bold text-[#6b7d9b] uppercase tracking-wider">Chênh lệch / Delay</p>
-            <p className={`text-xl font-bold tracking-tight ${project.deviation < 0 ? "text-[#ef4444]" : "text-[#10b981]"}`}>
-              {project.deviation > 0 ? "+" : ""}{project.deviation.toFixed(2)}%
+            <p className={`text-xl font-bold tracking-tight ${deviation < 0 ? "text-[#ef4444]" : "text-[#10b981]"}`}>
+              {deviation > 0 ? "+" : ""}{deviation.toFixed(2)}%
             </p>
           </div>
         </div>
-        <div className={`absolute right-0 top-0 bottom-0 w-[3px] ${project.deviation < 0 ? "bg-[#ef4444]" : "bg-[#10b981]"}`}></div>
+        <div className={`absolute right-0 top-0 bottom-0 w-[3px] ${deviation < 0 ? "bg-[#ef4444]" : "bg-[#10b981]"}`}></div>
       </div>
 
       {/* 4. Dự báo COD */}
@@ -63,7 +66,7 @@ export default function KPIOverview({ project }) {
           </div>
           <div>
             <p className="text-[10px] font-bold text-[#6b7d9b] uppercase tracking-wider">Dự báo COD</p>
-            <p className="text-lg font-bold text-white tracking-tight">{project.codDate}</p>
+            <p className="text-lg font-bold text-white tracking-tight">{project.cod}</p>
           </div>
         </div>
         <div className="absolute right-0 top-0 bottom-0 w-[3px] bg-[#eab308]"></div>
@@ -78,7 +81,7 @@ export default function KPIOverview({ project }) {
           <div>
             <p className="text-[10px] font-bold text-[#6b7d9b] uppercase tracking-wider">Thời gian còn lại</p>
             <p className="text-xl font-bold text-white tracking-tight">
-              <span className="text-[#7373ff]">{project.codDays}</span> <span className="text-sm font-medium text-slate-400">ngày</span>
+              <span className="text-[#7373ff]">{codDays > 0 ? codDays : 0}</span> <span className="text-sm font-medium text-slate-400">ngày</span>
             </p>
           </div>
         </div>

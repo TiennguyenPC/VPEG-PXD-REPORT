@@ -14,29 +14,43 @@ import PermitModule from "../components/project-details/modules/PermitModule";
 import DesignModule from "../components/project-details/modules/DesignModule";
 import ProcurementModule from "../components/project-details/modules/ProcurementModule";
 import ConstructionModule from "../components/project-details/modules/ConstructionModule";
-import { INITIAL_PROJECTS } from "../mockData";
+import { api } from "../services/api";
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Find project from local storage or mock data
-    const saved = localStorage.getItem("epc_projects");
-    const allProjects = saved ? JSON.parse(saved) : INITIAL_PROJECTS;
-    
-    // In mock data, ids are numbers but URL param is string
-    const found = allProjects.find(p => p.id.toString() === id);
-    if (found) {
-      setProject(found);
-    } else {
-      // Fallback to first project if not found for demo purposes
-      setProject(allProjects[0]);
-    }
+    const fetchProject = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getProject(id);
+        if (data) {
+          setProject(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch project detail:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchProject();
   }, [id]);
 
-  if (!project) return <div className="min-h-screen bg-[#060a13] text-white flex items-center justify-center">Loading...</div>;
+  if (isLoading || !project) {
+    return (
+      <div className="min-h-screen flex bg-[#060a13] text-slate-100 font-sans relative">
+        <div className="absolute inset-0 z-50 bg-[#060a13]/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 border-4 border-[#5252ff]/30 border-t-[#5252ff] rounded-full animate-spin"></div>
+            <span className="text-white font-medium text-sm tracking-wide">Đang tải chi tiết dự án...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex bg-[#060a13] text-slate-100 font-sans">

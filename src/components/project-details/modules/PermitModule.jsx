@@ -1,18 +1,43 @@
-import React, { useState } from 'react';
-import { FileText, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileText, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const initialPermits = [
-  { id: 1, item: 'Sở công thương', status: 'Đang xử lý', result: 'Đã tiếp nhận', nextStep: 'Theo dõi', finalResult: 'N/A' },
-  { id: 2, item: 'EVN (Pmax, SCADA)', status: 'Chờ phản hồi', result: 'Yêu cầu bổ sung', nextStep: 'Bổ sung hồ sơ', finalResult: 'N/A' },
-  { id: 3, item: 'PCCC', status: 'Đã nộp hồ sơ', result: 'Đã có biên nhận', nextStep: 'Mời nghiệm thu', finalResult: 'N/A' },
-  { id: 4, item: 'Đăng ký môi trường', status: 'Hoàn thành', result: 'Đã duyệt', nextStep: 'N/A', finalResult: 'Đã có giấy xác nhận' },
-  { id: 5, item: 'BQL/KCN', status: 'Chưa làm', result: 'Chưa có phản hồi', nextStep: 'Chuẩn bị hồ sơ', finalResult: 'N/A' },
-];
+import { api } from '../../../services/api';
 
 export default function PermitModule({ project }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [permits, setPermits] = useState(initialPermits);
+  const [permits, setPermits] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getPermits(project?.PROJECT_ID || project?.id);
+        if (data) setPermits(data);
+      } catch (error) {
+        console.error("Fetch permit error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (project?.PROJECT_ID || project?.id) fetchData();
+  }, [project?.PROJECT_ID, project?.id]);
+
+  const handleUpdate = async (id, field, value) => {
+    try {
+      setIsUpdating(true);
+      const original = permits.find(p => (p._rowIndex || p.id) === id);
+      const updated = { ...original, [field]: value };
+      
+      setPermits(prev => prev.map(p => (p._rowIndex || p.id) === id ? updated : p));
+      await api.updatePermit(updated);
+    } catch (error) {
+      console.error("Update permit error:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -33,8 +58,8 @@ export default function PermitModule({ project }) {
     return 'text-slate-300';
   };
 
-  const completedCount = permits.filter(p => p.status === 'Hoàn thành').length;
-  const progressPercent = Math.round((completedCount / permits.length) * 100);
+  const completedCount = permits.filter(p => p.TÌNH_TRẠNG === 'Hoàn thành').length;
+  const progressPercent = permits.length > 0 ? Math.round((completedCount / permits.length) * 100) : 0;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[#182135] overflow-hidden">
@@ -51,8 +76,17 @@ export default function PermitModule({ project }) {
         
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-3 text-xs font-semibold">
-            <span className="text-white">{completedCount} / {permits.length} hoàn thành</span>
-            <span className="text-[#10b981]">{progressPercent}%</span>
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-[#6b7d9b]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Đang tải...</span>
+              </div>
+            ) : (
+              <>
+                <span className="text-white">{completedCount} / {permits.length} hoàn thành</span>
+                <span className="text-[#10b981]">{progressPercent}%</span>
+              </>
+            )}
           </div>
           <div className="w-[1px] h-6 bg-[#182135] mx-2"></div>
           {isOpen ? <ChevronUp className="w-4 h-4 text-[#6b7d9b]" /> : <ChevronDown className="w-4 h-4 text-[#6b7d9b]" />}
@@ -81,13 +115,13 @@ export default function PermitModule({ project }) {
                   </thead>
                   <tbody className="divide-y divide-[#182135]">
                     {permits.map(p => (
-                      <tr key={p.id} className="hover:bg-[#0b0f19]/50 transition-colors">
-                        <td className="p-3 font-semibold text-slate-200">{p.item}</td>
+                      <tr key={p._rowIndex || p.id} className="hover:bg-[#0b0f19]/50 transition-colors">
+                        <td className="p-3 font-semibold text-slate-200">{p.HẠNG_MỤC}</td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(p.status)}`}
-                            value={p.status}
-                            onChange={() => {}}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(p.TÌNH_TRẠNG)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={p.TÌNH_TRẠNG}
+                            onChange={(e) => handleUpdate(p._rowIndex || p.id, 'TÌNH_TRẠNG', e.target.value)}
                           >
                             <option className="bg-[#0b0f19] text-slate-200">Chưa làm</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đang chuẩn bị hồ sơ</option>
@@ -100,9 +134,9 @@ export default function PermitModule({ project }) {
                         </td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getResultColor(p.result)}`}
-                            value={p.result}
-                            onChange={() => {}}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={p.KẾT_QUẢ_PHẢN_HỒI}
+                            onChange={(e) => handleUpdate(p._rowIndex || p.id, 'KẾT_QUẢ_PHẢN_HỒI', e.target.value)}
                           >
                             <option className="bg-[#0b0f19] text-slate-200">Chưa có phản hồi</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đã tiếp nhận</option>
@@ -114,10 +148,11 @@ export default function PermitModule({ project }) {
                         </td>
                         <td className="p-3">
                           <select 
-                            className="bg-transparent text-slate-300 font-medium focus:outline-none appearance-none cursor-pointer"
-                            value={p.nextStep}
-                            onChange={() => {}}
+                            className={`bg-transparent text-slate-300 font-medium focus:outline-none appearance-none cursor-pointer ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={p.BƯỚC_TIẾP_THEO}
+                            onChange={(e) => handleUpdate(p._rowIndex || p.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                           >
+                            <option className="bg-[#0b0f19]">Chuẩn bị hồ sơ</option>
                             <option className="bg-[#0b0f19]">Nộp hồ sơ</option>
                             <option className="bg-[#0b0f19]">Liên hệ cán bộ</option>
                             <option className="bg-[#0b0f19]">Bổ sung hồ sơ</option>
@@ -130,9 +165,9 @@ export default function PermitModule({ project }) {
                         </td>
                         <td className="p-3">
                           <select 
-                            className="bg-transparent text-slate-300 font-medium focus:outline-none appearance-none cursor-pointer"
-                            value={p.finalResult}
-                            onChange={() => {}}
+                            className={`bg-transparent text-slate-300 font-medium focus:outline-none appearance-none cursor-pointer ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={p.KẾT_QUẢ_CUỐI}
+                            onChange={(e) => handleUpdate(p._rowIndex || p.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                           >
                             <option className="bg-[#0b0f19]">Đã có GCN</option>
                             <option className="bg-[#0b0f19]">Đã có biên nhận</option>

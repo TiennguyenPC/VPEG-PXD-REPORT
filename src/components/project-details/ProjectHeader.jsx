@@ -18,8 +18,8 @@ export default function ProjectHeader({ project, onBack }) {
         
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
-            DỰ ÁN ĐIỆN MẶT TRỜI {project.name.toUpperCase()}
-            {project.status === 'completed' && (
+            DỰ ÁN ĐIỆN MẶT TRỜI {(project.name || "").toUpperCase()}
+            {(project.status === 'completed' || project.status === 'COMPLETED') && (
               <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
                 Đã hoàn thành
               </span>
@@ -31,11 +31,11 @@ export default function ProjectHeader({ project, onBack }) {
             </span>
             <span className="w-1 h-1 rounded-full bg-[#182135]"></span>
             <span className="flex items-center gap-1.5">
-              Công suất: <span className="text-white font-semibold">{project.capacity.toLocaleString()} kWp</span>
+              Công suất: <span className="text-white font-semibold">{Number(project.capacity || 0).toLocaleString()} kWp</span>
             </span>
             <span className="w-1 h-1 rounded-full bg-[#182135]"></span>
             <span className="flex items-center gap-1.5">
-              Kế hoạch COD: <span className="text-white font-semibold">{project.codDate}</span>
+              Kế hoạch COD: <span className="text-white font-semibold">{project.cod}</span>
             </span>
           </div>
         </div>
@@ -57,15 +57,15 @@ export default function ProjectHeader({ project, onBack }) {
           <p className="text-[10px] font-bold text-[#6b7d9b] uppercase tracking-wider mb-1">Tiến độ thực tế tổng thể</p>
           <div className="flex items-end justify-end gap-3">
             <span className="text-4xl font-black text-white leading-none tracking-tighter">
-              {project.progress}%
+              {project.actualProgress || 0}%
             </span>
           </div>
           <div className="w-full md:w-48 h-1.5 bg-[#182135] rounded-full mt-3 overflow-hidden shadow-inner">
             <div 
               className={`h-full rounded-full transition-all duration-1000 relative ${
-                project.deviation < 0 ? "bg-gradient-to-r from-red-500 to-red-400" : "bg-gradient-to-r from-emerald-500 to-emerald-400"
+                (project.delay || 0) < 0 ? "bg-gradient-to-r from-red-500 to-red-400" : "bg-gradient-to-r from-emerald-500 to-emerald-400"
               }`}
-              style={{ width: `${project.progress}%` }}
+              style={{ width: `${Math.min(100, Math.max(0, project.actualProgress || 0))}%` }}
             >
               <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"></div>
             </div>

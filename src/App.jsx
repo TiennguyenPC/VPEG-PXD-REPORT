@@ -33,20 +33,32 @@ import {
   Send
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { INITIAL_PROJECTS } from "./mockData";
+import { api } from "./services/api";
 
 export default function App() {
   const navigate = useNavigate();
-  // Projects state initialized from mockup data
-  const [projects, setProjects] = useState(() => {
-    const saved = localStorage.getItem("epc_projects");
-    return saved ? JSON.parse(saved) : INITIAL_PROJECTS;
-  });
+  // Projects state
+  const [projects, setProjects] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Sync to local storage
+  // Fetch from GAS
   useEffect(() => {
-    localStorage.setItem("epc_projects", JSON.stringify(projects));
-  }, [projects]);
+    const fetchProjects = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getProjects();
+        if (data && data.length > 0) {
+          setProjects(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchProjects();
+  }, []);
 
   // Search state
   const [searchTerm, setSearchTerm] = useState("");
@@ -222,7 +234,7 @@ export default function App() {
   });
 
   // Add project handler
-  const handleAddProject = (e) => {
+  const handleAddProject = async (e) => {
     e.preventDefault();
     if (!newProject.name || !newProject.client) return;
 
@@ -233,34 +245,52 @@ export default function App() {
 
     const projectToAdd = {
       ...newProject,
-      id: Date.now(),
-      priorityColor,
-      lastUpdated: "Vừa xong",
+      id: `NEW-${Date.now()}`,
+      name: newProject.name,
+      client: newProject.client,
+      pm: newProject.pm,
+      sm: newProject.sm,
       capacity: Number(newProject.capacity),
-      progress: Number(newProject.progress),
-      deviation: Number(newProject.deviation),
-      codDays: Number(newProject.codDays)
+      actualProgress: Number(newProject.progress),
+      delay: Number(newProject.deviation),
+      cod: newProject.codDate,
+      risk: newProject.risk,
+      status: newProject.status,
+      updatedAt: "Vừa xong",
+      priorityColor,
+      priority: newProject.priority,
+      issue: newProject.issue
     };
 
-    setProjects([projectToAdd, ...projects]);
-    setIsAddDrawerOpen(false);
-    // Reset form
-    setNewProject({
-      name: "",
-      client: "",
-      pm: "Lê Văn C.",
-      sm: "Bùi M. T.",
-      capacity: 1000,
-      progress: 0,
-      deviation: 0.0,
-      codDays: 90,
-      codDate: "20/08/2026",
-      risk: "LOW",
-      issue: "Không có",
-      region: "Miền Nam",
-      priority: 5,
-      status: "in_progress"
-    });
+    try {
+      setIsSubmitting(true);
+      await api.createProject(projectToAdd);
+      
+      setProjects([projectToAdd, ...projects]);
+      setIsAddDrawerOpen(false);
+      // Reset form
+      setNewProject({
+        name: "",
+        client: "",
+        pm: "Lê Văn C.",
+        sm: "Bùi M. T.",
+        capacity: 1000,
+        progress: 0,
+        deviation: 0.0,
+        codDays: 90,
+        codDate: "20/08/2026",
+        risk: "LOW",
+        issue: "Không có",
+        region: "Miền Nam",
+        priority: 5,
+        status: "in_progress"
+      });
+    } catch (error) {
+      console.error("Failed to add project:", error);
+      alert("Lỗi khi thêm dự án: " + error.message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Apply search, filters and sort
@@ -272,10 +302,10 @@ export default function App() {
       const term = searchTerm.toLowerCase();
       result = result.filter(
         p =>
-          p.name.toLowerCase().includes(term) ||
-          p.client.toLowerCase().includes(term) ||
-          p.pm.toLowerCase().includes(term) ||
-          p.sm.toLowerCase().includes(term)
+          (p.name && p.name.toLowerCase().includes(term)) ||
+          (p.client && p.client.toLowerCase().includes(term)) ||
+          (p.pm && p.pm.toLowerCase().includes(term)) ||
+          (p.sm && p.sm.toLowerCase().includes(term))
       );
     }
 
@@ -283,7 +313,10 @@ export default function App() {
     Object.keys(filters).forEach(category => {
       const selectedVals = filters[category];
       if (selectedVals && selectedVals.length > 0) {
-        result = result.filter(p => selectedVals.includes(p[category]));
+        result = result.filter(p => {
+          let val = p[category];
+          return selectedVals.includes(val);
+        });
       }
     });
 
@@ -319,13 +352,22 @@ export default function App() {
       let valA = a[sortField];
       let valB = b[sortField];
 
+      if (sortField === "capacity") { valA = a.capacity; valB = b.capacity; }
+      if (sortField === "progress") { valA = a.actualProgress; valB = b.actualProgress; }
+      if (sortField === "deviation") { valA = a.delay; valB = b.delay; }
+      if (sortField === "codDays") { valA = a.cod; valB = b.cod; }
+      if (sortField === "name") { valA = a.name; valB = b.name; }
+      if (sortField === "client") { valA = a.client; valB = b.client; }
+      if (sortField === "pm") { valA = a.pm; valB = b.pm; }
+      if (sortField === "sm") { valA = a.sm; valB = b.sm; }
+
       if (sortField === "risk") {
         const riskWeight = { HIGH: 3, MEDIUM: 2, LOW: 1 };
         valA = riskWeight[a.risk] || 0;
         valB = riskWeight[b.risk] || 0;
       } else if (sortField === "lastUpdated") {
-        valA = getHoursFromRelativeTime(a.lastUpdated);
-        valB = getHoursFromRelativeTime(b.lastUpdated);
+        valA = getHoursFromRelativeTime(a.updatedAt);
+        valB = getHoursFromRelativeTime(b.updatedAt);
         return sortDirection === "desc" ? valA - valB : valB - valA;
       }
 
@@ -349,13 +391,13 @@ export default function App() {
     const totalCount = processedProjects.length;
 
     // Total Capacity
-    const totalCapacity = processedProjects.reduce((acc, curr) => acc + curr.capacity, 0);
+    const totalCapacity = processedProjects.reduce((acc, curr) => acc + (Number(curr.capacity) || 0), 0);
 
     // Projects In-Construction / Active
-    const inConstructionCount = processedProjects.filter(p => p.status === "in_progress").length;
+    const inConstructionCount = processedProjects.filter(p => p.status === "ACTIVE" || p.status === "in_progress" || !p.status || p.status === "-").length;
 
     // Projects Completed
-    const completedCount = processedProjects.filter(p => p.status === "completed").length;
+    const completedCount = processedProjects.filter(p => p.status === "COMPLETED" || p.status === "completed").length;
 
     return {
       total: totalCount,
@@ -391,19 +433,19 @@ export default function App() {
     ];
 
     const rows = processedProjects.map(p => [
-      p.priority,
-      p.name,
-      p.client,
-      p.pm,
-      p.sm,
-      p.capacity,
-      `${p.progress}%`,
-      `${p.deviation >= 0 ? "+" : ""}${p.deviation}%`,
-      p.codDays,
-      p.codDate,
-      p.risk,
-      p.issue,
-      p.lastUpdated
+      p.priority || '',
+      p.TÊN_DỰ_ÁN || '',
+      p.KHÁCH_HÀNG || '',
+      p.PM || '',
+      p.SM || '',
+      p.CÔNG_SUẤT_KWP || 0,
+      `${p.TIẾN_ĐỘ_THỰC_TẾ || 0}%`,
+      `${(p.DELAY || 0) >= 0 ? "+" : ""}${p.DELAY || 0}%`,
+      p.KẾ_HOẠCH_COD || '',
+      p.DỰ_BÁO_COD || '',
+      p.RISK_LEVEL || '',
+      p.issue || '',
+      p.LAST_UPDATE || ''
     ]);
 
     const csvContent =
@@ -484,7 +526,15 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#060a13] text-slate-100 font-sans">
+    <div className="min-h-screen flex bg-[#060a13] text-slate-100 font-sans relative">
+      {isLoading && (
+        <div className="absolute inset-0 z-50 bg-[#060a13]/80 backdrop-blur-sm flex items-center justify-center">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 border-4 border-[#5252ff]/30 border-t-[#5252ff] rounded-full animate-spin"></div>
+            <span className="text-white font-medium text-sm tracking-wide">Đang đồng bộ dữ liệu...</span>
+          </div>
+        </div>
+      )}
       
       {/* 1. LEFT SIDEBAR */}
       <aside className="w-64 border-r border-[#182135] bg-[#070b14] flex flex-col justify-between shrink-0">
@@ -864,7 +914,7 @@ export default function App() {
                             sortField === "priority" ? "bg-[#0e1628]/30" : "bg-inherit"
                           }`}>
                             <div className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-[10px] ${priorityClass}`}>
-                              {p.priority}
+                              {p.priority || '-'}
                             </div>
                           </td>
 
@@ -907,7 +957,7 @@ export default function App() {
                           <td className={`py-2.5 px-4 font-bold text-slate-200 ${
                             sortField === "capacity" ? "text-white bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
                           }`}>
-                            {p.capacity.toLocaleString()}
+                            {Number(p.capacity || 0).toLocaleString()}
                           </td>
 
                           {/* Progress */}
@@ -915,11 +965,11 @@ export default function App() {
                             sortField === "progress" ? "bg-[#0e1628]/30" : "bg-inherit"
                           }`}>
                             <div className="flex flex-col">
-                              <span className={`font-bold ${sortField === "progress" ? "text-[#8a8aff]" : "text-[#5252ff]"}`}>{p.progress}%</span>
+                              <span className={`font-bold ${sortField === "progress" ? "text-[#8a8aff]" : "text-[#5252ff]"}`}>{p.actualProgress || 0}%</span>
                               <div className="w-16 h-1 bg-[#182135] rounded-full overflow-hidden mt-1.5">
                                 <div
                                   className="bg-[#5252ff] h-full rounded-full"
-                                  style={{ width: `${p.progress}%` }}
+                                  style={{ width: `${Math.min(100, Math.max(0, p.actualProgress || 0))}%` }}
                                 ></div>
                               </div>
                             </div>
@@ -929,9 +979,9 @@ export default function App() {
                           <td className={`py-2.5 px-4 font-bold ${
                             sortField === "deviation" ? "bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
                           }`}>
-                            <span className={p.deviation >= 0 ? "text-[#10b981]" : "text-[#ef4444]"}>
-                              {p.deviation >= 0 ? "+" : ""}
-                              {p.deviation.toFixed(2)}%
+                            <span className={(p.delay || 0) >= 0 ? "text-[#10b981]" : "text-[#ef4444]"}>
+                              {(p.delay || 0) >= 0 ? "+" : ""}
+                              {Number(p.delay || 0).toFixed(2)}%
                             </span>
                           </td>
 
@@ -941,9 +991,9 @@ export default function App() {
                           }`}>
                             <div className="flex flex-col">
                               <span className="font-semibold text-slate-200">
-                                {p.status === "completed" ? "Completed" : `${p.codDays} ngày`}
+                                {(p.status === "COMPLETED" || p.status === "completed") ? "Completed" : (p.cod || '-')}
                               </span>
-                              <span className="text-[10px] text-slate-400 mt-0.5">{p.codDate}</span>
+                              <span className="text-[10px] text-slate-400 mt-0.5">{p.forecastCod || ''}</span>
                             </div>
                           </td>
 
@@ -962,14 +1012,14 @@ export default function App() {
                           }`}>
                             <div className="flex items-center gap-1.5 text-slate-300 font-medium">
                               <span className={`w-1.5 h-1.5 rounded-full ${issueDotClass} inline-block`}></span>
-                              <span className="truncate">{p.issue}</span>
+                              <span className="truncate">{p.issue || '-'}</span>
                             </div>
                           </td>
 
                           {/* Last Updated */}
                           <td className={`py-2.5 px-4 font-medium whitespace-nowrap ${
                             sortField === "lastUpdated" ? "text-slate-100 bg-[#0e1628]/30 font-bold" : "text-[#6b7d9b] bg-inherit"
-                          }`}>{p.lastUpdated}</td>
+                          }`}>{p.updatedAt}</td>
 
                           {/* Action icons */}
                           <td className="py-2.5 px-4 bg-inherit">
@@ -1534,9 +1584,10 @@ export default function App() {
               </button>
               <button
                 type="submit"
-                className="bg-[#5252ff] hover:bg-[#4141d6] text-white font-semibold px-6 py-2 rounded transition-all cursor-pointer shadow-md"
+                disabled={isSubmitting}
+                className={`bg-[#5252ff] hover:bg-[#4141d6] text-white font-semibold px-6 py-2 rounded transition-all cursor-pointer shadow-md ${isSubmitting ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
-                Lưu dự án
+                {isSubmitting ? 'Đang lưu...' : 'Lưu dự án'}
               </button>
             </div>
 

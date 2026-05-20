@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { HardHat, ChevronDown, ChevronUp, Activity } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { HardHat, ChevronDown, ChevronUp, Activity, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { api } from '../../../services/api';
 
-const groups = [
+const initialGroups = [
   {
     id: 'A',
     name: '[A] CÔNG TÁC TẠM BAN ĐẦU',
@@ -47,6 +48,101 @@ const groups = [
 export default function ConstructionModule({ project }) {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({ 'A': false, 'B': true, 'C': true, 'D': false });
+  const [groups, setGroups] = useState(() => initialGroups.map(g => ({
+    ...g,
+    tasks: g.tasks.map(t => ({
+      ...t,
+      NGÀY_BẮT_ĐẦU: t.start,
+      NGÀY_KẾT_THÚC: t.endPlan,
+      NGÀY_HT_THỰC_TẾ: t.endActual,
+      TIẾN_ĐỘ_THỰC_TẾ: t.progress
+    }))
+  })));
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getConstructions(project?.PROJECT_ID || project?.id);
+        if (data && data.length > 0) {
+          const updatedGroups = initialGroups.map(g => ({
+            ...g,
+            tasks: g.tasks.map(t => {
+              const row = data.find(r => r.MÃ_CV === t.code || r.id === t.id);
+              if (row) {
+                return { 
+                  ...t, 
+                  _rowIndex: row._rowIndex,
+                  MÃ_CV: row.MÃ_CV || t.code,
+                  NGÀY_BẮT_ĐẦU: row.NGÀY_BẮT_ĐẦU !== undefined ? row.NGÀY_BẮT_ĐẦU : t.start,
+                  NGÀY_KẾT_THÚC: row.NGÀY_KẾT_THÚC !== undefined ? row.NGÀY_KẾT_THÚC : t.endPlan,
+                  NGÀY_HT_THỰC_TẾ: row.NGÀY_HT_THỰC_TẾ !== undefined ? row.NGÀY_HT_THỰC_TẾ : t.endActual,
+                  TIẾN_ĐỘ_THỰC_TẾ: row.TIẾN_ĐỘ_THỰC_TẾ !== undefined ? Number(row.TIẾN_ĐỘ_THỰC_TẾ) : t.progress
+                };
+              }
+              return {
+                ...t,
+                NGÀY_BẮT_ĐẦU: t.start,
+                NGÀY_KẾT_THÚC: t.endPlan,
+                NGÀY_HT_THỰC_TẾ: t.endActual,
+                TIẾN_ĐỘ_THỰC_TẾ: t.progress
+              };
+            })
+          }));
+          setGroups(updatedGroups);
+        }
+      } catch (error) {
+        console.error("Fetch construction error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (project?.PROJECT_ID || project?.id) fetchData();
+  }, [project?.PROJECT_ID, project?.id]);
+
+  const handleUpdate = async (groupId, taskId, field, value) => {
+    try {
+      setIsUpdating(true);
+      
+      let updatedTask = null;
+      setGroups(prev => prev.map(g => {
+        if (g.id !== groupId) return g;
+        return {
+          ...g,
+          tasks: g.tasks.map(t => {
+            if (t.id === taskId) {
+              updatedTask = { ...t, [field]: value };
+              return updatedTask;
+            }
+            return t;
+          })
+        };
+      }));
+
+      if (updatedTask) {
+        // Build payload with clean Google Sheet keys for construction
+        const payload = {
+          _rowIndex: updatedTask._rowIndex,
+          PROJECT_ID: project?.PROJECT_ID || project?.id,
+          NHÓM_THI_CÔNG: updatedTask.NHÓM_THI_CÔNG || initialGroups.find(g => g.id === groupId)?.name,
+          MÃ_CV: updatedTask.MÃ_CV || updatedTask.code,
+          HẠNG_MỤC_CÔNG_VIỆC: updatedTask.HẠNG_MỤC_CÔNG_VIỆC || updatedTask.item,
+          NGÀY_BẮT_ĐẦU: updatedTask.NGÀY_BẮT_ĐẦU,
+          NGÀY_KẾT_THÚC: updatedTask.NGÀY_KẾT_THÚC,
+          NGÀY_HT_THỰC_TẾ: updatedTask.NGÀY_HT_THỰC_TẾ,
+          TIẾN_ĐỘ_THỰC_TẾ: updatedTask.TIẾN_ĐỘ_THỰC_TẾ,
+          TRỌNG_SỐ: updatedTask.TRỌNG_SỐ || updatedTask.weight
+        };
+        await api.updateConstruction(payload);
+      }
+    } catch (error) {
+      console.error("Update construction error:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const toggleGroup = (id) => {
     setExpandedGroups(prev => ({ ...prev, [id]: !prev[id] }));
@@ -55,7 +151,7 @@ export default function ConstructionModule({ project }) {
   // Calculate overall progress based on weights
   const calculateGroupProgress = (tasks) => {
     if (tasks.length === 0) return 0;
-    const total = tasks.reduce((sum, task) => sum + task.progress, 0);
+    const total = tasks.reduce((sum, task) => sum + (task.TIẾN_ĐỘ_THỰC_TẾ || 0), 0);
     return total / tasks.length;
   };
 
@@ -80,7 +176,14 @@ export default function ConstructionModule({ project }) {
         
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-3 text-xs font-semibold">
-            <span className="text-white text-lg font-black tracking-tight">{totalProgress.toFixed(2)}%</span>
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-[#6b7d9b]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Đang tải...</span>
+              </div>
+            ) : (
+              <span className="text-white text-lg font-black tracking-tight">{totalProgress.toFixed(2)}%</span>
+            )}
           </div>
           <div className="w-[1px] h-6 bg-[#182135] mx-2"></div>
           {isOpen ? <ChevronUp className="w-4 h-4 text-[#6b7d9b]" /> : <ChevronDown className="w-4 h-4 text-[#6b7d9b]" />}
@@ -149,15 +252,21 @@ export default function ConstructionModule({ project }) {
                                   <tr key={task.id} className="hover:bg-[#141c2f]/40 transition-colors">
                                     <td className="p-3 font-semibold text-[#6b7d9b]">{task.code}</td>
                                     <td className="p-3 font-semibold text-slate-200">{task.item}</td>
-                                    <td className="p-3 text-slate-400">{task.start}</td>
-                                    <td className="p-3 text-slate-400">{task.endPlan}</td>
+                                    <td className="p-3 text-slate-400">{task.NGÀY_BẮT_ĐẦU}</td>
+                                    <td className="p-3 text-slate-400">{task.NGÀY_KẾT_THÚC}</td>
                                     <td className="p-3">
                                       <input 
                                         type="text" 
-                                        className="bg-transparent text-emerald-400 font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff]"
-                                        value={task.endActual}
+                                        className={`bg-transparent text-emerald-400 font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                                        value={task.NGÀY_HT_THỰC_TẾ || ''}
                                         placeholder="-"
-                                        onChange={() => {}}
+                                        onChange={(e) => {
+                                          const v = e.target.value;
+                                          setGroups(prev => prev.map(g => g.id === group.id ? {
+                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, NGÀY_HT_THỰC_TẾ: v } : t)
+                                          } : g));
+                                        }}
+                                        onBlur={(e) => handleUpdate(group.id, task.id, 'NGÀY_HT_THỰC_TẾ', e.target.value)}
                                       />
                                     </td>
                                     <td className="p-3">
@@ -166,14 +275,20 @@ export default function ConstructionModule({ project }) {
                                           type="number"
                                           min={0}
                                           max={100}
-                                          className={`bg-transparent font-bold focus:outline-none w-14 border-b border-transparent focus:border-[#5252ff] ${task.progress === 100 ? 'text-emerald-400' : 'text-[#3b82f6]'}`}
-                                          value={task.progress}
-                                          onChange={() => {}}
+                                          className={`bg-transparent font-bold focus:outline-none w-14 border-b border-transparent focus:border-[#5252ff] ${task.TIẾN_ĐỘ_THỰC_TẾ === 100 ? 'text-emerald-400' : 'text-[#3b82f6]'} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                                          value={task.TIẾN_ĐỘ_THỰC_TẾ || 0}
+                                          onChange={(e) => {
+                                            const v = e.target.value;
+                                            setGroups(prev => prev.map(g => g.id === group.id ? {
+                                              ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, TIẾN_ĐỘ_THỰC_TẾ: Number(v) } : t)
+                                            } : g));
+                                          }}
+                                          onBlur={(e) => handleUpdate(group.id, task.id, 'TIẾN_ĐỘ_THỰC_TẾ', Number(e.target.value))}
                                         />
                                         <div className="flex-1 h-1.5 bg-[#060a13] rounded-full overflow-hidden border border-[#182135]">
                                           <div 
-                                            className={`h-full rounded-full ${task.progress === 100 ? 'bg-emerald-500' : 'bg-[#3b82f6]'}`}
-                                            style={{ width: `${task.progress}%` }}
+                                            className={`h-full rounded-full ${task.TIẾN_ĐỘ_THỰC_TẾ === 100 ? 'bg-emerald-500' : 'bg-[#3b82f6]'}`}
+                                            style={{ width: `${task.TIẾN_ĐỘ_THỰC_TẾ}%` }}
                                           ></div>
                                         </div>
                                       </div>

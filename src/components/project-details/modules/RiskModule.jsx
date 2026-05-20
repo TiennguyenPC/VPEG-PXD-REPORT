@@ -1,16 +1,48 @@
-import React, { useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Plus } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const initialRisks = [
-  { id: 1, severity: 'Cao', content: 'Chậm phê duyệt PCCC', impact: 'Delay COD 2 tuần', status: 'Đang xử lý', owner: 'Mr. Tuấn', date: '10/05/2026' },
-  { id: 2, severity: 'Trung bình', content: 'Mưa nhiều ảnh hưởng kéo cáp', impact: 'Giảm năng suất 30%', status: 'Theo dõi', owner: 'Mr. Hải', date: '15/05/2026' },
-  { id: 3, severity: 'Thấp', content: 'Thay đổi layout inverter', impact: 'Phát sinh chi phí nhỏ', status: 'Đã đóng', owner: 'Mr. Nam', date: '01/05/2026' },
-];
+import { api } from '../../../services/api';
 
 export default function RiskModule({ project }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [risks, setRisks] = useState(initialRisks);
+  const [risks, setRisks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getRisks(project?.PROJECT_ID || project?.id);
+        if (data) setRisks(data);
+      } catch (error) {
+        console.error("Fetch risk error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (project?.PROJECT_ID || project?.id) {
+      fetchData();
+    }
+  }, [project?.PROJECT_ID, project?.id]);
+
+  const handleUpdate = async (id, field, value) => {
+    try {
+      setIsUpdating(true);
+      const original = risks.find(r => (r._rowIndex || r.id) === id);
+      const updated = { ...original, [field]: value };
+      
+      // Optimistic update
+      setRisks(prev => prev.map(r => (r._rowIndex || r.id) === id ? updated : r));
+      
+      await api.updateRisk(updated);
+    } catch (error) {
+      console.error("Update risk error:", error);
+      // Optional: reload data to revert
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const getSeverityColor = (severity) => {
     switch (severity) {
@@ -31,9 +63,9 @@ export default function RiskModule({ project }) {
     }
   };
 
-  const activeCount = risks.filter(r => r.status === 'Đang xử lý').length;
-  const watchCount = risks.filter(r => r.status === 'Theo dõi').length;
-  const closedCount = risks.filter(r => r.status === 'Đã đóng').length;
+  const activeCount = risks.filter(r => r.TRẠNG_THÁI === 'Đang xử lý').length;
+  const watchCount = risks.filter(r => r.TRẠNG_THÁI === 'Theo dõi').length;
+  const closedCount = risks.filter(r => r.TRẠNG_THÁI === 'Đã đóng').length;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[#182135] overflow-hidden">
@@ -51,10 +83,19 @@ export default function RiskModule({ project }) {
         
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-3 text-xs font-semibold">
-            <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Tổng</span> <span className="text-white">{risks.length}</span></div>
-            <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Xử lý</span> <span className="text-blue-400">{activeCount}</span></div>
-            <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Theo dõi</span> <span className="text-orange-400">{watchCount}</span></div>
-            <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Đã đóng</span> <span className="text-emerald-400">{closedCount}</span></div>
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-[#6b7d9b]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Đang tải...</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Tổng</span> <span className="text-white">{risks.length}</span></div>
+                <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Xử lý</span> <span className="text-blue-400">{activeCount}</span></div>
+                <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Theo dõi</span> <span className="text-orange-400">{watchCount}</span></div>
+                <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Đã đóng</span> <span className="text-emerald-400">{closedCount}</span></div>
+              </>
+            )}
           </div>
           <div className="w-[1px] h-6 bg-[#182135] mx-2"></div>
           {isOpen ? <ChevronUp className="w-4 h-4 text-[#6b7d9b]" /> : <ChevronDown className="w-4 h-4 text-[#6b7d9b]" />}
@@ -91,25 +132,25 @@ export default function RiskModule({ project }) {
                   </thead>
                   <tbody className="divide-y divide-[#182135]">
                     {risks.map(r => (
-                      <tr key={r.id} className="hover:bg-[#0b0f19]/50 transition-colors">
+                      <tr key={r._rowIndex || r.id} className="hover:bg-[#0b0f19]/50 transition-colors">
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent text-xs font-bold focus:outline-none appearance-none cursor-pointer px-2 py-1 rounded border ${getSeverityColor(r.severity)}`}
-                            value={r.severity}
-                            onChange={() => {}}
+                            className={`bg-transparent text-xs font-bold focus:outline-none appearance-none cursor-pointer px-2 py-1 rounded border ${getSeverityColor(r.MỨC_ĐỘ)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={r.MỨC_ĐỘ}
+                            onChange={(e) => handleUpdate(r._rowIndex || r.id, 'MỨC_ĐỘ', e.target.value)}
                           >
                             <option className="bg-[#0b0f19] text-slate-200">Cao</option>
                             <option className="bg-[#0b0f19] text-slate-200">Trung bình</option>
                             <option className="bg-[#0b0f19] text-slate-200">Thấp</option>
                           </select>
                         </td>
-                        <td className="p-3 font-semibold text-slate-200">{r.content}</td>
-                        <td className="p-3 text-[#8ca0c3]">{r.impact}</td>
+                        <td className="p-3 font-semibold text-slate-200">{r.NỘI_DUNG}</td>
+                        <td className="p-3 text-[#8ca0c3]">{r.ẢNH_HƯỞNG}</td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(r.status)}`}
-                            value={r.status}
-                            onChange={() => {}}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(r.TRẠNG_THÁI)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={r.TRẠNG_THÁI}
+                            onChange={(e) => handleUpdate(r._rowIndex || r.id, 'TRẠNG_THÁI', e.target.value)}
                           >
                             <option className="bg-[#0b0f19] text-slate-200">Open</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đang xử lý</option>
@@ -117,8 +158,8 @@ export default function RiskModule({ project }) {
                             <option className="bg-[#0b0f19] text-slate-200">Đã đóng</option>
                           </select>
                         </td>
-                        <td className="p-3 text-slate-300 font-medium">{r.owner}</td>
-                        <td className="p-3 text-[#6b7d9b]">{r.date}</td>
+                        <td className="p-3 text-slate-300 font-medium">{r.PHỤ_TRÁCH}</td>
+                        <td className="p-3 text-[#6b7d9b]">{r.NGÀY}</td>
                       </tr>
                     ))}
                   </tbody>

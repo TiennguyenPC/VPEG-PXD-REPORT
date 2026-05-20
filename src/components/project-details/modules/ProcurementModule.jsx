@@ -1,53 +1,43 @@
-import React, { useState } from 'react';
-import { Truck, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Truck, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const procurementMasterList = [
-  'An toàn tạm',
-  'Dây cáp',
-  'Lan can cứng',
-  'Walkway',
-  'Hệ thống khung đỡ',
-  'Tấm pin PV',
-  'Máng cáp',
-  'Nhà biến tần',
-  'Biến tần',
-  'Tủ điện',
-  'Hệ thống tiếp địa',
-  'Hệ PCCC',
-  'Hệ thống giám sát',
-  'Hệ thống tủ thông tin / không phát ngược lưới',
-  'Hệ thống vệ sinh pin'
-];
-
-const initialProcurement = procurementMasterList.map((item, index) => {
-  // Generate some mock statuses
-  let status = 'Chưa yêu cầu';
-  let progress = 'Đúng tiến độ';
-  
-  if (index < 3) { status = 'Hoàn thành'; progress = 'Đúng tiến độ'; }
-  else if (index < 5) { status = 'Đã tới site'; progress = 'Đúng tiến độ'; }
-  else if (index === 5) { status = 'Đang vận chuyển'; progress = 'Đúng tiến độ'; }
-  else if (index === 6) { status = 'Đang sản xuất'; progress = 'Trễ'; }
-  else if (index === 7) { status = 'Đã đặt hàng'; progress = 'Có nguy cơ trễ'; }
-
-  return {
-    id: index + 1,
-    item,
-    supplier: index < 5 ? 'NCC Solar Viet' : '',
-    poNo: index < 5 ? `PO-2026-${100+index}` : '',
-    reqDate: '01/04/2026',
-    estDate: '15/05/2026',
-    actualDate: index < 3 ? '10/05/2026' : '',
-    status,
-    progress,
-    note: ''
-  };
-});
+import { api } from '../../../services/api';
 
 export default function ProcurementModule({ project }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [items, setItems] = useState(initialProcurement);
+  const [items, setItems] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getProcurements(project?.PROJECT_ID || project?.id);
+        if (data) setItems(data);
+      } catch (error) {
+        console.error("Fetch procurement error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (project?.PROJECT_ID || project?.id) fetchData();
+  }, [project?.PROJECT_ID, project?.id]);
+
+  const handleUpdate = async (id, field, value) => {
+    try {
+      setIsUpdating(true);
+      const original = items.find(i => (i._rowIndex || i.id) === id);
+      const updated = { ...original, [field]: value };
+      
+      setItems(prev => prev.map(i => (i._rowIndex || i.id) === id ? updated : i));
+      await api.updateProcurement(updated);
+    } catch (error) {
+      console.error("Update procurement error:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -74,7 +64,7 @@ export default function ProcurementModule({ project }) {
     }
   };
 
-  const completedCount = items.filter(i => i.status === 'Hoàn thành' || i.status === 'Đã tới site').length;
+  const completedCount = items.filter(i => i.TÌNH_TRẠNG_VẬT_TƯ === 'Hoàn thành' || i.TÌNH_TRẠNG_VẬT_TƯ === 'Đã tới site').length;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[#182135] overflow-hidden">
@@ -91,8 +81,17 @@ export default function ProcurementModule({ project }) {
         
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-3 text-xs font-semibold">
-            <span className="text-[#6b7d9b]">Mặt hàng chính:</span>
-            <span className="text-white">{completedCount} / {items.length} (Tại site)</span>
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-[#6b7d9b]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Đang tải...</span>
+              </div>
+            ) : (
+              <>
+                <span className="text-[#6b7d9b]">Mặt hàng chính:</span>
+                <span className="text-white">{completedCount} / {items.length} (Tại site)</span>
+              </>
+            )}
           </div>
           <div className="w-[1px] h-6 bg-[#182135] mx-2"></div>
           {isOpen ? <ChevronUp className="w-4 h-4 text-[#6b7d9b]" /> : <ChevronDown className="w-4 h-4 text-[#6b7d9b]" />}
@@ -124,22 +123,32 @@ export default function ProcurementModule({ project }) {
                   </thead>
                   <tbody className="divide-y divide-[#182135]">
                     {items.map(item => (
-                      <tr key={item.id} className="hover:bg-[#0b0f19]/50 transition-colors">
-                        <td className="p-3 font-semibold text-slate-200">{item.item}</td>
+                      <tr key={item._rowIndex || item.id} className="hover:bg-[#0b0f19]/50 transition-colors">
+                        <td className="p-3 font-semibold text-slate-200">{item.HẠNG_MỤC_MUA_HÀNG}</td>
                         <td className="p-3">
-                          <input type="text" className="bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff]" value={item.supplier} onChange={() => {}} placeholder="-" />
+                          <input type="text" className={`bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`} value={item.NCC || ''} onChange={(e) => {
+                            const updated = [...items];
+                            const idx = updated.findIndex(x => (x._rowIndex || x.id) === (item._rowIndex || item.id));
+                            updated[idx] = { ...updated[idx], NCC: e.target.value };
+                            setItems(updated);
+                          }} onBlur={(e) => handleUpdate(item._rowIndex || item.id, 'NCC', e.target.value)} placeholder="-" />
                         </td>
                         <td className="p-3">
-                          <input type="text" className="bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff]" value={item.poNo} onChange={() => {}} placeholder="-" />
+                          <input type="text" className={`bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`} value={item.GHI_CHÚ || ''} onChange={(e) => {
+                            const updated = [...items];
+                            const idx = updated.findIndex(x => (x._rowIndex || x.id) === (item._rowIndex || item.id));
+                            updated[idx] = { ...updated[idx], GHI_CHÚ: e.target.value };
+                            setItems(updated);
+                          }} onBlur={(e) => handleUpdate(item._rowIndex || item.id, 'GHI_CHÚ', e.target.value)} placeholder="-" />
                         </td>
-                        <td className="p-3 text-slate-400">{item.reqDate}</td>
-                        <td className="p-3 text-slate-400">{item.estDate}</td>
-                        <td className="p-3 text-emerald-400 font-semibold">{item.actualDate || '-'}</td>
+                        <td className="p-3 text-slate-400">-</td>
+                        <td className="p-3 text-slate-400">{item.NGÀY_VỀ_DỰ_KIẾN || '-'}</td>
+                        <td className="p-3 text-emerald-400 font-semibold">{item.NGÀY_VỀ_THỰC_TẾ || '-'}</td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(item.status)}`}
-                            value={item.status}
-                            onChange={() => {}}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={item.TÌNH_TRẠNG_VẬT_TƯ}
+                            onChange={(e) => handleUpdate(item._rowIndex || item.id, 'TÌNH_TRẠNG_VẬT_TƯ', e.target.value)}
                           >
                             <option className="bg-[#0b0f19] text-slate-200">Chưa yêu cầu</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đang lấy báo giá</option>
@@ -154,9 +163,9 @@ export default function ProcurementModule({ project }) {
                         </td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getProgressColor(item.progress)}`}
-                            value={item.progress}
-                            onChange={() => {}}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getProgressColor(item.ĐÁNH_GIÁ_TIẾN_ĐỘ)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={item.ĐÁNH_GIÁ_TIẾN_ĐỘ}
+                            onChange={(e) => handleUpdate(item._rowIndex || item.id, 'ĐÁNH_GIÁ_TIẾN_ĐỘ', e.target.value)}
                           >
                             <option className="bg-[#0b0f19] text-slate-200">Đúng tiến độ</option>
                             <option className="bg-[#0b0f19] text-slate-200">Có nguy cơ trễ</option>

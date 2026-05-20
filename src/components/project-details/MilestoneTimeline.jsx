@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Clock, AlertCircle, Circle } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, Circle, Loader2 } from 'lucide-react';
+import { api } from '../../services/api';
 
-const milestones = [
+const initialMilestones = [
   { id: 1, title: 'KICKOFF', date: '01/04/2026', status: 'completed' },
   { id: 2, title: 'PHÁP LÝ', date: '15/04/2026', status: 'completed' },
   { id: 3, title: 'THIẾT KẾ', date: '25/05/2026', status: 'in-progress' },
@@ -13,13 +14,47 @@ const milestones = [
 ];
 
 export default function MilestoneTimeline({ project }) {
-  // We can eventually replace the static `milestones` array above with data driven by `project`
+  const [milestones, setMilestones] = useState(initialMilestones);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchMilestones = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getMilestones(project?.PROJECT_ID || project?.id);
+        if (data && data.length > 0) {
+          const updated = initialMilestones.map(m => {
+            const row = data.find(r => r.MILESTONE === m.title);
+            if (row) {
+              return {
+                ...m,
+                date: row.NGÀY_THỰC_TẾ || row.NGÀY_KẾ_HOẠCH || m.date,
+                status: row.STATUS ? row.STATUS.toLowerCase() : m.status
+              };
+            }
+            return m;
+          });
+          setMilestones(updated);
+        }
+      } catch (error) {
+        console.error("Fetch milestones error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (project?.PROJECT_ID || project?.id) fetchMilestones();
+  }, [project?.PROJECT_ID, project?.id]);
+
+  const lastActiveIndex = [...milestones].reverse().findIndex(m => m.status === 'completed' || m.status === 'in-progress' || m.status === 'delay');
+  const activeIndex = lastActiveIndex !== -1 ? (milestones.length - 1 - lastActiveIndex) : 0;
+  const percentWidth = `${(activeIndex / (milestones.length - 1)) * 100}%`;
   
   return (
     <div className="glass-panel p-6 rounded-xl shadow-lg border border-[#182135]">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           TRỤC MILESTONE KIỂM SOÁT TIẾN ĐỘ
+          {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[#6b7d9b]" />}
         </h3>
         <div className="flex gap-4 text-[10px] font-semibold text-[#6b7d9b] uppercase tracking-wider">
           <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-[#10b981]"></div> Hoàn thành</div>
@@ -38,7 +73,7 @@ export default function MilestoneTimeline({ project }) {
           {/* Progress Line */}
           <motion.div 
             initial={{ width: 0 }}
-            animate={{ width: "40%" }} // Match "in-progress" position
+            animate={{ width: percentWidth }}
             transition={{ duration: 1.5, ease: "easeInOut" }}
             className="absolute top-[20px] left-10 h-1 bg-gradient-to-r from-[#10b981] to-[#3b82f6] rounded-full"
           ></motion.div>
@@ -47,12 +82,10 @@ export default function MilestoneTimeline({ project }) {
             {milestones.map((ms, index) => {
               let Icon = Circle;
               let colorClass = "text-[#4d5e7a] bg-[#0b0f19] border-[#182135]";
-              let lineActive = false;
 
               if (ms.status === 'completed') {
                 Icon = CheckCircle2;
                 colorClass = "text-[#10b981] bg-[#0b0f19] border-[#10b981] shadow-[0_0_15px_rgba(16,185,129,0.2)]";
-                lineActive = true;
               } else if (ms.status === 'in-progress') {
                 Icon = Clock;
                 colorClass = "text-[#3b82f6] bg-[#0b0f19] border-[#3b82f6] shadow-[0_0_15px_rgba(59,130,246,0.3)] animate-pulse";

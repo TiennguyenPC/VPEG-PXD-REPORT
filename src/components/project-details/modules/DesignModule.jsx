@@ -1,17 +1,43 @@
-import React, { useState } from 'react';
-import { PenTool, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { PenTool, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const initialDesigns = [
-  { id: 1, item: 'Bản vẽ sơ bộ làm giấy phép', status: 'Hoàn thành', approval: 'Đã duyệt', nextStep: 'N/A', finalResult: 'N/A' },
-  { id: 2, item: 'Bản vẽ thi công', status: 'Đang xử lý', approval: 'Chờ duyệt', nextStep: 'Gửi CĐT duyệt', finalResult: 'N/A' },
-  { id: 3, item: 'BOQ', status: 'Đang xử lý', approval: 'Chưa gửi duyệt', nextStep: 'Kiểm tra lại', finalResult: 'N/A' },
-  { id: 4, item: 'Bản vẽ hoàn công', status: 'Chưa làm', approval: 'N/A', nextStep: 'Chờ thi công xong', finalResult: 'N/A' },
-];
+import { api } from '../../../services/api';
 
 export default function DesignModule({ project }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [designs, setDesigns] = useState(initialDesigns);
+  const [designs, setDesigns] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const data = await api.getDesigns(project?.PROJECT_ID || project?.id);
+        if (data) setDesigns(data);
+      } catch (error) {
+        console.error("Fetch design error:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    if (project?.PROJECT_ID || project?.id) fetchData();
+  }, [project?.PROJECT_ID, project?.id]);
+
+  const handleUpdate = async (id, field, value) => {
+    try {
+      setIsUpdating(true);
+      const original = designs.find(d => (d._rowIndex || d.id) === id);
+      const updated = { ...original, [field]: value };
+      
+      setDesigns(prev => prev.map(d => (d._rowIndex || d.id) === id ? updated : d));
+      await api.updateDesign(updated);
+    } catch (error) {
+      console.error("Update design error:", error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -29,8 +55,8 @@ export default function DesignModule({ project }) {
     return 'text-slate-300';
   };
 
-  const completedCount = designs.filter(d => d.status === 'Hoàn thành').length;
-  const progressPercent = Math.round((completedCount / designs.length) * 100);
+  const completedCount = designs.filter(d => d.TÌNH_TRẠNG === 'Hoàn thành').length;
+  const progressPercent = designs.length > 0 ? Math.round((completedCount / designs.length) * 100) : 0;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[#182135] overflow-hidden">
@@ -47,8 +73,17 @@ export default function DesignModule({ project }) {
         
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-3 text-xs font-semibold">
-            <span className="text-white">{completedCount} / {designs.length} hoàn thành</span>
-            <span className="text-[#10b981]">{progressPercent}%</span>
+            {isLoading ? (
+              <div className="flex items-center gap-2 text-[#6b7d9b]">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Đang tải...</span>
+              </div>
+            ) : (
+              <>
+                <span className="text-white">{completedCount} / {designs.length} hoàn thành</span>
+                <span className="text-[#10b981]">{progressPercent}%</span>
+              </>
+            )}
           </div>
           <div className="w-[1px] h-6 bg-[#182135] mx-2"></div>
           {isOpen ? <ChevronUp className="w-4 h-4 text-[#6b7d9b]" /> : <ChevronDown className="w-4 h-4 text-[#6b7d9b]" />}
@@ -77,13 +112,13 @@ export default function DesignModule({ project }) {
                   </thead>
                   <tbody className="divide-y divide-[#182135]">
                     {designs.map(d => (
-                      <tr key={d.id} className="hover:bg-[#0b0f19]/50 transition-colors">
-                        <td className="p-3 font-semibold text-slate-200">{d.item}</td>
+                      <tr key={d._rowIndex || d.id} className="hover:bg-[#0b0f19]/50 transition-colors">
+                        <td className="p-3 font-semibold text-slate-200">{d.HẠNG_MỤC_BẢN_VẼ}</td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(d.status)}`}
-                            value={d.status}
-                            onChange={() => {}}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(d.TÌNH_TRẠNG)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={d.TÌNH_TRẠNG}
+                            onChange={(e) => handleUpdate(d._rowIndex || d.id, 'TÌNH_TRẠNG', e.target.value)}
                           >
                             <option className="bg-[#0b0f19] text-slate-200">Chưa làm</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đang xử lý</option>
@@ -92,9 +127,9 @@ export default function DesignModule({ project }) {
                         </td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getApprovalColor(d.approval)}`}
-                            value={d.approval}
-                            onChange={() => {}}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getApprovalColor(d.PHÊ_DUYỆT)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={d.PHÊ_DUYỆT}
+                            onChange={(e) => handleUpdate(d._rowIndex || d.id, 'PHÊ_DUYỆT', e.target.value)}
                           >
                             <option className="bg-[#0b0f19] text-slate-200">N/A</option>
                             <option className="bg-[#0b0f19] text-slate-200">Chưa gửi duyệt</option>
@@ -106,17 +141,29 @@ export default function DesignModule({ project }) {
                         <td className="p-3">
                           <input 
                             type="text" 
-                            className="bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff]"
-                            value={d.nextStep}
-                            onChange={() => {}}
+                            className={`bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={d.BƯỚC_TIẾP_THEO || ''}
+                            onChange={(e) => {
+                              const updated = [...designs];
+                              const idx = updated.findIndex(x => (x._rowIndex || x.id) === (d._rowIndex || d.id));
+                              updated[idx] = { ...updated[idx], BƯỚC_TIẾP_THEO: e.target.value };
+                              setDesigns(updated);
+                            }}
+                            onBlur={(e) => handleUpdate(d._rowIndex || d.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                           />
                         </td>
                         <td className="p-3">
                           <input 
                             type="text" 
-                            className="bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff]"
-                            value={d.finalResult}
-                            onChange={() => {}}
+                            className={`bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={d.KẾT_QUẢ_CUỐI || ''}
+                            onChange={(e) => {
+                              const updated = [...designs];
+                              const idx = updated.findIndex(x => (x._rowIndex || x.id) === (d._rowIndex || d.id));
+                              updated[idx] = { ...updated[idx], KẾT_QUẢ_CUỐI: e.target.value };
+                              setDesigns(updated);
+                            }}
+                            onBlur={(e) => handleUpdate(d._rowIndex || d.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                           />
                         </td>
                       </tr>
