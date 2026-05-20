@@ -32,9 +32,11 @@ import {
   Clock,
   Send
 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { INITIAL_PROJECTS } from "./mockData";
 
 export default function App() {
+  const navigate = useNavigate();
   // Projects state initialized from mockup data
   const [projects, setProjects] = useState(() => {
     const saved = localStorage.getItem("epc_projects");
@@ -872,8 +874,7 @@ export default function App() {
                               sortField === "name" ? "text-slate-100 bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
                             }`}
                             onClick={() => {
-                              setSelectedProject(p);
-                              setIsDetailDrawerOpen(true);
+                              navigate('/projects/' + p.id);
                             }}
                           >
                             {p.name}
@@ -975,8 +976,7 @@ export default function App() {
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => {
-                                  setSelectedProject(p);
-                                  setIsDetailDrawerOpen(true);
+                                  navigate('/projects/' + p.id);
                                 }}
                                 title="Xem chi tiết"
                                 className="p-1.5 hover:text-white text-slate-400 hover:bg-[#182135] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
@@ -992,8 +992,7 @@ export default function App() {
                               </button>
                               <button
                                 onClick={() => {
-                                  setSelectedProject(p);
-                                  setIsDetailDrawerOpen(true);
+                                  navigate('/projects/' + p.id);
                                 }}
                                 title="Bình luận"
                                 className="p-1.5 hover:text-white text-slate-400 hover:bg-[#182135] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer relative"
