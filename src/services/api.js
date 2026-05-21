@@ -1,5 +1,5 @@
 // Replace this URL with your deployed Google Apps Script Web App URL
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbyvKapSv-0zYkBf1VJJfUg4Eh_UDBpJaXHgtbLk8dSERY2BEJcRP2y1C0BihfG5Ssij/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxojmRJFocx0sMvf3VmjaLhdIl6T9ATJdizWa_V43gIT0jWxIQn0pdRrIvYTTgcjETo/exec';
 
 function normalizeProject(project) {
   if (!project) return null;
@@ -111,22 +111,37 @@ export const api = {
     const data = await fetchFromGAS('project', { id });
     return normalizeProject(data);
   },
+  getDashboardBundle: async (id) => {
+    const data = await fetchFromGAS('dashboard-bundle', { id });
+    if (data && data.project) {
+      data.project = normalizeProject(data.project);
+    }
+    return data;
+  },
   getRisks: (id) => fetchFromGAS('risk', { id }),
   getPermits: (id) => fetchFromGAS('permit', { id }),
   getDesigns: (id) => fetchFromGAS('design', { id }),
   getProcurements: (id) => fetchFromGAS('procurement', { id }),
   getConstructions: (id) => fetchFromGAS('construction', { id }),
+  getHandovers: (id) => fetchFromGAS('handover', { id }),
   getSiteLogs: (id) => fetchFromGAS('site-log', { id }),
+  getWeeklyLogs: (id) => fetchFromGAS('weeklyLog', { id }),
+  getMonthlyLogs: (id) => fetchFromGAS('monthlyLog', { id }),
   getMilestones: (id) => fetchFromGAS('milestone', { id }),
   getSCurves: (id) => fetchFromGAS('scurve', { id }),
-  
+
   // POST (Updates)
   updateRisk: (data) => postToGAS('update-risk', data),
   updatePermit: (data) => postToGAS('update-permit', data),
   updateDesign: (data) => postToGAS('update-design', data),
   updateProcurement: (data) => postToGAS('update-procurement', data),
   updateConstruction: (data) => postToGAS('update-construction', data),
+  updateHandover: (data) => postToGAS('update-handover', data),
   updateSiteLog: (data) => postToGAS('update-site-log', data),
   updateProject: (data) => postToGAS('update-project', mapProjectToSheet(data)),
-  createProject: (data) => postToGAS('add-project', mapProjectToSheet(data))
+  createProject: (data) => postToGAS('add-project', mapProjectToSheet(data)),
+  addRisk: (data) => postToGAS('add-risk', data),
+  addPermit: (data) => postToGAS('add-permit', data),
+  addDesign: (data) => postToGAS('add-design', data),
+  addProcurement: (data) => postToGAS('add-procurement', data)
 };

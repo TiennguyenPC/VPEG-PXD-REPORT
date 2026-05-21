@@ -3,18 +3,158 @@ import { Truck, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 
-export default function ProcurementModule({ project }) {
+const defaultProcurements = [
+  'An toàn tạm',
+  'Dây cáp (AC/DC/Cứu sinh/dây mạng/dây tín hiệu,...)',
+  'Lan can cứng',
+  'Walkway',
+  'Hệ thống khung đỡ (Rail, xà gồ, kẹp biên, kẹp giữa, kẹp seamlock, Pad L,..)',
+  'Tấm pin PV ( Kẹp tiếp địa, kẹp thoát nước,...)',
+  'Máng cáp (Máng DC, AC, nắp đậy máng, thanh V làm support,..)',
+  'Nhà biến tần (khung lưới, mái tôn, chân trụ, bản mã, xà gồ, khung treo biến tần,...)',
+  'Biến tần (Inverter, phụ kiện bấm MC4,...)',
+  'Tủ điện (Isolator, ACDB)',
+  'Hệ thống tiếp địa (dây PE, kẹp tiếp địa, hộp test box, dây đồng trần,...)',
+  'Hệ PCCC (Quả cầu PCCC, tiêu lệnh, bình xịt PCCC,...)',
+  'Hệ thống giám sát (Tủ Mornitoring, Bluelog, Data logger, UPS, nguồn điện,...)',
+  'Hệ thống tủ thông tin/không phát ngược lưới (Tủ zero export, Multi Meter, CT,...)',
+  'Hệ thống vệ sinh pin (Bơm, phụ kiện bơm, bồn nước, CB bơm, ống nước, khơi thủy)'
+];
+
+const parseDateStr = (str) => {
+  if (!str) return null;
+  const cleaned = str.trim();
+  if (cleaned === '-' || cleaned === '' || cleaned === '---') return null;
+  
+  if (cleaned.includes('/')) {
+    const parts = cleaned.split('/');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      let year = parseInt(parts[2], 10);
+      if (parts[2].length === 2) {
+        year += 2000;
+      }
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+  
+  if (cleaned.includes('-')) {
+    const parts = cleaned.split('-');
+    if (parts.length === 3) {
+      if (parts[0].length === 4) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+      } else {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+  }
+  
+  const d = new Date(cleaned);
+  if (!isNaN(d.getTime())) return d;
+  return null;
+};
+
+const getAutoEvaluation = (expectedStr, actualStr) => {
+  const expected = parseDateStr(expectedStr);
+  const actual = parseDateStr(actualStr);
+  
+  if (actual && expected) {
+    return actual.getTime() <= expected.getTime() ? 'Đúng tiến độ' : 'Trễ';
+  }
+  
+  if (expected) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return expected.getTime() >= today.getTime() ? 'Đang theo kế hoạch' : 'Trễ';
+  }
+  
+  return '';
+};
+
+
+function AutoGrowingTextarea({ value, onChange, onBlur, disabled, placeholder }) {
+  const textareaRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
+    }
+  }, [value]);
+
+  return (
+    <textarea
+      ref={textareaRef}
+      value={value}
+      placeholder={placeholder}
+      disabled={disabled}
+      onChange={onChange}
+      onBlur={onBlur}
+      rows={1}
+      className="bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 resize-none overflow-hidden min-h-[24px] py-1 leading-normal transition-all"
+    />
+  );
+}
+
+export default function ProcurementModule({ project, initialData, onProgressChange }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [items, setItems] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  
+  const mergeProcurementData = (data) => {
+    return defaultProcurements.map((name, index) => {
+      const row = data ? data.find(r => r.HẠNG_MỤC_MUA_HÀNG === name) : null;
+      if (row) {
+        const expected = row.NGÀY_VỀ_DỰ_KIẾN || '';
+        const actual = row.NGÀY_VỀ_THỰC_TẾ || '';
+        const autoEval = getAutoEvaluation(expected, actual);
+        return {
+          id: `proc_${index}`,
+          _rowIndex: row._rowIndex,
+          HẠNG_MỤC_MUA_HÀNG: name,
+          NGÀY_VỀ_DỰ_KIẾN: expected,
+          NGÀY_VỀ_THỰC_TẾ: actual,
+          TÌNH_TRẠNG_VẬT_TƯ: row.TÌNH_TRẠNG_VẬT_TƯ || '',
+          ĐÁNH_GIÁ_TIẾN_ĐỘ: row.ĐÁNH_GIÁ_TIẾN_ĐỘ || autoEval,
+          GHI_CHÚ: row.GHI_CHÚ || ''
+        };
+      }
+      return {
+        id: `proc_${index}`,
+        _rowIndex: undefined,
+        HẠNG_MỤC_MUA_HÀNG: name,
+        NGÀY_VỀ_DỰ_KIẾN: '',
+        NGÀY_VỀ_THỰC_TẾ: '',
+        TÌNH_TRẠNG_VẬT_TƯ: '',
+        ĐÁNH_GIÁ_TIẾN_ĐỘ: '',
+        GHI_CHÚ: ''
+      };
+    });
+  };
+
+  const [items, setItems] = useState(() => mergeProcurementData(initialData));
+  const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
+    if (initialData) {
+      setItems(mergeProcurementData(initialData));
+      setIsLoading(false);
+      return;
+    }
     const fetchData = async () => {
       try {
         setIsLoading(true);
         const data = await api.getProcurements(project?.PROJECT_ID || project?.id);
-        if (data) setItems(data);
+        if (data) setItems(mergeProcurementData(data));
       } catch (error) {
         console.error("Fetch procurement error:", error);
       } finally {
@@ -22,16 +162,50 @@ export default function ProcurementModule({ project }) {
       }
     };
     if (project?.PROJECT_ID || project?.id) fetchData();
-  }, [project?.PROJECT_ID, project?.id]);
+  }, [project?.PROJECT_ID, project?.id, initialData]);
+
+  const completedCount = items.filter(i => i.TÌNH_TRẠNG_VẬT_TƯ === 'Đã tới site').length;
+  const progressPercent = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
+
+  useEffect(() => {
+    if (onProgressChange) onProgressChange(progressPercent);
+  }, [progressPercent, onProgressChange]);
 
   const handleUpdate = async (id, field, value) => {
     try {
       setIsUpdating(true);
-      const original = items.find(i => (i._rowIndex || i.id) === id);
-      const updated = { ...original, [field]: value };
       
-      setItems(prev => prev.map(i => (i._rowIndex || i.id) === id ? updated : i));
-      await api.updateProcurement(updated);
+      let updatedItem = null;
+      setItems(prev => prev.map(i => {
+        if (i.id === id) {
+          let temp = { ...i, [field]: value };
+          if (field === 'NGÀY_VỀ_DỰ_KIẾN' || field === 'NGÀY_VỀ_THỰC_TẾ') {
+            temp.ĐÁNH_GIÁ_TIẾN_ĐỘ = getAutoEvaluation(temp.NGÀY_VỀ_DỰ_KIẾN, temp.NGÀY_VỀ_THỰC_TẾ);
+          }
+          updatedItem = temp;
+          return updatedItem;
+        }
+        return i;
+      }));
+
+      if (updatedItem) {
+        const payload = {
+          _rowIndex: updatedItem._rowIndex,
+          PROJECT_ID: project?.PROJECT_ID || project?.id,
+          HẠNG_MỤC_MUA_HÀNG: updatedItem.HẠNG_MỤC_MUA_HÀNG,
+          NGÀY_VỀ_DỰ_KIẾN: updatedItem.NGÀY_VỀ_DỰ_KIẾN,
+          NGÀY_VỀ_THỰC_TẾ: updatedItem.NGÀY_VỀ_THỰC_TẾ,
+          TÌNH_TRẠNG_VẬT_TƯ: updatedItem.TÌNH_TRẠNG_VẬT_TƯ,
+          ĐÁNH_GIÁ_TIẾN_ĐỘ: updatedItem.ĐÁNH_GIÁ_TIẾN_ĐỘ,
+          GHI_CHÚ: updatedItem.GHI_CHÚ
+        };
+        await api.updateProcurement(payload);
+        
+        if (!updatedItem._rowIndex) {
+          const freshData = await api.getProcurements(project?.PROJECT_ID || project?.id);
+          if (freshData) setItems(mergeProcurementData(freshData));
+        }
+      }
     } catch (error) {
       console.error("Update procurement error:", error);
     } finally {
@@ -41,30 +215,26 @@ export default function ProcurementModule({ project }) {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Chưa yêu cầu': return 'text-slate-400';
-      case 'Đang lấy báo giá': return 'text-purple-400';
-      case 'Đã duyệt mua': return 'text-blue-400';
-      case 'Đã đặt hàng': return 'text-blue-500';
-      case 'Đang sản xuất': return 'text-orange-400';
-      case 'Đang vận chuyển': return 'text-yellow-400';
-      case 'Đã tới site': return 'text-emerald-400';
-      case 'Thiếu vật tư': return 'text-red-400';
-      case 'Hoàn thành': return 'text-emerald-500 font-black';
+      case 'Đã tới site': return 'text-[#10b981] font-semibold';
+      case 'Chưa đặt': return 'text-[#ef4444] font-semibold';
+      case 'Đã đặt hàng': return 'text-[#3b82f6] font-semibold';
+      case 'Đang vận chuyển': return 'text-[#f59e0b] font-semibold';
       default: return 'text-slate-400';
     }
   };
 
-  const getProgressColor = (progress) => {
+  const getProgressStyle = (progress) => {
     switch (progress) {
-      case 'Đúng tiến độ': return 'text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded';
-      case 'Có nguy cơ trễ': return 'text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded';
-      case 'Trễ': return 'text-red-400 bg-red-500/10 px-2 py-0.5 rounded';
-      case 'Critical Delay': return 'text-red-500 bg-red-900/30 px-2 py-0.5 rounded font-black border border-red-500/50';
-      default: return 'text-slate-300';
+      case 'Đúng tiến độ':
+        return 'text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded border border-emerald-500/20 font-bold';
+      case 'Đang theo kế hoạch':
+        return 'text-blue-400 bg-blue-500/10 px-2.5 py-0.5 rounded border border-blue-500/20 font-bold';
+      case 'Trễ':
+        return 'text-red-400 bg-red-500/10 px-2.5 py-0.5 rounded border border-red-500/20 font-bold';
+      default:
+        return 'text-slate-400 font-semibold';
     }
   };
-
-  const completedCount = items.filter(i => i.TÌNH_TRẠNG_VẬT_TƯ === 'Hoàn thành' || i.TÌNH_TRẠNG_VẬT_TƯ === 'Đã tới site').length;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[#182135] overflow-hidden">
@@ -87,10 +257,11 @@ export default function ProcurementModule({ project }) {
                 <span>Đang tải...</span>
               </div>
             ) : (
-              <>
-                <span className="text-[#6b7d9b]">Mặt hàng chính:</span>
-                <span className="text-white">{completedCount} / {items.length} (Tại site)</span>
-              </>
+              <div className="flex items-center gap-2 bg-[#182135]/50 border border-[#1e293b] px-3 py-1 rounded-full text-xs">
+                <span className="text-[#8ca0c3]">{completedCount}/{items.length} hoàn thành</span>
+                <span className="w-1 h-1 bg-[#f97316] rounded-full"></span>
+                <span className="text-[#f97316] font-bold">{progressPercent}%</span>
+              </div>
             )}
           </div>
           <div className="w-[1px] h-6 bg-[#182135] mx-2"></div>
@@ -108,70 +279,83 @@ export default function ProcurementModule({ project }) {
           >
             <div className="p-4 border-t border-[#182135] bg-[#060a13]">
               <div className="overflow-x-auto rounded-lg border border-[#182135]">
-                <table className="w-full text-left text-xs min-w-[1000px]">
+                <table className="w-full text-left text-xs min-w-[950px]">
                   <thead>
                     <tr className="bg-[#0b0f19] text-[#6b7d9b] font-bold uppercase tracking-wider border-b border-[#182135]">
-                      <th className="p-3">Hạng mục mua hàng</th>
-                      <th className="p-3">Nhà cung cấp</th>
-                      <th className="p-3">PO No.</th>
-                      <th className="p-3">Ngày YC</th>
-                      <th className="p-3">Ngày về DK</th>
-                      <th className="p-3">Ngày về TT</th>
-                      <th className="p-3">Tình trạng vật tư</th>
-                      <th className="p-3">Đánh giá tiến độ</th>
+                      <th className="p-3">Thiết bị / Vật tư mua hàng</th>
+                      <th className="p-3 w-32">Ngày về dự kiến</th>
+                      <th className="p-3 w-32">Ngày về thực tế</th>
+                      <th className="p-3 w-36">Tình trạng vật tư</th>
+                      <th className="p-3 w-40">Đánh giá tiến độ</th>
+                      <th className="p-3 w-64">Ghi chú</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#182135]">
                     {items.map(item => (
-                      <tr key={item._rowIndex || item.id} className="hover:bg-[#0b0f19]/50 transition-colors">
+                      <tr key={item.id} className="hover:bg-[#0b0f19]/50 transition-colors">
                         <td className="p-3 font-semibold text-slate-200">{item.HẠNG_MỤC_MUA_HÀNG}</td>
                         <td className="p-3">
-                          <input type="text" className={`bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`} value={item.NCC || ''} onChange={(e) => {
-                            const updated = [...items];
-                            const idx = updated.findIndex(x => (x._rowIndex || x.id) === (item._rowIndex || item.id));
-                            updated[idx] = { ...updated[idx], NCC: e.target.value };
-                            setItems(updated);
-                          }} onBlur={(e) => handleUpdate(item._rowIndex || item.id, 'NCC', e.target.value)} placeholder="-" />
+                          <input 
+                            type="text" 
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={item.NGÀY_VỀ_DỰ_KIẾN || ''}
+                            placeholder="-"
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, NGÀY_VỀ_DỰ_KIẾN: v } : i));
+                            }}
+                            onBlur={(e) => handleUpdate(item.id, 'NGÀY_VỀ_DỰ_KIẾN', e.target.value)}
+                          />
                         </td>
                         <td className="p-3">
-                          <input type="text" className={`bg-transparent text-slate-300 font-medium focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`} value={item.GHI_CHÚ || ''} onChange={(e) => {
-                            const updated = [...items];
-                            const idx = updated.findIndex(x => (x._rowIndex || x.id) === (item._rowIndex || item.id));
-                            updated[idx] = { ...updated[idx], GHI_CHÚ: e.target.value };
-                            setItems(updated);
-                          }} onBlur={(e) => handleUpdate(item._rowIndex || item.id, 'GHI_CHÚ', e.target.value)} placeholder="-" />
+                          <input 
+                            type="text" 
+                            className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${item.NGÀY_VỀ_THỰC_TẾ && item.NGÀY_VỀ_THỰC_TẾ !== '-' ? 'text-[#10b981]' : 'text-slate-300'} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={item.NGÀY_VỀ_THỰC_TẾ || ''}
+                            placeholder="-"
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, NGÀY_VỀ_THỰC_TẾ: v } : i));
+                            }}
+                            onBlur={(e) => handleUpdate(item.id, 'NGÀY_VỀ_THỰC_TẾ', e.target.value)}
+                          />
                         </td>
-                        <td className="p-3 text-slate-400">-</td>
-                        <td className="p-3 text-slate-400">{item.NGÀY_VỀ_DỰ_KIẾN || '-'}</td>
-                        <td className="p-3 text-emerald-400 font-semibold">{item.NGÀY_VỀ_THỰC_TẾ || '-'}</td>
                         <td className="p-3">
                           <select 
                             className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
-                            value={item.TÌNH_TRẠNG_VẬT_TƯ}
-                            onChange={(e) => handleUpdate(item._rowIndex || item.id, 'TÌNH_TRẠNG_VẬT_TƯ', e.target.value)}
+                            value={item.TÌNH_TRẠNG_VẬT_TƯ || ''}
+                            onChange={(e) => handleUpdate(item.id, 'TÌNH_TRẠNG_VẬT_TƯ', e.target.value)}
                           >
-                            <option className="bg-[#0b0f19] text-slate-200">Chưa yêu cầu</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đang lấy báo giá</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã duyệt mua</option>
+                            <option className="bg-[#0b0f19] text-slate-200" value="">-</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Chưa đặt</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đã đặt hàng</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đang sản xuất</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đang vận chuyển</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đã tới site</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Thiếu vật tư</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Hoàn thành</option>
                           </select>
                         </td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getProgressColor(item.ĐÁNH_GIÁ_TIẾN_ĐỘ)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
-                            value={item.ĐÁNH_GIÁ_TIẾN_ĐỘ}
-                            onChange={(e) => handleUpdate(item._rowIndex || item.id, 'ĐÁNH_GIÁ_TIẾN_ĐỘ', e.target.value)}
+                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getProgressStyle(item.ĐÁNH_GIÁ_TIẾN_ĐỘ)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={item.ĐÁNH_GIÁ_TIẾN_ĐỘ || ''}
+                            onChange={(e) => handleUpdate(item.id, 'ĐÁNH_GIÁ_TIẾN_ĐỘ', e.target.value)}
                           >
+                            <option className="bg-[#0b0f19] text-slate-200" value="">-</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đúng tiến độ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Có nguy cơ trễ</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Đang theo kế hoạch</option>
                             <option className="bg-[#0b0f19] text-slate-200">Trễ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Critical Delay</option>
                           </select>
+                        </td>
+                        <td className="p-3">
+                          <AutoGrowingTextarea 
+                            value={item.GHI_CHÚ || ''}
+                            placeholder="Nhập ghi chú..."
+                            disabled={isUpdating}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, GHI_CHÚ: v } : i));
+                            }}
+                            onBlur={(e) => handleUpdate(item.id, 'GHI_CHÚ', e.target.value)}
+                          />
                         </td>
                       </tr>
                     ))}

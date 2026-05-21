@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { 
-  Activity, Briefcase, Folder, ChevronLeft
+  Activity, Briefcase, Folder
 } from "lucide-react";
 import ProjectHeader from "../components/project-details/ProjectHeader";
 import KPIOverview from "../components/project-details/KPIOverview";
@@ -14,32 +14,469 @@ import PermitModule from "../components/project-details/modules/PermitModule";
 import DesignModule from "../components/project-details/modules/DesignModule";
 import ProcurementModule from "../components/project-details/modules/ProcurementModule";
 import ConstructionModule from "../components/project-details/modules/ConstructionModule";
+import HandoverModule from "../components/project-details/modules/HandoverModule";
 import { api } from "../services/api";
+
+const getTodayStr = () => {
+  const today = new Date();
+  const d = String(today.getDate()).padStart(2, '0');
+  const m = String(today.getMonth() + 1).padStart(2, '0');
+  const y = today.getFullYear();
+  return `${d}/${m}/${y}`;
+};
+
+const parseDateStr = (dateStr) => {
+  if (!dateStr) return null;
+  const parts = String(dateStr).split('/');
+  if (parts.length !== 3) return null;
+  return new Date(parts[2], parts[1] - 1, parts[0]);
+};
+
+const formatDateStr = (date) => {
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
+};
+
+const getMondayOfDate = (date) => {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+};
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  
+  // Project & S-Curve State
   const [project, setProject] = useState(null);
+  const [scurveData, setScurveData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Centralized Operations State
+  const [logs, setLogs] = useState([]);
+  const [weeklyLogs, setWeeklyLogs] = useState([]);
+  const [monthlyLogs, setMonthlyLogs] = useState([]);
+  const [selectedView, setSelectedView] = useState('day'); // 'day' | 'week' | 'month'
+  const [selectedDate, setSelectedDate] = useState(getTodayStr());
+  const [selectedWeek, setSelectedWeek] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [saveStatus, setSaveStatus] = useState('Saved'); // 'Draft' | 'Saving...' | 'Saved' | 'Error'
+
+  const saveTimeoutRef = useRef(null);
+  const isSavingRef = useRef(false);
+  const pendingSaveRef = useRef(null);
+
+  const [bundleData, setBundleData] = useState(null);
+
+  const [moduleProgress, setModuleProgress] = useState({
+    permit: 0,
+    design: 0,
+    procurement: 0,
+    construction: 0,
+    handover: 0
+  });
+
+  const handleModuleProgressChange = (moduleKey, percent) => {
+    setModuleProgress(prev => {
+      if (prev[moduleKey] === percent) return prev;
+      const next = { ...prev, [moduleKey]: percent };
+      
+      const overall = (next.permit * 0.10) + (next.design * 0.15) + (next.procurement * 0.25) + (next.construction * 0.40) + (next.handover * 0.10);
+      
+      setProject(p => {
+        if (!p) return p;
+        const roundedOverall = Math.round(overall * 100) / 100;
+        if (p.actualProgress === roundedOverall) return p;
+        
+        const planVal = p.planProgress || 0;
+        const updatedProj = {
+          ...p,
+          actualProgress: roundedOverall,
+          delay: roundedOverall - planVal
+        };
+        
+        api.updateProject(updatedProj).catch(err => console.error("Sync project progress error:", err));
+        
+        return updatedProj;
+      });
+      
+      return next;
+    });
+  };
 
   useEffect(() => {
-    const fetchProject = async () => {
+    const fetchAllData = async () => {
       try {
         setIsLoading(true);
-        const data = await api.getProject(id);
-        if (data) {
-          setProject(data);
+        let bundle = null;
+        try {
+          bundle = await api.getDashboardBundle(id);
+        } catch (e) {
+          console.warn("getDashboardBundle not supported or failed, falling back to individual endpoints", e);
+        }
+
+        if (bundle) {
+          setBundleData(bundle);
+          if (bundle.project) setProject(bundle.project);
+          if (bundle.scurve) setScurveData(bundle.scurve);
+          
+          const dailyRes = bundle.siteLogs || [];
+          setLogs(dailyRes);
+          if (dailyRes.length > 0) {
+            const sorted = [...dailyRes].sort((a, b) => parseDateStr(a.LOG_DATE || a.NGÀY) - parseDateStr(b.LOG_DATE || b.NGÀY));
+            const latest = sorted[sorted.length - 1];
+            const latestDate = latest ? (latest.LOG_DATE || latest.NGÀY) : getTodayStr();
+            setSelectedDate(latestDate);
+          } else {
+            setSelectedDate(getTodayStr());
+          }
+
+          const weeklyRes = bundle.weeklyLogs || [];
+          setWeeklyLogs(weeklyRes);
+          if (weeklyRes.length > 0) {
+            const latestWeekly = weeklyRes[weeklyRes.length - 1];
+            if (latestWeekly) {
+              setSelectedWeek(latestWeekly.LOG_DATE);
+            } else {
+              setSelectedWeek(formatDateStr(getMondayOfDate(new Date())));
+            }
+          } else {
+            setSelectedWeek(formatDateStr(getMondayOfDate(new Date())));
+          }
+
+          const monthlyRes = bundle.monthlyLogs || [];
+          setMonthlyLogs(monthlyRes);
+          if (monthlyRes.length > 0) {
+            const latestMonthly = monthlyRes[monthlyRes.length - 1];
+            if (latestMonthly) {
+              const parts = latestMonthly.LOG_DATE.split('/');
+              if (parts.length === 3) setSelectedMonth(`${parts[1]}/${parts[2]}`);
+            } else {
+              const today = new Date();
+              const m = String(today.getMonth() + 1).padStart(2, '0');
+              setSelectedMonth(`${m}/${today.getFullYear()}`);
+            }
+          } else {
+            const today = new Date();
+            const m = String(today.getMonth() + 1).padStart(2, '0');
+            setSelectedMonth(`${m}/${today.getFullYear()}`);
+          }
+        } else {
+          const [projData, scurveRes, dailyRes, weeklyRes, monthlyRes] = await Promise.all([
+            api.getProject(id),
+            api.getSCurves(id),
+            api.getSiteLogs(id),
+            api.getWeeklyLogs(id),
+            api.getMonthlyLogs(id)
+          ]);
+          if (projData) setProject(projData);
+          if (scurveRes) setScurveData(scurveRes);
+          if (dailyRes) {
+            setLogs(dailyRes);
+            if (dailyRes.length > 0) {
+              const sorted = [...dailyRes].sort((a, b) => parseDateStr(a.LOG_DATE || a.NGÀY) - parseDateStr(b.LOG_DATE || b.NGÀY));
+              const latest = sorted[sorted.length - 1];
+              const latestDate = latest ? (latest.LOG_DATE || latest.NGÀY) : getTodayStr();
+              setSelectedDate(latestDate);
+            } else {
+              setSelectedDate(getTodayStr());
+            }
+          }
+          if (weeklyRes) {
+            setWeeklyLogs(weeklyRes);
+            if (weeklyRes.length > 0) {
+              const latestWeekly = weeklyRes[weeklyRes.length - 1];
+              setSelectedWeek(latestWeekly ? latestWeekly.LOG_DATE : formatDateStr(getMondayOfDate(new Date())));
+            }
+          }
+          if (monthlyRes) {
+            setMonthlyLogs(monthlyRes);
+            if (monthlyRes.length > 0) {
+              const latestMonthly = monthlyRes[monthlyRes.length - 1];
+              if (latestMonthly) {
+                const parts = latestMonthly.LOG_DATE.split('/');
+                if (parts.length === 3) setSelectedMonth(`${parts[1]}/${parts[2]}`);
+              }
+            }
+          }
         }
       } catch (error) {
-        console.error("Failed to fetch project detail:", error);
+        console.error("Failed to fetch project details:", error);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchProject();
+    if (id) fetchAllData();
   }, [id]);
 
-  if (isLoading || !project) {
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // S-Curve Fallback
+  const toPercentageVal = (v) => {
+    if (v === undefined || v === null || v === '') return null;
+    const num = Number(v);
+    if (isNaN(num)) return null;
+    return num <= 1.0 && num > 0 ? num * 100 : num;
+  };
+
+  const formattedSCurve = scurveData && scurveData.length > 0 ? scurveData.map(r => ({
+    name: r.NGÀY || r.LOG_DATE || '',
+    plan: toPercentageVal(r['KẾ_HOẠCH_%'] || r.PLAN_PROGRESS),
+    actual: toPercentageVal(r['THỰC_TẾ_%'] || r.ACTUAL_PROGRESS)
+  })) : [
+    { name: '01/04', plan: 0, actual: 0 },
+    { name: '15/04', plan: 5, actual: 4 },
+    { name: '01/05', plan: 15, actual: 12 },
+    { name: '15/05', plan: 35, actual: 30 },
+    { name: '01/06', plan: 50, actual: 45.2 },
+    { name: '15/06', plan: 75, actual: null },
+    { name: '30/06', plan: 95, actual: null },
+    { name: '10/07', plan: 100, actual: null },
+  ];
+
+  const latestActualPoint = [...formattedSCurve].reverse().find(p => p.actual !== null && p.actual !== undefined);
+
+  const enrichedProject = project ? {
+    ...project,
+    actualProgress: project.actualProgress !== undefined && project.actualProgress !== null ? project.actualProgress : (latestActualPoint ? latestActualPoint.actual : 0),
+    planProgress: project.planProgress !== undefined && project.planProgress !== null ? project.planProgress : (latestActualPoint ? latestActualPoint.plan : 0),
+    delay: project.delay !== undefined && project.delay !== null ? project.delay : (latestActualPoint ? latestActualPoint.actual - latestActualPoint.plan : 0)
+  } : null;
+
+  // Compute active log
+  let activeLog = null;
+  if (selectedView === 'day') {
+    activeLog = logs.find(l => (l.LOG_DATE === selectedDate || l.NGÀY === selectedDate)) || {
+      PROJECT_ID: id,
+      LOG_DATE: selectedDate,
+      MANPOWER: 0,
+      ENGINEERS: 0,
+      WEATHER: '',
+      INCIDENT_COUNT: 0,
+      DAILY_NOTE: '',
+      WEEKLY_ASSESSMENT: '',
+      MONTHLY_REPORT: '',
+      STATUS: 'Draft',
+      UPDATED_BY: 'NV - GIÁM SÁT',
+      UPDATED_AT: ''
+    };
+  } else if (selectedView === 'week') {
+    activeLog = weeklyLogs.find(w => w.LOG_DATE === selectedWeek) || {
+      PROJECT_ID: id,
+      LOG_DATE: selectedWeek,
+      avgManpower: 0,
+      avgEngineers: 0,
+      weatherSummary: 'Chưa ghi nhận',
+      incidentCount: 0,
+      loggedDaysCount: 0,
+      weeklyAssessment: ''
+    };
+  } else if (selectedView === 'month') {
+    activeLog = monthlyLogs.find(m => {
+      const parts = m.LOG_DATE ? m.LOG_DATE.split('/') : [];
+      return parts.length === 3 && `${parts[1]}/${parts[2]}` === selectedMonth;
+    }) || {
+      PROJECT_ID: id,
+      LOG_DATE: `01/${selectedMonth}`,
+      monthLabel: `Tháng ${selectedMonth}`,
+      avgManpower: 0,
+      avgEngineers: 0,
+      weatherSummary: 'Chưa ghi nhận',
+      incidentCount: 0,
+      loggedDaysCount: 0,
+      monthlyReport: ''
+    };
+  }
+
+  const getLogsInWeek = (mondayStr) => {
+    const monday = parseDateStr(mondayStr);
+    if (!monday) return [];
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    return logs.filter(l => {
+      const d = parseDateStr(l.LOG_DATE || l.NGÀY);
+      return d && d >= monday && d <= sunday;
+    });
+  };
+
+  const getLogsInMonth = (monthYearStr) => {
+    const parts = monthYearStr.split('/');
+    if (parts.length !== 2) return [];
+    const m = parseInt(parts[0]) - 1;
+    const y = parseInt(parts[1]);
+    return logs.filter(l => {
+      const d = parseDateStr(l.LOG_DATE || l.NGÀY);
+      return d && d.getMonth() === m && d.getFullYear() === y;
+    });
+  };
+
+  const handleUpdateLog = (field, value) => {
+    let targetLogDate = selectedDate;
+    
+    // Support object of fields
+    const updates = typeof field === 'object' ? field : { [field]: value };
+    
+    // Normalization helper
+    const getMappedField = (f) => {
+      let mapped = f;
+      if (f === 'NHÂN_LỰC_SITE') mapped = 'MANPOWER';
+      if (f === 'KỸ_SƯ_GS') mapped = 'ENGINEERS';
+      if (f === 'THỜI_TIẾT') mapped = 'WEATHER';
+      if (f === 'SỰ_CỐ') mapped = 'INCIDENT_COUNT';
+      if (f === 'GHI_CHÚ_HIỆN_TRƯỜNG') mapped = 'DAILY_NOTE';
+      if (f === 'ĐÁNH_GIÁ_TUẦN') mapped = 'WEEKLY_ASSESSMENT';
+      return mapped;
+    };
+    
+    // Map view edits to correct daily log row
+    if (selectedView === 'week') {
+      const weekLogs = getLogsInWeek(selectedWeek);
+      if (weekLogs.length > 0) {
+        weekLogs.sort((a, b) => parseDateStr(a.LOG_DATE || a.NGÀY) - parseDateStr(b.LOG_DATE || b.NGÀY));
+        targetLogDate = weekLogs[weekLogs.length - 1].LOG_DATE || weekLogs[weekLogs.length - 1].NGÀY;
+      } else {
+        targetLogDate = selectedWeek;
+      }
+    } else if (selectedView === 'month') {
+      const monthLogs = getLogsInMonth(selectedMonth);
+      if (monthLogs.length > 0) {
+        monthLogs.sort((a, b) => parseDateStr(a.LOG_DATE || a.NGÀY) - parseDateStr(b.LOG_DATE || b.NGÀY));
+        targetLogDate = monthLogs[monthLogs.length - 1].LOG_DATE || monthLogs[monthLogs.length - 1].NGÀY;
+      } else {
+        targetLogDate = `01/${selectedMonth}`;
+      }
+    }
+    
+    const existingLog = logs.find(l => (l.LOG_DATE === targetLogDate || l.NGÀY === targetLogDate)) || {
+      PROJECT_ID: id,
+      LOG_DATE: targetLogDate,
+      MANPOWER: 0,
+      ENGINEERS: 0,
+      WEATHER: '',
+      INCIDENT_COUNT: 0,
+      DAILY_NOTE: '',
+      WEEKLY_ASSESSMENT: '',
+      MONTHLY_REPORT: '',
+      STATUS: 'Draft',
+      UPDATED_BY: 'NV - GIÁM SÁT',
+      UPDATED_AT: ''
+    };
+    
+    const updatedFields = {};
+    Object.keys(updates).forEach(k => {
+      const mapped = getMappedField(k);
+      const val = updates[k];
+      updatedFields[mapped] = (mapped === 'MANPOWER' || mapped === 'ENGINEERS' || mapped === 'INCIDENT_COUNT') ? Number(val) : val;
+    });
+    
+    const updatedLog = {
+      ...existingLog,
+      ...updatedFields,
+      UPDATED_BY: 'NV - GIÁM SÁT',
+      UPDATED_AT: new Date().toISOString()
+    };
+    
+    // Update local logs list optimistically
+    setLogs(prev => {
+      const idx = prev.findIndex(l => (l.LOG_DATE === targetLogDate || l.NGÀY === targetLogDate));
+      if (idx !== -1) {
+        return prev.map((l, i) => i === idx ? { ...l, ...updatedLog } : l);
+      } else {
+        return [...prev, updatedLog];
+      }
+    });
+    
+    // Sync to GAS with debounce
+    triggerSave(updatedLog);
+  };
+
+  const triggerSave = (payload) => {
+    setSaveStatus('Saving...');
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    pendingSaveRef.current = payload;
+    saveTimeoutRef.current = setTimeout(async () => {
+      if (isSavingRef.current) return;
+      await performSave();
+    }, 1000);
+  };
+
+  const performSave = async () => {
+    const toSave = pendingSaveRef.current;
+    if (!toSave) {
+      setSaveStatus('Saved');
+      return;
+    }
+    
+    isSavingRef.current = true;
+    setSaveStatus('Saving...');
+    pendingSaveRef.current = null;
+    
+    try {
+      const payload = {
+        PROJECT_ID: String(id),
+        LOG_DATE: toSave.LOG_DATE,
+        NGÀY: toSave.LOG_DATE,
+        MANPOWER: Number(toSave.MANPOWER || 0),
+        NHÂN_LỰC_SITE: Number(toSave.MANPOWER || 0),
+        ENGINEERS: Number(toSave.ENGINEERS || 0),
+        KỸ_SƯ_GS: Number(toSave.ENGINEERS || 0),
+        WEATHER: toSave.WEATHER || '',
+        THỜI_TIẾT: toSave.WEATHER || '',
+        INCIDENT_COUNT: Number(toSave.INCIDENT_COUNT || 0),
+        SỰ_CỐ: `${toSave.INCIDENT_COUNT || 0} vụ`,
+        DAILY_NOTE: toSave.DAILY_NOTE || '',
+        GHI_CHÚ_HIỆN_TRƯỜNG: toSave.DAILY_NOTE || '',
+        WEEKLY_ASSESSMENT: toSave.WEEKLY_ASSESSMENT || '',
+        ĐÁNH_GIÁ_TUẦN: toSave.WEEKLY_ASSESSMENT || '',
+        MONTHLY_REPORT: toSave.MONTHLY_REPORT || '',
+        STATUS: 'Saved',
+        UPDATED_BY: 'NV - GIÁM SÁT',
+        UPDATED_AT: new Date().toISOString(),
+        _rowIndex: toSave._rowIndex
+      };
+      
+      const res = await api.updateSiteLog(payload);
+      setSaveStatus('Saved');
+      
+      if (res && res.dailyLogs) {
+        setLogs(res.dailyLogs);
+        if (res.weeklyLogs) setWeeklyLogs(res.weeklyLogs);
+        if (res.monthlyLogs) setMonthlyLogs(res.monthlyLogs);
+      } else {
+        const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
+          api.getSiteLogs(id),
+          api.getWeeklyLogs(id),
+          api.getMonthlyLogs(id)
+        ]);
+        if (dailyRes) setLogs(dailyRes);
+        if (weeklyRes) setWeeklyLogs(weeklyRes);
+        if (monthlyRes) setMonthlyLogs(monthlyRes);
+      }
+      
+    } catch (error) {
+      console.error("Autosave error:", error);
+      setSaveStatus('Error');
+      pendingSaveRef.current = toSave;
+    } finally {
+      isSavingRef.current = false;
+      if (pendingSaveRef.current && pendingSaveRef.current !== toSave) {
+        performSave();
+      }
+    }
+  };
+
+  if (isLoading || !enrichedProject) {
     return (
       <div className="min-h-screen flex bg-[#060a13] text-slate-100 font-sans relative">
         <div className="absolute inset-0 z-50 bg-[#060a13]/80 backdrop-blur-sm flex items-center justify-center">
@@ -63,7 +500,7 @@ export default function ProjectDetailPage() {
             <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-[#5252ff] to-[#8080ff] shadow-[0_0_12px_rgba(82,82,255,0.7)]"></div>
             <span className="text-sm font-bold tracking-wider text-white">VPEG-PXD-REPORT</span>
           </div>
-
+ 
           {/* Navigation Menu */}
           <nav className="p-4 space-y-1">
             <a
@@ -109,32 +546,65 @@ export default function ProjectDetailPage() {
         <div className="max-w-7xl mx-auto w-full p-6 space-y-6">
           
           {/* SECTION 1 - HEADER */}
-          <ProjectHeader project={project} onBack={() => navigate('/')} />
+          <ProjectHeader project={enrichedProject} onBack={() => navigate('/')} />
           
           {/* SECTION 2 - KPI OVERVIEW */}
-          <KPIOverview project={project} />
+          <KPIOverview project={enrichedProject} />
           
           {/* SECTION 3 - MILESTONE TIMELINE */}
-          <MilestoneTimeline project={project} />
+          <MilestoneTimeline project={enrichedProject} />
           
-          {/* SECTION 4 & 5 - S-CURVE & SITE LOG */}
+          {/* SECTION 4 - S-CURVE CHART (FULL WIDTH) */}
+          <SCurveChart project={enrichedProject} />
+          
+          {/* SECTION 5 - SITE LOGS & OPERATIONS */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <SCurveChart project={project} />
+            <div className={selectedView === 'day' ? 'lg:col-span-3' : 'lg:col-span-2'}>
+              <SiteLogPanel 
+                project={enrichedProject}
+                logs={logs}
+                weeklyLogs={weeklyLogs}
+                monthlyLogs={monthlyLogs}
+                selectedView={selectedView}
+                setSelectedView={setSelectedView}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                selectedWeek={selectedWeek}
+                setSelectedWeek={setSelectedWeek}
+                selectedMonth={selectedMonth}
+                setSelectedMonth={setSelectedMonth}
+                activeLog={activeLog}
+                onUpdateLog={handleUpdateLog}
+                saveStatus={saveStatus}
+              />
             </div>
-            <div className="flex flex-col gap-6">
-              <SiteLogPanel project={project} />
-              <WeeklyKPI project={project} />
-            </div>
+            {selectedView !== 'day' && (
+              <div className="lg:col-span-1">
+                <WeeklyKPI 
+                  project={enrichedProject}
+                  logs={logs}
+                  weeklyLogs={weeklyLogs}
+                  monthlyLogs={monthlyLogs}
+                  selectedView={selectedView}
+                  selectedDate={selectedDate}
+                  selectedWeek={selectedWeek}
+                  selectedMonth={selectedMonth}
+                  activeLog={activeLog}
+                  onUpdateLog={handleUpdateLog}
+                  saveStatus={saveStatus}
+                />
+              </div>
+            )}
           </div>
           
           {/* SECTION 7 - MAIN ACCORDION MODULES */}
           <div className="space-y-4 pt-4">
-            <RiskModule project={project} />
-            <PermitModule project={project} />
-            <DesignModule project={project} />
-            <ProcurementModule project={project} />
-            <ConstructionModule project={project} />
+            <RiskModule project={enrichedProject} initialData={bundleData?.risks} />
+            <PermitModule project={enrichedProject} initialData={bundleData?.permits} onProgressChange={(pct) => handleModuleProgressChange('permit', pct)} />
+            <DesignModule project={enrichedProject} initialData={bundleData?.designs} onProgressChange={(pct) => handleModuleProgressChange('design', pct)} />
+            <ProcurementModule project={enrichedProject} initialData={bundleData?.procurements} onProgressChange={(pct) => handleModuleProgressChange('procurement', pct)} />
+            <ConstructionModule project={enrichedProject} initialData={bundleData?.constructions} onProgressChange={(pct) => handleModuleProgressChange('construction', pct)} />
+            <HandoverModule project={enrichedProject} initialData={bundleData?.handovers} onProgressChange={(pct) => handleModuleProgressChange('handover', pct)} />
           </div>
           
         </div>

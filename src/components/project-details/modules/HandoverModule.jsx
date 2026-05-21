@@ -1,63 +1,73 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, ChevronDown, ChevronUp, Loader2, Landmark, Zap, Shield, Leaf, Building } from 'lucide-react';
+import { ClipboardCheck, ChevronDown, ChevronUp, Loader2, FileText, CheckSquare, FolderOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 
-const defaultPermits = [
-  'Sở công thương',
-  'EVN (Pmax, Scada)',
-  'PCCC (Thông báo)',
-  'Đăng ký môi trường',
-  'Sở xây dựng/BQL'
+const defaultHandovers = [
+  'Hồ sơ thiết kế hoàn công',
+  'Tài liệu hướng dẫn vận hành & bảo trì (O&M Manuals)',
+  'Biên bản nghiệm thu hoàn thành T&C và chạy thử',
+  'Giấy chứng nhận/biên bản kiểm định thiết bị',
+  'Biên bản nghiệm thu COD & Bàn giao đưa vào sử dụng'
 ];
 
-export default function PermitModule({ project, initialData, onProgressChange }) {
+export default function HandoverModule({ project, initialData, onProgressChange }) {
   const [isOpen, setIsOpen] = useState(false);
   
-  const mergePermitData = (data) => {
-    return defaultPermits.map((name, index) => {
+  const mergeHandoverData = (data) => {
+    return defaultHandovers.map((name, index) => {
       const nameLower = name.toLowerCase().replace(/\s+/g, '');
       const row = data ? data.find(r => r.HẠNG_MỤC && r.HẠNG_MỤC.toLowerCase().replace(/\s+/g, '') === nameLower) : null;
       if (row) {
         return {
-          id: `permit_${index}`,
+          id: `handover_${index}`,
           _rowIndex: row._rowIndex,
           HẠNG_MỤC: name,
           TÌNH_TRẠNG: row.TÌNH_TRẠNG || 'Chưa làm',
-          KẾT_QUẢ_PHẢN_HỒI: row.KẾT_QUẢ_PHẢN_HỒI || row.PHẢN_HỒI || 'Chưa có phản hồi',
-          BƯỚC_TIẾP_THEO: row.BƯỚC_TIẾP_THEO || row.BƯỚC_TIẾP || 'Nộp hồ sơ',
+          KẾT_QUẢ_PHẢN_HỒI: row.KẾT_QUẢ_PHẢN_HỒI || 'Chưa có phản hồi',
+          BƯỚC_TIẾP_THEO: row.BƯỚC_TIẾP_THEO || 'Chuẩn bị hồ sơ',
           KẾT_QUẢ_CUỐI: row.KẾT_QUẢ_CUỐI || 'N/A'
         };
       }
       return {
-        id: `permit_${index}`,
+        id: `handover_${index}`,
         _rowIndex: undefined,
         HẠNG_MỤC: name,
         TÌNH_TRẠNG: 'Chưa làm',
         KẾT_QUẢ_PHẢN_HỒI: 'Chưa có phản hồi',
-        BƯỚC_TIẾP_THEO: 'Nộp hồ sơ',
+        BƯỚC_TIẾP_THEO: 'Chuẩn bị hồ sơ',
         KẾT_QUẢ_CUỐI: 'N/A'
       };
     });
   };
 
-  const [permits, setPermits] = useState(() => mergePermitData(initialData));
+  const [handovers, setHandovers] = useState(() => mergeHandoverData(initialData));
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     if (initialData) {
-      setPermits(mergePermitData(initialData));
+      const merged = mergeHandoverData(initialData);
+      setHandovers(merged);
       setIsLoading(false);
+      
+      const compCount = merged.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
+      const prog = merged.length > 0 ? Math.round((compCount / merged.length) * 100) : 0;
+      if (onProgressChange) onProgressChange(prog);
       return;
     }
     const fetchData = async () => {
       try {
         setIsLoading(true);
-        const data = await api.getPermits(project?.PROJECT_ID || project?.id);
-        if (data) setPermits(mergePermitData(data));
+        const data = await api.getHandovers(project?.PROJECT_ID || project?.id);
+        const merged = mergeHandoverData(data);
+        setHandovers(merged);
+        
+        const compCount = merged.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
+        const prog = merged.length > 0 ? Math.round((compCount / merged.length) * 100) : 0;
+        if (onProgressChange) onProgressChange(prog);
       } catch (error) {
-        console.error("Fetch permit error:", error);
+        console.error("Fetch handover error:", error);
       } finally {
         setIsLoading(false);
       }
@@ -65,24 +75,23 @@ export default function PermitModule({ project, initialData, onProgressChange })
     if (project?.PROJECT_ID || project?.id) fetchData();
   }, [project?.PROJECT_ID, project?.id, initialData]);
 
-  useEffect(() => {
-    const completedCount = permits.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
-    const progressPercent = permits.length > 0 ? Math.round((completedCount / permits.length) * 100) : 0;
-    if (onProgressChange) onProgressChange(progressPercent);
-  }, [permits, onProgressChange]);
-
   const handleUpdate = async (id, field, value) => {
     try {
       setIsUpdating(true);
       
       let updatedItem = null;
-      setPermits(prev => prev.map(p => {
+      const updatedList = handovers.map(p => {
         if (p.id === id) {
           updatedItem = { ...p, [field]: value };
           return updatedItem;
         }
         return p;
-      }));
+      });
+      setHandovers(updatedList);
+
+      const compCount = updatedList.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
+      const prog = updatedList.length > 0 ? Math.round((compCount / updatedList.length) * 100) : 0;
+      if (onProgressChange) onProgressChange(prog);
 
       if (updatedItem) {
         const payload = {
@@ -94,15 +103,18 @@ export default function PermitModule({ project, initialData, onProgressChange })
           BƯỚC_TIẾP_THEO: updatedItem.BƯỚC_TIẾP_THEO,
           KẾT_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI
         };
-        await api.updatePermit(payload);
+        await api.updateHandover(payload);
         
         if (!updatedItem._rowIndex) {
-          const freshData = await api.getPermits(project?.PROJECT_ID || project?.id);
-          if (freshData) setPermits(mergePermitData(freshData));
+          const freshData = await api.getHandovers(project?.PROJECT_ID || project?.id);
+          if (freshData) {
+            const merged = mergeHandoverData(freshData);
+            setHandovers(merged);
+          }
         }
       }
     } catch (error) {
-      console.error("Update permit error:", error);
+      console.error("Update handover error:", error);
     } finally {
       setIsUpdating(false);
     }
@@ -111,12 +123,10 @@ export default function PermitModule({ project, initialData, onProgressChange })
   const getStatusColor = (status) => {
     switch (status) {
       case 'Chưa làm': return 'text-slate-400';
-      case 'Đang chuẩn bị hồ sơ': return 'text-[#f59e0b]'; // orange/yellow
-      case 'Đã nộp hồ sơ': return 'text-[#3b82f6]';
-      case 'Đang xử lý': return 'text-[#f97316]';
-      case 'Chờ phản hồi': return 'text-[#f59e0b]';
-      case 'Đang bổ sung': return 'text-[#ef4444]'; // red
-      case 'Tạm dừng': return 'text-rose-500';
+      case 'Đang chuẩn bị hồ sơ': return 'text-[#f59e0b]';
+      case 'Đã trình duyệt': return 'text-[#3b82f6]';
+      case 'Đang chỉnh sửa': return 'text-[#ef4444]';
+      case 'Đã chốt': return 'text-[#10b981]';
       default: return 'text-slate-400';
     }
   };
@@ -125,22 +135,17 @@ export default function PermitModule({ project, initialData, onProgressChange })
     switch (result) {
       case 'Chưa có phản hồi': return 'text-slate-400';
       case 'Đã tiếp nhận': return 'text-[#3b82f6]';
-      case 'Đã có biên nhận': return 'text-[#3b82f6]';
-      case 'Đang xử lý': return 'text-[#f97316]';
-      case 'Yêu cầu bổ sung': return 'text-red-400';
-      case 'Đã duyệt': return 'text-[#10b981]';
-      case 'Bị từ chối': return 'text-rose-500';
+      case 'Yêu cầu chỉnh sửa': return 'text-red-400';
+      case 'Đã thông qua': return 'text-[#10b981]';
       default: return 'text-slate-300';
     }
   };
 
   const getNextStepColor = (step) => {
     switch (step) {
-      case 'Nộp hồ sơ': return 'text-[#3b82f6]';
-      case 'Bổ sung hồ sơ': return 'text-[#f59e0b]';
-      case 'Theo dõi': return 'text-[#eab308]';
-      case 'Lấy kết quả': return 'text-[#10b981] font-semibold';
-      case 'Mời nghiệm thu': return 'text-[#10b981] font-semibold';
+      case 'Chuẩn bị hồ sơ': return 'text-[#3b82f6]';
+      case 'Bổ sung/Chỉnh sửa': return 'text-[#f59e0b]';
+      case 'Trình ký duyệt': return 'text-[#10b981] font-semibold';
       default: return 'text-slate-300';
     }
   };
@@ -150,17 +155,16 @@ export default function PermitModule({ project, initialData, onProgressChange })
     return 'text-slate-500';
   };
 
-  const getPermitIcon = (name) => {
+  const getHandoverIcon = (name) => {
     const lowercase = name.toLowerCase();
-    if (lowercase.includes('công thương')) return <Landmark className="w-3.5 h-3.5 text-[#3b82f6]" />;
-    if (lowercase.includes('evn')) return <Zap className="w-3.5 h-3.5 text-[#eab308]" />;
-    if (lowercase.includes('pccc')) return <Shield className="w-3.5 h-3.5 text-[#ef4444]" />;
-    if (lowercase.includes('môi trường')) return <Leaf className="w-3.5 h-3.5 text-[#10b981]" />;
-    return <Building className="w-3.5 h-3.5 text-[#a855f7]" />;
+    if (lowercase.includes('thiết kế')) return <FolderOpen className="w-3.5 h-3.5 text-[#3b82f6]" />;
+    if (lowercase.includes('vận hành')) return <FileText className="w-3.5 h-3.5 text-[#eab308]" />;
+    if (lowercase.includes('nghiệm thu')) return <CheckSquare className="w-3.5 h-3.5 text-[#ef4444]" />;
+    return <ClipboardCheck className="w-3.5 h-3.5 text-[#10b981]" />;
   };
 
-  const completedCount = permits.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
-  const progressPercent = permits.length > 0 ? Math.round((completedCount / permits.length) * 100) : 0;
+  const completedCount = handovers.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
+  const progressPercent = handovers.length > 0 ? Math.round((completedCount / handovers.length) * 100) : 0;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[#182135] overflow-hidden">
@@ -169,10 +173,10 @@ export default function PermitModule({ project, initialData, onProgressChange })
         className="w-full flex items-center justify-between p-4 bg-[#0b0f19] hover:bg-[#0d1322] transition-colors"
       >
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded bg-[#6366f1]/10 text-[#6366f1] flex items-center justify-center">
-            <FileText className="w-4 h-4" />
+          <div className="w-8 h-8 rounded bg-[#10b981]/10 text-[#10b981] flex items-center justify-center">
+            <ClipboardCheck className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">GIẤY PHÉP / HỒ SƠ PHÁP LÝ DỰ ÁN</h3>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">BÀN GIAO HỒ SƠ DỰ ÁN</h3>
         </div>
         
         <div className="flex items-center gap-4">
@@ -184,7 +188,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
               </div>
             ) : (
               <div className="flex items-center gap-2 bg-[#182135]/50 border border-[#1e293b] px-3 py-1 rounded-full text-xs">
-                <span className="text-[#8ca0c3]">{completedCount}/{permits.length} hoàn thành</span>
+                <span className="text-[#8ca0c3]">{completedCount}/{handovers.length} hoàn thành</span>
                 <span className="w-1 h-1 bg-[#10b981] rounded-full"></span>
                 <span className="text-[#10b981] font-bold">{progressPercent}%</span>
               </div>
@@ -216,10 +220,10 @@ export default function PermitModule({ project, initialData, onProgressChange })
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#182135]">
-                    {permits.map(p => (
+                    {handovers.map(p => (
                       <tr key={p.id} className="hover:bg-[#0b0f19]/50 transition-colors">
                         <td className="p-3 font-semibold text-slate-200 flex items-center gap-2">
-                          {getPermitIcon(p.HẠNG_MỤC)}
+                          {getHandoverIcon(p.HẠNG_MỤC)}
                           <span>{p.HẠNG_MỤC}</span>
                         </td>
                         <td className="p-3">
@@ -230,11 +234,9 @@ export default function PermitModule({ project, initialData, onProgressChange })
                           >
                             <option className="bg-[#0b0f19] text-slate-200">Chưa làm</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đang chuẩn bị hồ sơ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã nộp hồ sơ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đang xử lý</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Chờ phản hồi</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đang bổ sung</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Tạm dừng</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Đã trình duyệt</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Đang chỉnh sửa</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Đã chốt</option>
                           </select>
                         </td>
                         <td className="p-3">
@@ -245,11 +247,8 @@ export default function PermitModule({ project, initialData, onProgressChange })
                           >
                             <option className="bg-[#0b0f19] text-slate-200">Chưa có phản hồi</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đã tiếp nhận</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã có biên nhận</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đang xử lý</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Yêu cầu bổ sung</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã duyệt</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Bị từ chối</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Yêu cầu chỉnh sửa</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Đã thông qua</option>
                           </select>
                         </td>
                         <td className="p-3">
@@ -258,13 +257,10 @@ export default function PermitModule({ project, initialData, onProgressChange })
                             value={p.BƯỚC_TIẾP_THEO || ''}
                             onChange={(e) => handleUpdate(p.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                           >
-                            <option className="bg-[#0b0f19] text-slate-200">Nộp hồ sơ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Liên hệ cán bộ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Bổ sung hồ sơ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Theo dõi</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Gọi thúc</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Lấy kết quả</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Mời nghiệm thu</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Chuẩn bị hồ sơ</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Trình duyệt CĐT</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Bổ sung/Chỉnh sửa</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Trình ký duyệt</option>
                           </select>
                         </td>
                         <td className="p-3">
@@ -274,10 +270,8 @@ export default function PermitModule({ project, initialData, onProgressChange })
                             onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                           >
                             <option className="bg-[#0b0f19] text-slate-200" value="-">-</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã có GCN</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã có biên nhận</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã nghiệm thu</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã có công văn</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Đã ký duyệt</option>
+                            <option className="bg-[#0b0f19] text-slate-200">Đã bàn giao</option>
                             <option className="bg-[#0b0f19] text-slate-200">Đã hoàn tất</option>
                             <option className="bg-[#0b0f19] text-slate-200">N/A</option>
                           </select>

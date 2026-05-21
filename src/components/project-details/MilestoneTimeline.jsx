@@ -10,7 +10,8 @@ const initialMilestones = [
   { id: 4, title: 'VẬT TƯ', date: '10/06/2026', status: 'pending' },
   { id: 5, title: 'THI CÔNG', date: '25/06/2026', status: 'pending' },
   { id: 6, title: 'COMMISSIONING', date: '05/07/2026', status: 'pending' },
-  { id: 7, title: 'COD', date: '29/06/2026', status: 'delay' }
+  { id: 7, title: 'COD', date: '29/06/2026', status: 'delay' },
+  { id: 8, title: 'BÀN GIAO HỒ SƠ', date: '15/07/2026', status: 'pending' }
 ];
 
 export default function MilestoneTimeline({ project }) {

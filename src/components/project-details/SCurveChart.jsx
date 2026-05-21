@@ -92,7 +92,7 @@ export default function SCurveChart({ project }) {
   const latestActualPoint = [...chartData].reverse().find(p => p.actual !== null && p.actual !== undefined);
 
   return (
-    <div className="glass-panel p-6 rounded-xl shadow-lg border border-[#182135] h-full flex flex-col">
+    <div className="glass-panel p-6 rounded-xl shadow-lg border border-[#182135] h-[360px] flex flex-col">
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           ĐƯỜNG ĐỒ THỊ TIẾN ĐỘ (S-CURVE)

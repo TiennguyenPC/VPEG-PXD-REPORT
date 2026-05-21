@@ -3,13 +3,18 @@ import { AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2 } from 'lucide-rea
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 
-export default function RiskModule({ project }) {
+export default function RiskModule({ project, initialData }) {
   const [isOpen, setIsOpen] = useState(false);
-  const [risks, setRisks] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [risks, setRisks] = useState(initialData || []);
+  const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
+    if (initialData) {
+      setRisks(initialData);
+      setIsLoading(false);
+      return;
+    }
     const fetchData = async () => {
       try {
         setIsLoading(true);
@@ -24,7 +29,7 @@ export default function RiskModule({ project }) {
     if (project?.PROJECT_ID || project?.id) {
       fetchData();
     }
-  }, [project?.PROJECT_ID, project?.id]);
+  }, [project?.PROJECT_ID, project?.id, initialData]);
 
   const handleUpdate = async (id, field, value) => {
     try {
@@ -113,7 +118,23 @@ export default function RiskModule({ project }) {
           >
             <div className="p-4 border-t border-[#182135] bg-[#060a13]">
               <div className="flex justify-end mb-3">
-                <button className="bg-[#182135] hover:bg-[#263554] text-slate-200 text-xs font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors">
+                <button 
+                  onClick={async () => {
+                    const newRisk = {
+                      PROJECT_ID: project?.PROJECT_ID || project?.id || '',
+                      MỨC_ĐỘ: 'Trung bình',
+                      NỘI_DUNG: 'Rủi ro mới',
+                      ẢNH_HƯỞNG: '',
+                      TRẠNG_THÁI: 'Open',
+                      PHỤ_TRÁCH: '',
+                      NGÀY: new Date().toLocaleDateString('vi-VN'),
+                      GHI_CHÚ: ''
+                    };
+                    setRisks(prev => [...prev, { ...newRisk, _rowIndex: 'new-' + Date.now() }]);
+                    try { await api.addRisk(newRisk); } catch(e) { console.error("Add risk error:", e); }
+                  }}
+                  className="bg-[#182135] hover:bg-[#263554] text-slate-200 text-xs font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors"
+                >
                   <Plus className="w-3.5 h-3.5" /> Thêm rủi ro
                 </button>
               </div>
