@@ -35,12 +35,16 @@ export default function RiskModule({ project, initialData }) {
     try {
       setIsUpdating(true);
       const original = risks.find(r => (r._rowIndex || r.id) === id);
+      if (!original) return;
       const updated = { ...original, [field]: value };
       
       // Optimistic update
       setRisks(prev => prev.map(r => (r._rowIndex || r.id) === id ? updated : r));
       
-      await api.updateRisk(updated);
+      const response = await api.updateRisk(updated);
+      if (response && response.data) {
+        setRisks(response.data);
+      }
     } catch (error) {
       console.error("Update risk error:", error);
       // Optional: reload data to revert
@@ -130,8 +134,19 @@ export default function RiskModule({ project, initialData }) {
                       NGÀY: new Date().toLocaleDateString('vi-VN'),
                       GHI_CHÚ: ''
                     };
-                    setRisks(prev => [...prev, { ...newRisk, _rowIndex: 'new-' + Date.now() }]);
-                    try { await api.addRisk(newRisk); } catch(e) { console.error("Add risk error:", e); }
+                    const tempId = 'new-' + Date.now();
+                    setRisks(prev => [...prev, { ...newRisk, _rowIndex: tempId }]);
+                    try { 
+                      const response = await api.addRisk(newRisk);
+                      if (response && response.data) {
+                        setRisks(response.data);
+                      } else {
+                        const data = await api.getRisks(project?.PROJECT_ID || project?.id);
+                        if (data) setRisks(data);
+                      }
+                    } catch(e) { 
+                      console.error("Add risk error:", e); 
+                    }
                   }}
                   className="bg-[#182135] hover:bg-[#263554] text-slate-200 text-xs font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors"
                 >
@@ -143,12 +158,12 @@ export default function RiskModule({ project, initialData }) {
                 <table className="w-full text-left text-xs">
                   <thead>
                     <tr className="bg-[#0b0f19] text-[#6b7d9b] font-bold uppercase tracking-wider border-b border-[#182135]">
-                      <th className="p-3">Mức độ</th>
+                      <th className="p-3 w-32">Mức độ</th>
                       <th className="p-3">Nội dung</th>
                       <th className="p-3">Ảnh hưởng</th>
-                      <th className="p-3">Trạng thái</th>
+                      <th className="p-3 w-32">Trạng thái</th>
                       <th className="p-3">Phụ trách</th>
-                      <th className="p-3">Ngày</th>
+                      <th className="p-3 w-28">Ngày</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#182135]">
@@ -165,8 +180,32 @@ export default function RiskModule({ project, initialData }) {
                             <option className="bg-[#0b0f19] text-slate-200">Thấp</option>
                           </select>
                         </td>
-                        <td className="p-3 font-semibold text-slate-200">{r.NỘI_DUNG}</td>
-                        <td className="p-3 text-[#8ca0c3]">{r.ẢNH_HƯỞNG}</td>
+                        <td className="p-3">
+                          <input 
+                            type="text" 
+                            className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-200 ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={r.NỘI_DUNG || ''}
+                            placeholder="Nhập nội dung..."
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRisks(prev => prev.map(item => (item._rowIndex === r._rowIndex || item.id === r.id) ? { ...item, NỘI_DUNG: val } : item));
+                            }}
+                            onBlur={(e) => handleUpdate(r._rowIndex || r.id, 'NỘI_DUNG', e.target.value)}
+                          />
+                        </td>
+                        <td className="p-3">
+                          <input 
+                            type="text" 
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[#8ca0c3] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={r.ẢNH_HƯỞNG || ''}
+                            placeholder="Nhập ảnh hưởng..."
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRisks(prev => prev.map(item => (item._rowIndex === r._rowIndex || item.id === r.id) ? { ...item, ẢNH_HƯỞNG: val } : item));
+                            }}
+                            onBlur={(e) => handleUpdate(r._rowIndex || r.id, 'ẢNH_HƯỞNG', e.target.value)}
+                          />
+                        </td>
                         <td className="p-3">
                           <select 
                             className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(r.TRẠNG_THÁI)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
@@ -179,8 +218,32 @@ export default function RiskModule({ project, initialData }) {
                             <option className="bg-[#0b0f19] text-slate-200">Đã đóng</option>
                           </select>
                         </td>
-                        <td className="p-3 text-slate-300 font-medium">{r.PHỤ_TRÁCH}</td>
-                        <td className="p-3 text-[#6b7d9b]">{r.NGÀY}</td>
+                        <td className="p-3">
+                          <input 
+                            type="text" 
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 font-medium ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={r.PHỤ_TRÁCH || ''}
+                            placeholder="Nhập người phụ trách..."
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRisks(prev => prev.map(item => (item._rowIndex === r._rowIndex || item.id === r.id) ? { ...item, PHỤ_TRÁCH: val } : item));
+                            }}
+                            onBlur={(e) => handleUpdate(r._rowIndex || r.id, 'PHỤ_TRÁCH', e.target.value)}
+                          />
+                        </td>
+                        <td className="p-3">
+                          <input 
+                            type="text" 
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[#6b7d9b] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            value={r.NGÀY || ''}
+                            placeholder="DD/MM/YYYY"
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setRisks(prev => prev.map(item => (item._rowIndex === r._rowIndex || item.id === r.id) ? { ...item, NGÀY: val } : item));
+                            }}
+                            onBlur={(e) => handleUpdate(r._rowIndex || r.id, 'NGÀY', e.target.value)}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>

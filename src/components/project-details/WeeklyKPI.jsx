@@ -204,7 +204,9 @@ export default function WeeklyKPI({
   const incidentsList = [];
 
   weekDays.forEach((day) => {
-    const man = day.log ? Number(day.log.MANPOWER !== undefined ? day.log.MANPOWER : (day.log.NHÂN_LỰC_SITE || 0)) : 0;
+    const workers = day.log ? Number(day.log.MANPOWER !== undefined ? day.log.MANPOWER : (day.log.NHÂN_LỰC_SITE || 0)) : 0;
+    const engineers = day.log ? Number(day.log.ENGINEERS !== undefined ? day.log.ENGINEERS : (day.log.KỸ_SƯ_GS || 0)) : 0;
+    const man = workers + engineers;
     const weather = day.log ? String(day.log.WEATHER !== undefined ? day.log.WEATHER : (day.log.THỜI_TIẾT || '')).toLowerCase() : '';
     const incidents = day.log ? Number(day.log.INCIDENT_COUNT !== undefined ? day.log.INCIDENT_COUNT : (parseInt(day.log.SỰ_CỐ) || 0)) : 0;
     const rawNote = day.log ? (day.log.DAILY_NOTE !== undefined ? day.log.DAILY_NOTE : (day.log.GHI_CHÚ_HIỆN_TRƯỜNG || '')) : '';
@@ -365,7 +367,7 @@ export default function WeeklyKPI({
                 labelStyle={{ fontSize: '10px', color: '#6b7d9b', fontWeight: 'bold' }}
                 itemStyle={{ fontSize: '10px', color: '#fff' }}
               />
-              <Line type="monotone" dataKey="manpower" stroke="#5252ff" strokeWidth={2} dot={{ r: 3, fill: '#5252ff' }} />
+              <Line type="monotone" dataKey="manpower" name="Tổng nhân sự" stroke="#5252ff" strokeWidth={2} dot={{ r: 3, fill: '#5252ff' }} />
             </LineChart>
           </ResponsiveContainer>
         </div>

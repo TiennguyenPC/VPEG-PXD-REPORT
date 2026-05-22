@@ -28,6 +28,7 @@ function doGet(e) {
         break;
       case 'dashboard-bundle':
         const projectId = id;
+        const siteLogs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId));
         data = {
           project: getSheetDataAsObjects(ss, 'PROJECT_MASTER').find(p => (p.PROJECT_ID == projectId || p.id == projectId)) || null,
           scurve: getSheetDataAsObjects(ss, 'PROJECT_S_CURVE').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId)),
@@ -37,9 +38,9 @@ function doGet(e) {
           procurements: getSheetDataAsObjects(ss, 'PROJECT_PROCUREMENT').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId)),
           constructions: getSheetDataAsObjects(ss, 'PROJECT_CONSTRUCTION').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId)),
           handovers: getSheetDataAsObjects(ss, 'PROJECT_HANDOVER').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId)),
-          siteLogs: getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId)),
-          weeklyLogs: getWeeklyAggregates(ss, projectId),
-          monthlyLogs: getMonthlyAggregates(ss, projectId),
+          siteLogs: siteLogs,
+          weeklyLogs: getWeeklyAggregates(ss, projectId, siteLogs),
+          monthlyLogs: getMonthlyAggregates(ss, projectId, siteLogs),
           milestones: getSheetDataAsObjects(ss, 'PROJECT_MILESTONE').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId))
         };
         break;
@@ -150,20 +151,43 @@ function doPost(e) {
     if (sheetName) {
       if (action.startsWith('add-')) {
         appendRow(ss, sheetName, payload);
+        if (action === 'add-project') {
+          const projectId = payload.PROJECT_ID || payload.id;
+          if (projectId) {
+            initializeProjectDetails(ss, projectId);
+          }
+        }
       } else {
         // Fallback to payload.id if payload.PROJECT_ID is not provided (for older modules)
         updateRowById(ss, sheetName, payload.PROJECT_ID || payload.id, payload);
+      }
+      
+      const projectId = payload.PROJECT_ID || payload.id || payload.projectId;
+      if (projectId && ['PROJECT_PERMIT', 'PROJECT_DESIGN', 'PROJECT_PROCUREMENT', 'PROJECT_CONSTRUCTION', 'PROJECT_HANDOVER'].indexOf(sheetName) !== -1) {
+        recalculateProjectProgress(ss, projectId);
+      }
+      
+      if (action !== 'update-site-log') {
+        if (projectId) {
+          const updatedList = getSheetDataAsObjects(ss, sheetName).filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId));
+          return createResponse({
+            status: 'success',
+            message: 'Data saved successfully',
+            data: updatedList
+          });
+        }
       }
     }
     
     if (action === 'update-site-log') {
       const projectId = payload.PROJECT_ID || payload.id;
+      const dailyLogs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId));
       return createResponse({
         status: 'success',
         message: 'Data updated successfully',
-        dailyLogs: getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId)),
-        weeklyLogs: getWeeklyAggregates(ss, projectId),
-        monthlyLogs: getMonthlyAggregates(ss, projectId)
+        dailyLogs: dailyLogs,
+        weeklyLogs: getWeeklyAggregates(ss, projectId, dailyLogs),
+        monthlyLogs: getMonthlyAggregates(ss, projectId, dailyLogs)
       });
     }
     
@@ -172,8 +196,127 @@ function doPost(e) {
     return createResponse({ status: 'error', message: error.toString() }, 500);
   }
 }
-
 // ================= UTILITIES =================
+
+function normalizeString(str) {
+  if (!str) return "";
+  return String(str)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove accents
+    .replace(/đ/g, "d")
+    .replace(/[^a-z0-9%]/g, ""); // remove spaces, underscores, dashes, keep %
+}
+
+const STANDARD_KEYS_MAP = {
+  'projectid': 'PROJECT_ID',
+  
+  // master
+  'tenduan': 'TÊN_DỰ_ÁN',
+  'projectname': 'TÊN_DỰ_ÁN',
+  'khachhang': 'KHÁCH_HÀNG',
+  'client': 'KHÁCH_HÀNG',
+  'pm': 'PM',
+  'sm': 'SM',
+  'congsuatkwp': 'CÔNG_SUẤT_KWP',
+  'capacitykwp': 'CÔNG_SUẤT_KWP',
+  'kehoachcod': 'KẾ_HOẠCH_COD',
+  'codplan': 'KẾ_HOẠCH_COD',
+  'dubaocod': 'DỰ_BÁO_COD',
+  'tiendokehoach': 'TIẾN_ĐỘ_KẾ_HOẠCH',
+  'planprogress': 'TIẾN_ĐỘ_KẾ_HOẠCH',
+  'tiendothucte': 'TIẾN_ĐỘ_THỰC_TẾ',
+  'actualprogress': 'TIẾN_ĐỘ_THỰC_TẾ',
+  'delay': 'DELAY',
+  'trangthai': 'TRẠNG_THÁI',
+  'status': 'TRẠNG_THÁI',
+  'risklevel': 'RISK_LEVEL',
+  'capnhatcuoi': 'CẬP_NHẬT_CUỐI',
+  
+  // permit/handover
+  'hangmuc': 'HẠNG_MỤC',
+  'tinhtrang': 'TÌNH_TRẠNG',
+  'ketquaphanhoi': 'KẾ_QUẢ_PHẢN_HỒI',
+  'phanhoi': 'KẾ_QUẢ_PHẢN_HỒI',
+  'buoctieptheo': 'BƯỚC_TIẾP_THEO',
+  'buoctiep': 'BƯỚC_TIẾP_THEO',
+  'ketquacuoi': 'KẾ_QUẢ_CUỐI',
+  'capnhatboi': 'CẬP_NHẬT_BỞI',
+  'ngaycapnhat': 'NGÀY_CẬP_NHẬT',
+  
+  // design
+  'hangmucbanve': 'HẠNG_MỤC_BẢN_VẼ',
+  'pheduyet': 'PHÊ_DUYỆT',
+  
+  // procurement
+  'hangmucmuahang': 'HẠNG_MỤC_MUA_HÀNG',
+  'ngayvedukien': 'NGÀY_VỀ_DỰ_KIẾN',
+  'ngayvethucte': 'NGÀY_VỀ_THỰC_TẾ',
+  'tinhtrangvattu': 'TÌNH_TRẠNG_VẬT_TƯ',
+  'danhgiatiento': 'ĐÁNH_GIÁ_TIẾN_ĐỘ',
+  'danhgiatiendo': 'ĐÁNH_GIÁ_TIẾN_ĐỘ',
+  'ncc': 'NCC',
+  'ghichu': 'GHI_CHÚ',
+  
+  // construction
+  'nhomthicong': 'NHÓM_THI_CÔNG',
+  'macv': 'MÃ_CV',
+  'hangmuccongviec': 'HẠNG_MỤC_CÔNG_VIỆC',
+  'ngaybatdau': 'NGÀY_BẮT_ĐẦU',
+  'songay': 'SỐ_NGÀY',
+  'ngayketthuc': 'NGÀY_KẾT_THÚC',
+  'ngayhtthucte': 'NGÀY_HT_THỰC_TẾ',
+  'tiendothucte': 'TIẾN_ĐỘ_THỰC_TẾ',
+  'trongso': 'TRỌNG_SỐ',
+  
+  // daily log
+  'ngay': 'NGÀY',
+  'logdate': 'NGÀY',
+  'nhanlucsite': 'NHÂN_LỰC_SITE',
+  'manpower': 'NHÂN_LỰC_SITE',
+  'kysugs': 'KỸ_SƯ_GS',
+  'engineers': 'KỸ_SƯ_GS',
+  'thoitiet': 'THỜI_TIẾT',
+  'weather': 'THỜI_TIẾT',
+  'suco': 'SỰ_CỐ',
+  'incidentcount': 'SỰ_CỐ',
+  'ghichuhientruong': 'GHI_CHÚ_HIỆN_TRƯỜNG',
+  'dailynote': 'GHI_CHÚ_HIỆN_TRƯỜNG',
+  'danhgiatuan': 'ĐÁNH_GIÁ_TUẦN',
+  'weeklyassessment': 'ĐÁNH_GIÁ_TUẦN',
+  'monthlyreport': 'GHI_CHÚ_HIỆN_TRƯỜNG',
+  
+  // risk
+  'mucdo': 'MỨC_ĐỘ',
+  'noidung': 'NỘI_DUNG',
+  'anhhuong': 'ẢNH_HƯỞNG',
+  'phutrach': 'PHỤ_TRÁCH',
+  
+  // milestone
+  'milestone': 'MILESTONE',
+  'ngaykehoach': 'NGÀY_KẾ_HOẠCH',
+  'ngaythucte': 'NGÀY_THỰC_TẾ',
+  
+  // scurve
+  'kehoach%': 'KẾ_HOẠCH_%',
+  'thucte%': 'THỰC_TẾ_%'
+};
+
+function findColumnIndex(headers, possibleNames) {
+  if (!headers || headers.length === 0) return -1;
+  if (!Array.isArray(possibleNames)) {
+    possibleNames = [possibleNames];
+  }
+  for (let k = 0; k < possibleNames.length; k++) {
+    const normTarget = normalizeString(possibleNames[k]);
+    for (let i = 0; i < headers.length; i++) {
+      if (normalizeString(headers[i]) === normTarget) {
+        return i;
+      }
+    }
+  }
+  return -1;
+}
 
 function getSheetDataAsObjects(ss, sheetName) {
   const sheet = ss.getSheetByName(sheetName);
@@ -189,21 +332,19 @@ function getSheetDataAsObjects(ss, sheetName) {
     const row = data[i];
     const obj = {};
     for (let j = 0; j < headers.length; j++) {
-      // Assume first row is header keys, match exactly with JS object keys
       if (headers[j]) {
         let val = row[j];
-        // Handle dates properly if needed
         if (val instanceof Date) {
-          // simple formatting for frontend
           const y = val.getFullYear();
           const m = String(val.getMonth() + 1).padStart(2, '0');
           const d = String(val.getDate()).padStart(2, '0');
           val = `${d}/${m}/${y}`;
         }
-        obj[headers[j]] = val;
+        const normKey = normalizeString(headers[j]);
+        const stdKey = STANDARD_KEYS_MAP[normKey] || headers[j];
+        obj[stdKey] = val;
       }
     }
-    // inject row index for update logic if needed
     obj._rowIndex = i + 1; 
     objects.push(obj);
   }
@@ -229,14 +370,24 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     targetRowIndex = Number(updatedData._rowIndex);
   } else {
     // Find ID column (could be PROJECT_ID or id depending on sheet)
-    let idColIndex = headers.indexOf('PROJECT_ID');
-    if (idColIndex === -1) idColIndex = headers.indexOf('id');
-    if (idColIndex === -1) idColIndex = headers.indexOf('projectId');
+    let idColIndex = findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']);
     
-    let dateColIndex = headers.indexOf('LOG_DATE');
-    if (dateColIndex === -1) dateColIndex = headers.indexOf('NGÀY');
+    let dateColIndex = findColumnIndex(headers, ['LOG_DATE', 'NGÀY']);
     
     if (idColIndex === -1) throw new Error("No ID column found in sheet");
+    
+    // Secondary key columns for sheets with multiple rows per project
+    const SECONDARY_KEYS = {
+      'PROJECT_PERMIT':       'HẠNG_MỤC',
+      'PROJECT_DESIGN':       'HẠNG_MỤC_BẢN_VẼ',
+      'PROJECT_PROCUREMENT':  'HẠNG_MỤC_MUA_HÀNG',
+      'PROJECT_HANDOVER':     'HẠNG_MỤC',
+      'PROJECT_CONSTRUCTION': 'HẠNG_MỤC_CÔNG_VIỆC',
+      'PROJECT_RISK':         'NỘI_DUNG'
+    };
+    const secondaryKeyName = SECONDARY_KEYS[sheetName];
+    const secondaryKeyColIndex = secondaryKeyName ? findColumnIndex(headers, secondaryKeyName) : -1;
+    const secondaryKeyValue = secondaryKeyName && updatedData ? updatedData[secondaryKeyName] : undefined;
     
     for (let i = 1; i < data.length; i++) {
       // Weak equality because sheet ID might be number but payload ID is string
@@ -258,7 +409,13 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
         dateMatch = (rowDateStr === String(payloadDate));
       }
       
-      if (idMatch && dateMatch) {
+      // For multi-row sheets, also match by secondary key (item name)
+      let secondaryMatch = true;
+      if (secondaryKeyColIndex !== -1 && secondaryKeyValue !== undefined) {
+        secondaryMatch = (String(data[i][secondaryKeyColIndex]).trim() === String(secondaryKeyValue).trim());
+      }
+      
+      if (idMatch && dateMatch && secondaryMatch) {
         targetRowIndex = i + 1; // 1-based index for sheet
         break;
       }
@@ -270,12 +427,43 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     return;
   }
   
-  // Update the row
+  // Alias map: frontend English keys → possible Vietnamese column header names in the sheet
+  const FIELD_ALIASES = {
+    'LOG_DATE':        ['LOG_DATE', 'NGÀY'],
+    'MANPOWER':        ['MANPOWER', 'NHÂN_LỰC_SITE'],
+    'ENGINEERS':       ['ENGINEERS', 'KỸ_SƯ_GS'],
+    'WEATHER':         ['WEATHER', 'THỜI_TIẾT'],
+    'INCIDENT_COUNT':  ['INCIDENT_COUNT', 'SỰ_CỐ'],
+    'DAILY_NOTE':      ['DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'WEEKLY_ASSESSMENT': ['WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN'],
+    'MONTHLY_REPORT':  ['MONTHLY_REPORT', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    // Vietnamese → English reverse aliases
+    'NGÀY':                   ['NGÀY', 'LOG_DATE'],
+    'NHÂN_LỰC_SITE':          ['NHÂN_LỰC_SITE', 'MANPOWER'],
+    'KỸ_SƯ_GS':              ['KỸ_SƯ_GS', 'ENGINEERS'],
+    'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
+    'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
+    'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
+    'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT']
+  };
+
+  // Update the row — try key directly first, then aliases
   for (const key in updatedData) {
-    if (key === 'id' || key === 'projectId' || key === 'PROJECT_ID' || key === '_rowIndex') continue; // Don't modify keys
-    const colIndex = headers.indexOf(key);
+    if (key === 'id' || key === 'projectId' || key === 'PROJECT_ID' || key === '_rowIndex') continue;
+    
+    // Find matching column: try exact match first, then aliases
+    let colIndex = findColumnIndex(headers, key);
+    if (colIndex === -1 && FIELD_ALIASES[key]) {
+      colIndex = findColumnIndex(headers, FIELD_ALIASES[key]);
+    }
+    
     if (colIndex !== -1) {
-      sheet.getRange(targetRowIndex, colIndex + 1).setValue(updatedData[key]);
+      let val = updatedData[key];
+      // Special handling: SỰ_CỐ in sheet stores as "X vụ" string format
+      if ((normalizeString(headers[colIndex]) === 'suco') && typeof val === 'number') {
+        val = val + ' vụ';
+      }
+      sheet.getRange(targetRowIndex, colIndex + 1).setValue(val);
     }
   }
 }
@@ -304,8 +492,8 @@ function formatDateString(date) {
   return `${d}/${m}/${y}`;
 }
 
-function getWeeklyAggregates(ss, projectId) {
-  const logs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => {
+function getWeeklyAggregates(ss, projectId, preloadedLogs) {
+  const logs = preloadedLogs || getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => {
     return String(row.PROJECT_ID) === String(projectId);
   });
   
@@ -396,8 +584,8 @@ function getWeeklyAggregates(ss, projectId) {
   return results;
 }
 
-function getMonthlyAggregates(ss, projectId) {
-  const logs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => {
+function getMonthlyAggregates(ss, projectId, preloadedLogs) {
+  const logs = preloadedLogs || getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => {
     return String(row.PROJECT_ID) === String(projectId);
   });
   
@@ -501,10 +689,37 @@ function appendRow(ss, sheetName, payload) {
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const newRow = new Array(headers.length).fill("");
   
+  // Same alias map used in updateRowById
+  const FIELD_ALIASES = {
+    'LOG_DATE':          ['LOG_DATE', 'NGÀY'],
+    'MANPOWER':          ['MANPOWER', 'NHÂN_LỰC_SITE'],
+    'ENGINEERS':         ['ENGINEERS', 'KỸ_SƯ_GS'],
+    'WEATHER':           ['WEATHER', 'THỜI_TIẾT'],
+    'INCIDENT_COUNT':    ['INCIDENT_COUNT', 'SỰ_CỐ'],
+    'DAILY_NOTE':        ['DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'WEEKLY_ASSESSMENT': ['WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN'],
+    'MONTHLY_REPORT':    ['MONTHLY_REPORT', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'NGÀY':                   ['NGÀY', 'LOG_DATE'],
+    'NHÂN_LỰC_SITE':          ['NHÂN_LỰC_SITE', 'MANPOWER'],
+    'KỸ_SƯ_GS':              ['KỸ_SƯ_GS', 'ENGINEERS'],
+    'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
+    'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
+    'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
+    'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT']
+  };
+  
   for (const key in payload) {
-    const colIndex = headers.indexOf(key);
+    if (key === '_rowIndex') continue;
+    let colIndex = findColumnIndex(headers, key);
+    if (colIndex === -1 && FIELD_ALIASES[key]) {
+      colIndex = findColumnIndex(headers, FIELD_ALIASES[key]);
+    }
     if (colIndex !== -1) {
-      newRow[colIndex] = payload[key];
+      let val = payload[key];
+      if ((normalizeString(headers[colIndex]) === 'suco') && typeof val === 'number') {
+        val = val + ' vụ';
+      }
+      newRow[colIndex] = val;
     }
   }
   
@@ -533,206 +748,7 @@ function initializeSheetIfEmpty(sheet, sheetName) {
   }
 }
 
-/**
- * Aggregate daily logs into weekly summaries.
- * Groups by ISO week (Monday to Sunday). No separate sheet needed.
- */
-function getWeeklyAggregates(ss, projectId) {
-  var allLogs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(function(row) {
-    return String(row.PROJECT_ID) == String(projectId);
-  });
-  
-  if (allLogs.length === 0) return [];
-  
-  // Helper: parse dd/mm/yyyy to Date
-  function parseDate(dateStr) {
-    if (!dateStr) return null;
-    var parts = String(dateStr).split('/');
-    if (parts.length !== 3) return null;
-    return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
-  }
-  
-  // Helper: format Date to dd/mm/yyyy
-  function formatDate(d) {
-    var dd = ('0' + d.getDate()).slice(-2);
-    var mm = ('0' + (d.getMonth() + 1)).slice(-2);
-    return dd + '/' + mm + '/' + d.getFullYear();
-  }
-  
-  // Helper: get Monday of given date
-  function getMonday(d) {
-    var date = new Date(d);
-    var day = date.getDay();
-    var diff = date.getDate() - day + (day === 0 ? -6 : 1);
-    return new Date(date.setDate(diff));
-  }
-  
-  // Group logs by week (keyed by Monday date string)
-  var weekMap = {};
-  allLogs.forEach(function(log) {
-    var dateStr = log.LOG_DATE || log.NGÀY;
-    var d = parseDate(dateStr);
-    if (!d) return;
-    
-    var monday = getMonday(d);
-    var mondayKey = formatDate(monday);
-    
-    if (!weekMap[mondayKey]) {
-      weekMap[mondayKey] = [];
-    }
-    weekMap[mondayKey].push(log);
-  });
-  
-  // Build aggregated results
-  var results = [];
-  var keys = Object.keys(weekMap).sort(function(a, b) {
-    return parseDate(a) - parseDate(b);
-  });
-  
-  keys.forEach(function(mondayKey) {
-    var logsInWeek = weekMap[mondayKey];
-    var count = logsInWeek.length;
-    
-    var totalManpower = 0;
-    var totalEngineers = 0;
-    var totalIncidents = 0;
-    var weatherCounts = {};
-    var weeklyAssessment = '';
-    
-    logsInWeek.forEach(function(log) {
-      totalManpower += Number(log.MANPOWER || log.NHÂN_LỰC_SITE || 0);
-      totalEngineers += Number(log.ENGINEERS || log.KỸ_SƯ_GS || 0);
-      totalIncidents += Number(log.INCIDENT_COUNT || log.SỰ_CỐ || 0);
-      
-      // Weather: extract condition (before '|' if structured)
-      var w = String(log.WEATHER || log.THỜI_TIẾT || '');
-      var condition = w.indexOf('|') > -1 ? w.split('|')[0] : w;
-      if (condition) {
-        weatherCounts[condition] = (weatherCounts[condition] || 0) + 1;
-      }
-      
-      // Use latest weekly assessment if available
-      if (log.WEEKLY_ASSESSMENT || log.ĐÁNH_GIÁ_TUẦN) {
-        weeklyAssessment = log.WEEKLY_ASSESSMENT || log.ĐÁNH_GIÁ_TUẦN;
-      }
-    });
-    
-    // Find most common weather
-    var topWeather = '';
-    var topCount = 0;
-    for (var w in weatherCounts) {
-      if (weatherCounts[w] > topCount) {
-        topCount = weatherCounts[w];
-        topWeather = w;
-      }
-    }
-    
-    results.push({
-      PROJECT_ID: String(projectId),
-      LOG_DATE: mondayKey,
-      avgManpower: count > 0 ? Math.round(totalManpower / count) : 0,
-      avgEngineers: count > 0 ? Math.round(totalEngineers / count) : 0,
-      weatherSummary: topWeather || 'Chưa ghi nhận',
-      incidentCount: totalIncidents,
-      loggedDaysCount: count,
-      weeklyAssessment: weeklyAssessment
-    });
-  });
-  
-  return results;
-}
 
-/**
- * Aggregate daily logs into monthly summaries.
- * Groups by calendar month. No separate sheet needed.
- */
-function getMonthlyAggregates(ss, projectId) {
-  var allLogs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(function(row) {
-    return String(row.PROJECT_ID) == String(projectId);
-  });
-  
-  if (allLogs.length === 0) return [];
-  
-  function parseDate(dateStr) {
-    if (!dateStr) return null;
-    var parts = String(dateStr).split('/');
-    if (parts.length !== 3) return null;
-    return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
-  }
-  
-  // Group logs by month key "MM/YYYY"
-  var monthMap = {};
-  allLogs.forEach(function(log) {
-    var dateStr = log.LOG_DATE || log.NGÀY;
-    var d = parseDate(dateStr);
-    if (!d) return;
-    
-    var mm = ('0' + (d.getMonth() + 1)).slice(-2);
-    var monthKey = mm + '/' + d.getFullYear();
-    
-    if (!monthMap[monthKey]) {
-      monthMap[monthKey] = [];
-    }
-    monthMap[monthKey].push(log);
-  });
-  
-  var results = [];
-  var keys = Object.keys(monthMap).sort(function(a, b) {
-    var pa = a.split('/');
-    var pb = b.split('/');
-    return new Date(pa[1], pa[0] - 1) - new Date(pb[1], pb[0] - 1);
-  });
-  
-  keys.forEach(function(monthKey) {
-    var logsInMonth = monthMap[monthKey];
-    var count = logsInMonth.length;
-    
-    var totalManpower = 0;
-    var totalEngineers = 0;
-    var totalIncidents = 0;
-    var weatherCounts = {};
-    var monthlyReport = '';
-    
-    logsInMonth.forEach(function(log) {
-      totalManpower += Number(log.MANPOWER || log.NHÂN_LỰC_SITE || 0);
-      totalEngineers += Number(log.ENGINEERS || log.KỸ_SƯ_GS || 0);
-      totalIncidents += Number(log.INCIDENT_COUNT || log.SỰ_CỐ || 0);
-      
-      var w = String(log.WEATHER || log.THỜI_TIẾT || '');
-      var condition = w.indexOf('|') > -1 ? w.split('|')[0] : w;
-      if (condition) {
-        weatherCounts[condition] = (weatherCounts[condition] || 0) + 1;
-      }
-      
-      if (log.MONTHLY_REPORT) {
-        monthlyReport = log.MONTHLY_REPORT;
-      }
-    });
-    
-    var topWeather = '';
-    var topCount = 0;
-    for (var w in weatherCounts) {
-      if (weatherCounts[w] > topCount) {
-        topCount = weatherCounts[w];
-        topWeather = w;
-      }
-    }
-    
-    results.push({
-      PROJECT_ID: String(projectId),
-      LOG_DATE: '01/' + monthKey,
-      monthLabel: 'Tháng ' + monthKey,
-      avgManpower: count > 0 ? Math.round(totalManpower / count) : 0,
-      avgEngineers: count > 0 ? Math.round(totalEngineers / count) : 0,
-      weatherSummary: topWeather || 'Chưa ghi nhận',
-      incidentCount: totalIncidents,
-      loggedDaysCount: count,
-      monthlyReport: monthlyReport
-    });
-  });
-  
-  return results;
-}
 
 function getDefaultHeaders(sheetName) {
   switch (sheetName) {
@@ -750,9 +766,321 @@ function getDefaultHeaders(sheetName) {
       return ['PROJECT_ID', 'NHÓM_THI_CÔNG', 'MÃ_CV', 'HẠNG_MỤC_CÔNG_VIỆC', 'NGÀY_BẮT_ĐẦU', 'SỐ_NGÀY', 'NGÀY_KẾT_THÚC', 'NGÀY_HT_THỰC_TẾ', 'TIẾN_ĐỘ_THỰC_TẾ', 'TRỌNG_SỐ'];
     case 'PROJECT_HANDOVER':
       return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾ_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾ_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
+    case 'PROJECT_MILESTONE':
+      return ['PROJECT_ID', 'MILESTONE', 'NGÀY_KẾ_HOẠCH', 'NGÀY_THỰC_TẾ', 'STATUS'];
     case 'DAILY_SITE_LOG':
       return ['PROJECT_ID', 'LOG_DATE', 'NGÀY', 'MANPOWER', 'NHÂN_LỰC_SITE', 'ENGINEERS', 'KỸ_SƯ_GS', 'WEATHER', 'THỜI_TIẾT', 'INCIDENT_COUNT', 'SỰ_CỐ', 'DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG', 'WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN', 'MONTHLY_REPORT', 'STATUS', 'UPDATED_BY', 'UPDATED_AT'];
     default:
       return [];
+  }
+}
+
+function recalculateProjectProgress(ss, projectId) {
+  if (!projectId) return;
+  
+  // 1. Permits (10%)
+  const permits = getSheetDataAsObjects(ss, 'PROJECT_PERMIT').filter(r => r.PROJECT_ID == projectId);
+  const permitsComp = permits.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && String(p.KẾT_QUẢ_CUỐI).trim() !== '').length;
+  const permitProg = permits.length > 0 ? (permitsComp / permits.length) * 100 : 0;
+  
+  // 2. Designs (15%)
+  const designs = getSheetDataAsObjects(ss, 'PROJECT_DESIGN').filter(r => r.PROJECT_ID == projectId);
+  const designsComp = designs.filter(d => d.KẾT_QUẢ_CUỐI && d.KẾT_QUẢ_CUỐI !== '-' && d.KẾT_QUẢ_CUỐI !== '---' && d.KẾT_QUẢ_CUỐI !== 'N/A' && String(d.KẾT_QUẢ_CUỐI).trim() !== '').length;
+  const designProg = designs.length > 0 ? (designsComp / designs.length) * 100 : 0;
+  
+  // 3. Procurement (25%)
+  const procurements = getSheetDataAsObjects(ss, 'PROJECT_PROCUREMENT').filter(r => r.PROJECT_ID == projectId);
+  const procurementsComp = procurements.filter(p => p.TÌNH_TRẠNG_VẬT_TƯ === 'Đã tới site').length;
+  const procurementProg = procurements.length > 0 ? (procurementsComp / procurements.length) * 100 : 0;
+  
+  // 4. Construction (40%)
+  const constructions = getSheetDataAsObjects(ss, 'PROJECT_CONSTRUCTION').filter(r => r.PROJECT_ID == projectId);
+  const groupWeights = { 'A': 15, 'B': 40, 'C': 30, 'D': 15 };
+  const groupTasks = { 'A': [], 'B': [], 'C': [], 'D': [] };
+  
+  const getGroupKey = (groupName) => {
+    if (!groupName) return null;
+    if (groupName.includes('[A]')) return 'A';
+    if (groupName.includes('[B]')) return 'B';
+    if (groupName.includes('[C]')) return 'C';
+    if (groupName.includes('[D]')) return 'D';
+    return null;
+  };
+  
+  const getGroupKeyByCode = (code) => {
+    if (!code) return null;
+    const prefix = String(code).charAt(0);
+    if (prefix === '1') return 'A';
+    if (prefix === '2') return 'B';
+    if (prefix === '3') return 'C';
+    if (prefix === '4') return 'D';
+    return null;
+  };
+  
+  const getGroupKeyFromRow = (r) => {
+    return getGroupKey(r.NHÓM_THI_CÔNG) || getGroupKeyByCode(r.MÃ_CV);
+  };
+  
+  const defaultConstructionRows = [
+    { code: '1.1', item: 'Nhận mặt bằng bàn giao' },
+    { code: '1.2', item: 'Gia công lắp đặt khung móng pin' },
+    { code: '1.3', item: 'Lắp ráp khung móng/khung đỡ' },
+    { code: '2.1', item: 'Lắp đặt pin mặt trời (PV panels)' },
+    { code: '2.2', item: 'Lắp đặt Inverter' },
+    { code: '2.3', item: 'Lắp đặt tủ SMC' },
+    { code: '2.4', item: 'Lắp đặt máng cáp và ống luồn dây' },
+    { code: '3.1', item: 'Đấu nối cáp DC (từ string pin về tủ SMC/Inverter)' },
+    { code: '3.2', item: 'Lắp đặt cáp AC (Inverter về tủ điện chính MSB)' },
+    { code: '3.3', item: 'Lắp đặt hệ thống giám sát (Meters, Dataloggers)' },
+    { code: '3.4', item: 'Lắp đặt tủ Zero export' },
+    { code: '3.5', item: 'Lắp đặt hệ thống tiếp địa AC/DC' },
+    { code: '3.6', item: 'Lắp đặt hệ thống PCCC' },
+    { code: '3.7', item: 'Lắp đặt hệ thống chiếu sáng' },
+    { code: '3.8', item: 'Ngắt điện để đấu nối và chỉnh sửa tủ MSB (Nếu cần)' },
+    { code: '4.1', item: 'Đóng điện cho T&C (Thử nghiệm & Nghiệm thu)' },
+    { code: '4.2', item: 'T&C (Thử nghiệm & Nghiệm thu)' },
+    { code: '4.3', item: 'Phân tích chất lượng điện của Inverter' },
+    { code: '4.4', item: 'Ngày vận hành thương mại (COD)' },
+    { code: '4.5', item: 'Kiểm tra hiệu suất PR' }
+  ];
+  
+  const rowsToUse = constructions.length > 0 ? constructions : defaultConstructionRows;
+  rowsToUse.forEach(task => {
+    const key = getGroupKeyFromRow(task);
+    if (key) {
+      const prog = Number(task.TIẾN_ĐỘ_THỰC_TẾ || task.progress || 0);
+      groupTasks[key].push(prog);
+    }
+  });
+  
+  let constructionProg = 0;
+  for (const key in groupWeights) {
+    const tasks = groupTasks[key];
+    const avg = tasks.length > 0 ? (tasks.reduce((sum, v) => sum + v, 0) / tasks.length) : 0;
+    constructionProg += avg * (groupWeights[key] / 100);
+  }
+  
+  // 5. Handovers (10%)
+  const handovers = getSheetDataAsObjects(ss, 'PROJECT_HANDOVER').filter(r => r.PROJECT_ID == projectId);
+  const handoversComp = handovers.filter(h => h.KẾT_QUẢ_CUỐI && h.KẾT_QUẢ_CUỐI !== '-' && h.KẾT_QUẢ_CUỐI !== 'N/A' && String(h.KẾT_QUẢ_CUỐI).trim() !== '').length;
+  const handoverProg = handovers.length > 0 ? (handoversComp / handovers.length) * 100 : 0;
+  
+  // 6. Overall calculation
+  const overall = (permitProg * 0.10) + (designProg * 0.15) + (procurementProg * 0.25) + (constructionProg * 0.40) + (handoverProg * 0.10);
+  const roundedOverall = Math.round(overall * 100) / 100;
+  
+  // 7. Update PROJECT_MASTER sheet
+  const masterSheet = ss.getSheetByName('PROJECT_MASTER');
+  if (masterSheet) {
+    const masterData = masterSheet.getDataRange().getValues();
+    const headers = masterData[0];
+    const idIndex = findColumnIndex(headers, 'PROJECT_ID');
+    const actualIndex = findColumnIndex(headers, 'TIẾN_ĐỘ_THỰC_TẾ');
+    const planIndex = findColumnIndex(headers, 'TIẾN_ĐỘ_KẾ_HOẠCH');
+    const delayIndex = findColumnIndex(headers, 'DELAY');
+    
+    if (idIndex !== -1) {
+      for (let i = 1; i < masterData.length; i++) {
+        if (masterData[i][idIndex] == projectId) {
+          if (actualIndex !== -1) {
+            masterSheet.getRange(i + 1, actualIndex + 1).setValue(roundedOverall);
+          }
+          if (delayIndex !== -1 && planIndex !== -1) {
+            const planVal = Number(masterData[i][planIndex] || 0);
+            masterSheet.getRange(i + 1, delayIndex + 1).setValue(roundedOverall - planVal);
+          }
+          break;
+        }
+      }
+    }
+  }
+}
+
+function initializeProjectDetails(ss, projectId) {
+  if (!projectId) return;
+
+  // 1. Permits
+  const permitSheet = ss.getSheetByName('PROJECT_PERMIT');
+  if (permitSheet) {
+    initializeSheetIfEmpty(permitSheet, 'PROJECT_PERMIT');
+    const defaultPermits = [
+      'Sở công thương',
+      'EVN (Pmax, Scada)',
+      'PCCC (Thông báo)',
+      'Đăng ký môi trường',
+      'Sở xây dựng/BQL'
+    ];
+    defaultPermits.forEach(function(item) {
+      appendRow(ss, 'PROJECT_PERMIT', {
+        PROJECT_ID: projectId,
+        HẠNG_MỤC: item,
+        TÌNH_TRẠNG: 'Chưa làm',
+        KẾ_QUẢ_PHẢN_HỒI: 'Chưa có phản hồi',
+        BƯỚC_TIẾP_THEO: 'Nộp hồ sơ',
+        KẾ_QUẢ_CUỐI: 'N/A'
+      });
+    });
+  }
+
+  // 2. Designs
+  const designSheet = ss.getSheetByName('PROJECT_DESIGN');
+  if (designSheet) {
+    initializeSheetIfEmpty(designSheet, 'PROJECT_DESIGN');
+    const defaultDesigns = [
+      'Bản vẽ sơ bộ làm giấy phép',
+      'Bản vẽ thi công',
+      'BOQ',
+      'Bản vẽ hoàn công'
+    ];
+    defaultDesigns.forEach(function(item) {
+      appendRow(ss, 'PROJECT_DESIGN', {
+        PROJECT_ID: projectId,
+        HẠNG_MỤC_BẢN_VẼ: item,
+        TÌNH_TRẠNG: 'Chưa làm',
+        PHÊ_DUYỆT: 'Chưa phản hồi',
+        BƯỚC_TIẾP_THEO: 'Vẽ mới',
+        KẾ_QUẢ_CUỐI: '-'
+      });
+    });
+  }
+
+  // 3. Procurements
+  const procurementSheet = ss.getSheetByName('PROJECT_PROCUREMENT');
+  if (procurementSheet) {
+    initializeSheetIfEmpty(procurementSheet, 'PROJECT_PROCUREMENT');
+    const defaultProcurements = [
+      'An toàn tạm',
+      'Dây cáp (AC/DC/Cứu sinh/dây mạng/dây tín hiệu,...)',
+      'Lan can cứng',
+      'Walkway',
+      'Hệ thống khung đỡ (Rail, xà gồ, kẹp biên, kẹp giữa, kẹp seamlock, Pad L,..)',
+      'Tấm pin PV ( Kẹp tiếp địa, kẹp thoát nước,...)',
+      'Máng cáp (Máng DC, AC, nắp đậy máng, thanh V làm support,..)',
+      'Nhà biến tần (khung lưới, mái tôn, chân trụ, bản mã, xà gồ, khung treo biến tần,...)',
+      'Biến tần (Inverter, phụ kiện bấm MC4,...)',
+      'Tủ điện (Isolator, ACDB)',
+      'Hệ thống tiếp địa (dây PE, kẹp tiếp địa, hộp test box, dây đồng trần,...)',
+      'Hệ PCCC (Quả cầu PCCC, tiêu lệnh, bình xịt PCCC,...)',
+      'Hệ thống giám sát (Tủ Mornitoring, Bluelog, Data logger, UPS, nguồn điện,...)',
+      'Hệ thống tủ thông tin/không phát ngược lưới (Tủ zero export, Multi Meter, CT,...)',
+      'Hệ thống vệ sinh pin (Bơm, phụ kiện bơm, bồn nước, CB bơm, ống nước, khơi thủy)'
+    ];
+    defaultProcurements.forEach(function(item) {
+      appendRow(ss, 'PROJECT_PROCUREMENT', {
+        PROJECT_ID: projectId,
+        HẠNG_MỤC_MUA_HÀNG: item,
+        NGÀY_VỀ_DỰ_KIẾN: '',
+        NGÀY_VỀ_THỰC_TẾ: '',
+        TÌNH_TRẠNG_VẬT_TƯ: '',
+        ĐÁNH_GIÁ_TIẾN_ĐỘ: ''
+      });
+    });
+  }
+
+  // 4. Constructions
+  const constructionSheet = ss.getSheetByName('PROJECT_CONSTRUCTION');
+  if (constructionSheet) {
+    initializeSheetIfEmpty(constructionSheet, 'PROJECT_CONSTRUCTION');
+    const defaultConstructions = [
+      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Đặt văn phòng BCH', start: '01/05/2026', endPlan: '-', endActual: '15/05/2026', weight: 15 },
+      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Khu vực tập kết vật tư', start: '02/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Lắp đặt lối truy cập mái', start: '03/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Lắp đặt các công tác tạm', start: '04/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Nhận bàn giao mặt bằng thi công (Nhà biến tần, mặt bằng mái...)', start: '05/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+      
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt lan can cứng', start: '06/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt lối đi bộ', start: '07/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Định vị & lắp đặt kẹp', start: '08/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt thanh rail', start: '09/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt giá đỡ máng cáp DC/AC', start: '10/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt máng cáp DC/AC', start: '11/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Kéo cáp DC từ chuỗi PV đến Inverter', start: '12/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt tấm pin mặt trời (PV Module)', start: '13/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt hệ thống nối đất DC trên mái (Kẹp tiếp địa, cáp nối đất DC)', start: '14/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt trạm thời tiết (cảm biến, kéo cáp)', start: '15/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt hệ thống rửa nước', start: '16/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt thang truy cập mái', start: '17/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+      
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt khung inverter (Đổ bê tông nếu cần)', start: '18/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt biến tần', start: '19/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt tủ ACDB và tủ trung gian, đấu nối', start: '20/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt máng cáp DC/AC tại trạm inverter/ Tủ MSB của nhà máy', start: '21/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Kéo cáp AC từ Inverter đến tủ ACDB Solar', start: '22/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Kéo cáp AC từ tủ ACDB solar đến tủ MSB hiện hữu của nhà máy', start: '23/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống giám sát (lắp datalogger, UPS, nguồn điện, router và cài đặt)', start: '24/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt tủ Zero export', start: '25/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống tiếp địa AC/DC', start: '26/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống PCCC (Bảng tiêu lệnh, quả cầu PCCC, bình PCCC)', start: '27/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống chiếu sáng', start: '28/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Ngắt điện để đấu nối và chỉnh sửa tủ MSB (Nếu cần)', start: '29/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+      
+      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Đóng điện cho T&C (Thử nghiệm & Nghiệm thu)', start: '30/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'T&C (Thử nghiệm & Nghiệm thu)', start: '31/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Phân tích chất lượng điện của Inverter', start: '01/06/2026', endPlan: '-', endActual: '-', weight: 15 },
+      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Ngày vận hành thương mại (COD)', start: '15/06/2026', endPlan: '-', endActual: '-', weight: 15 },
+      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Kiểm tra hiệu suất PR', start: '16/06/2026', endPlan: '-', endActual: '-', weight: 15 }
+    ];
+    defaultConstructions.forEach(function(task) {
+      appendRow(ss, 'PROJECT_CONSTRUCTION', {
+        PROJECT_ID: projectId,
+        NHÓM_THI_CÔNG: task.group,
+        MÃ_CV: task.code,
+        HẠNG_MỤC_CÔNG_VIỆC: task.item,
+        NGÀY_BẮT_ĐẦU: task.start,
+        SỐ_NGÀY: '',
+        NGÀY_KẾT_THÚC: task.endPlan,
+        NGÀY_HT_THỰC_TẾ: task.endActual,
+        TIẾN_ĐỘ_THỰC_TẾ: 0,
+        TRỌNG_SỐ: task.weight
+      });
+    });
+  }
+
+  // 5. Handovers
+  const handoverSheet = ss.getSheetByName('PROJECT_HANDOVER');
+  if (handoverSheet) {
+    initializeSheetIfEmpty(handoverSheet, 'PROJECT_HANDOVER');
+    const defaultHandovers = [
+      'Hồ sơ thiết kế hoàn công',
+      'Tài liệu hướng dẫn vận hành & bảo trì (O&M Manuals)',
+      'Biên bản nghiệm thu hoàn thành T&C và chạy thử',
+      'Giấy chứng nhận/biên bản kiểm định thiết bị',
+      'Biên bản nghiệm thu COD & Bàn giao đưa vào sử dụng'
+    ];
+    defaultHandovers.forEach(function(item) {
+      appendRow(ss, 'PROJECT_HANDOVER', {
+        PROJECT_ID: projectId,
+        HẠNG_MỤC: item,
+        TÌNH_TRẠNG: 'Chưa làm',
+        KẾ_QUẢ_PHẢN_HỒI: 'Chưa có phản hồi',
+        BƯỚC_TIẾP_THEO: 'Chuẩn bị hồ sơ',
+        KẾ_QUẢ_CUỐI: 'N/A'
+      });
+    });
+  }
+
+  // 6. Milestones
+  const milestoneSheet = ss.getSheetByName('PROJECT_MILESTONE');
+  if (milestoneSheet) {
+    initializeSheetIfEmpty(milestoneSheet, 'PROJECT_MILESTONE');
+    const defaultMilestones = [
+      { title: 'KICKOFF', date: '01/04/2026', status: 'completed' },
+      { title: 'PHÁP LÝ', date: '15/04/2026', status: 'completed' },
+      { title: 'THIẾT KẾ', date: '25/05/2026', status: 'in-progress' },
+      { title: 'VẬT TƯ', date: '10/06/2026', status: 'pending' },
+      { title: 'THI CÔNG', date: '25/06/2026', status: 'pending' },
+      { title: 'COMMISSIONING', date: '05/07/2026', status: 'pending' },
+      { title: 'COD', date: '29/06/2026', status: 'delay' },
+      { title: 'BÀN GIAO HỒ SƠ', date: '15/07/2026', status: 'pending' }
+    ];
+    defaultMilestones.forEach(function(m) {
+      appendRow(ss, 'PROJECT_MILESTONE', {
+        PROJECT_ID: projectId,
+        MILESTONE: m.title,
+        NGÀY_KẾ_HOẠCH: m.date,
+        NGÀY_THỰC_TẾ: '',
+        STATUS: m.status
+      });
+    });
   }
 }

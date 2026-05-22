@@ -211,7 +211,10 @@ export default function ConstructionModule({ project, initialData, onProgressCha
           TIẾN_ĐỘ_THỰC_TẾ: updatedTask.TIẾN_ĐỘ_THỰC_TẾ,
           TRỌNG_SỐ: updatedTask.TRỌNG_SỐ || initialGroups.find(g => g.id === groupId)?.weight
         };
-        await api.updateConstruction(payload);
+        const response = await api.updateConstruction(payload);
+        if (response && response.data) {
+          setGroups(mergeConstructionData(response.data));
+        }
       }
     } catch (error) {
       console.error("Update construction error:", error);

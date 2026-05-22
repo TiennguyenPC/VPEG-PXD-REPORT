@@ -103,14 +103,10 @@ export default function HandoverModule({ project, initialData, onProgressChange 
           BƯỚC_TIẾP_THEO: updatedItem.BƯỚC_TIẾP_THEO,
           KẾT_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI
         };
-        await api.updateHandover(payload);
-        
-        if (!updatedItem._rowIndex) {
-          const freshData = await api.getHandovers(project?.PROJECT_ID || project?.id);
-          if (freshData) {
-            const merged = mergeHandoverData(freshData);
-            setHandovers(merged);
-          }
+        const response = await api.updateHandover(payload);
+        if (response && response.data) {
+          const merged = mergeHandoverData(response.data);
+          setHandovers(merged);
         }
       }
     } catch (error) {

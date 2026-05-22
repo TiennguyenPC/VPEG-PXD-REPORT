@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { PenTool, ChevronDown, ChevronUp, Loader2, Compass } from 'lucide-react';
+import { PenTool, ChevronDown, ChevronUp, Loader2, Compass, CloudOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 
@@ -40,13 +40,25 @@ export default function DesignModule({ project, initialData, onProgressChange })
     });
   };
 
-  const [designs, setDesigns] = useState(() => mergeDesignData(initialData));
+  const STORAGE_KEY = `designs_${project?.PROJECT_ID || project?.id}`;
+
+  const [designs, setDesigns] = useState(() => {
+    if (Array.isArray(initialData)) return mergeDesignData(initialData);
+    try {
+      const cached = localStorage.getItem(`designs_${project?.PROJECT_ID || project?.id}`);
+      if (cached) return mergeDesignData(JSON.parse(cached));
+    } catch (_) {}
+    return mergeDesignData([]);
+  });
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [syncError, setSyncError] = useState(false);
 
   useEffect(() => {
-    if (initialData) {
-      setDesigns(mergeDesignData(initialData));
+    if (Array.isArray(initialData)) {
+      const merged = mergeDesignData(initialData);
+      setDesigns(merged);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
       setIsLoading(false);
       return;
     }
@@ -54,9 +66,17 @@ export default function DesignModule({ project, initialData, onProgressChange })
       try {
         setIsLoading(true);
         const data = await api.getDesigns(project?.PROJECT_ID || project?.id);
-        if (data) setDesigns(mergeDesignData(data));
+        const fetchedData = Array.isArray(data) ? data : [];
+        setDesigns(mergeDesignData(fetchedData));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedData));
+        setSyncError(false);
       } catch (error) {
         console.error("Fetch design error:", error);
+        setSyncError(true);
+        try {
+          const cached = localStorage.getItem(STORAGE_KEY);
+          if (cached) setDesigns(mergeDesignData(JSON.parse(cached)));
+        } catch (_) {}
       } finally {
         setIsLoading(false);
       }
@@ -71,19 +91,37 @@ export default function DesignModule({ project, initialData, onProgressChange })
   }, [designs, onProgressChange]);
 
   const handleUpdate = async (id, field, value) => {
-    try {
-      setIsUpdating(true);
-      
-      let updatedItem = null;
-      setDesigns(prev => prev.map(d => {
+    let updatedItems = [];
+    let updatedItem = null;
+
+    setDesigns(prev => {
+      const next = prev.map(d => {
         if (d.id === id) {
           updatedItem = { ...d, [field]: value };
           return updatedItem;
         }
         return d;
-      }));
+      });
+      updatedItems = next;
+      return next;
+    });
 
-      if (updatedItem) {
+    if (updatedItems.length > 0) {
+      const rawData = updatedItems.map(d => ({
+        _rowIndex: d._rowIndex,
+        PROJECT_ID: project?.PROJECT_ID || project?.id,
+        HẠNG_MỤC_BẢN_VẼ: d.HẠNG_MỤC_BẢN_VẼ,
+        TÌNH_TRẠNG: d.TÌNH_TRẠNG,
+        PHÊ_DUYỆT: d.PHÊ_DUYỆT,
+        BƯỚC_TIẾP_THEO: d.BƯỚC_TIẾP_THEO,
+        KẾT_QUẢ_CUỐI: d.KẾT_QUẢ_CUỐI
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData));
+    }
+
+    if (updatedItem) {
+      setIsUpdating(true);
+      try {
         const payload = {
           _rowIndex: updatedItem._rowIndex,
           PROJECT_ID: project?.PROJECT_ID || project?.id,
@@ -93,17 +131,18 @@ export default function DesignModule({ project, initialData, onProgressChange })
           BƯỚC_TIẾP_THEO: updatedItem.BƯỚC_TIẾP_THEO,
           KẾT_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI
         };
-        await api.updateDesign(payload);
-        
-        if (!updatedItem._rowIndex) {
-          const freshData = await api.getDesigns(project?.PROJECT_ID || project?.id);
-          if (freshData) setDesigns(mergeDesignData(freshData));
+        const response = await api.updateDesign(payload);
+        if (response && response.data && response.data.length > 0) {
+          setDesigns(mergeDesignData(response.data));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(response.data));
+          setSyncError(false);
         }
+      } catch (error) {
+        console.warn("GAS sync failed (data saved locally):", error);
+        setSyncError(true);
+      } finally {
+        setIsUpdating(false);
       }
-    } catch (error) {
-      console.error("Update design error:", error);
-    } finally {
-      setIsUpdating(false);
     }
   };
 
@@ -172,10 +211,18 @@ export default function DesignModule({ project, initialData, onProgressChange })
                 <span>Đang tải...</span>
               </div>
             ) : (
-              <div className="flex items-center gap-2 bg-[#182135]/50 border border-[#1e293b] px-3 py-1 rounded-full text-xs">
-                <span className="text-[#8ca0c3]">{completedCount}/{designs.length} hoàn thành</span>
-                <span className="w-1 h-1 bg-[#10b981] rounded-full"></span>
-                <span className="text-[#10b981] font-bold">{progressPercent}%</span>
+              <div className="flex items-center gap-2">
+                {syncError && (
+                  <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-full text-xs text-amber-400">
+                    <CloudOff className="w-3 h-3" />
+                    <span>Lưu cục bộ</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 bg-[#182135]/50 border border-[#1e293b] px-3 py-1 rounded-full text-xs">
+                  <span className="text-[#8ca0c3]">{completedCount}/{designs.length} hoàn thành</span>
+                  <span className="w-1 h-1 bg-[#10b981] rounded-full"></span>
+                  <span className="text-[#10b981] font-bold">{progressPercent}%</span>
+                </div>
               </div>
             )}
           </div>

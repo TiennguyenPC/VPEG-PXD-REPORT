@@ -92,15 +92,11 @@ export default function ProjectDetailPage() {
         if (p.actualProgress === roundedOverall) return p;
         
         const planVal = p.planProgress || 0;
-        const updatedProj = {
+        return {
           ...p,
           actualProgress: roundedOverall,
           delay: roundedOverall - planVal
         };
-        
-        api.updateProject(updatedProj).catch(err => console.error("Sync project progress error:", err));
-        
-        return updatedProj;
       });
       
       return next;

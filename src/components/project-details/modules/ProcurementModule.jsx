@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
+import { Truck, ChevronDown, ChevronUp, Loader2, CloudOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 
@@ -140,13 +140,24 @@ export default function ProcurementModule({ project, initialData, onProgressChan
     });
   };
 
-  const [items, setItems] = useState(() => mergeProcurementData(initialData));
+  const STORAGE_KEY = `procurements_${project?.PROJECT_ID || project?.id}`;
+
+  const [items, setItems] = useState(() => {
+    if (Array.isArray(initialData)) return mergeProcurementData(initialData);
+    try {
+      const cached = localStorage.getItem(`procurements_${project?.PROJECT_ID || project?.id}`);
+      if (cached) return mergeProcurementData(JSON.parse(cached));
+    } catch (_) {}
+    return mergeProcurementData([]);
+  });
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [syncError, setSyncError] = useState(false);
 
   useEffect(() => {
-    if (initialData) {
+    if (Array.isArray(initialData)) {
       setItems(mergeProcurementData(initialData));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
       setIsLoading(false);
       return;
     }
@@ -154,9 +165,17 @@ export default function ProcurementModule({ project, initialData, onProgressChan
       try {
         setIsLoading(true);
         const data = await api.getProcurements(project?.PROJECT_ID || project?.id);
-        if (data) setItems(mergeProcurementData(data));
+        const fetchedData = Array.isArray(data) ? data : [];
+        setItems(mergeProcurementData(fetchedData));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedData));
+        setSyncError(false);
       } catch (error) {
         console.error("Fetch procurement error:", error);
+        setSyncError(true);
+        try {
+          const cached = localStorage.getItem(STORAGE_KEY);
+          if (cached) setItems(mergeProcurementData(JSON.parse(cached)));
+        } catch (_) {}
       } finally {
         setIsLoading(false);
       }
@@ -172,11 +191,11 @@ export default function ProcurementModule({ project, initialData, onProgressChan
   }, [progressPercent, onProgressChange]);
 
   const handleUpdate = async (id, field, value) => {
-    try {
-      setIsUpdating(true);
-      
-      let updatedItem = null;
-      setItems(prev => prev.map(i => {
+    let updatedItems = [];
+    let updatedItem = null;
+
+    setItems(prev => {
+      const next = prev.map(i => {
         if (i.id === id) {
           let temp = { ...i, [field]: value };
           if (field === 'NGÀY_VỀ_DỰ_KIẾN' || field === 'NGÀY_VỀ_THỰC_TẾ') {
@@ -186,9 +205,28 @@ export default function ProcurementModule({ project, initialData, onProgressChan
           return updatedItem;
         }
         return i;
-      }));
+      });
+      updatedItems = next;
+      return next;
+    });
 
-      if (updatedItem) {
+    if (updatedItems.length > 0) {
+      const rawData = updatedItems.map(i => ({
+        _rowIndex: i._rowIndex,
+        PROJECT_ID: project?.PROJECT_ID || project?.id,
+        HẠNG_MỤC_MUA_HÀNG: i.HẠNG_MỤC_MUA_HÀNG,
+        NGÀY_VỀ_DỰ_KIẾN: i.NGÀY_VỀ_DỰ_KIẾN,
+        NGÀY_VỀ_THỰC_TẾ: i.NGÀY_VỀ_THỰC_TẾ,
+        TÌNH_TRẠNG_VẬT_TƯ: i.TÌNH_TRẠNG_VẬT_TƯ,
+        ĐÁNH_GIÁ_TIẾN_ĐỘ: i.ĐÁNH_GIÁ_TIẾN_ĐỘ,
+        GHI_CHÚ: i.GHI_CHÚ
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData));
+    }
+
+    if (updatedItem) {
+      setIsUpdating(true);
+      try {
         const payload = {
           _rowIndex: updatedItem._rowIndex,
           PROJECT_ID: project?.PROJECT_ID || project?.id,
@@ -199,17 +237,18 @@ export default function ProcurementModule({ project, initialData, onProgressChan
           ĐÁNH_GIÁ_TIẾN_ĐỘ: updatedItem.ĐÁNH_GIÁ_TIẾN_ĐỘ,
           GHI_CHÚ: updatedItem.GHI_CHÚ
         };
-        await api.updateProcurement(payload);
-        
-        if (!updatedItem._rowIndex) {
-          const freshData = await api.getProcurements(project?.PROJECT_ID || project?.id);
-          if (freshData) setItems(mergeProcurementData(freshData));
+        const response = await api.updateProcurement(payload);
+        if (response && response.data && response.data.length > 0) {
+          setItems(mergeProcurementData(response.data));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(response.data));
+          setSyncError(false);
         }
+      } catch (error) {
+        console.warn("GAS sync failed (data saved locally):", error);
+        setSyncError(true);
+      } finally {
+        setIsUpdating(false);
       }
-    } catch (error) {
-      console.error("Update procurement error:", error);
-    } finally {
-      setIsUpdating(false);
     }
   };
 
@@ -257,10 +296,18 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                 <span>Đang tải...</span>
               </div>
             ) : (
-              <div className="flex items-center gap-2 bg-[#182135]/50 border border-[#1e293b] px-3 py-1 rounded-full text-xs">
-                <span className="text-[#8ca0c3]">{completedCount}/{items.length} hoàn thành</span>
-                <span className="w-1 h-1 bg-[#f97316] rounded-full"></span>
-                <span className="text-[#f97316] font-bold">{progressPercent}%</span>
+              <div className="flex items-center gap-2">
+                {syncError && (
+                  <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-full text-xs text-amber-400">
+                    <CloudOff className="w-3 h-3" />
+                    <span>Lưu cục bộ</span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 bg-[#182135]/50 border border-[#1e293b] px-3 py-1 rounded-full text-xs">
+                  <span className="text-[#8ca0c3]">{completedCount}/{items.length} hoàn thành</span>
+                  <span className="w-1 h-1 bg-[#f97316] rounded-full"></span>
+                  <span className="text-[#f97316] font-bold">{progressPercent}%</span>
+                </div>
               </div>
             )}
           </div>
