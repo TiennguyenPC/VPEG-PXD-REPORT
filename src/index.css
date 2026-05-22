@@ -3,21 +3,49 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --bg-main: #060a13;
+    --bg-panel: #0b0f19;
+    --bg-hover: #0d1322;
+    --border-main: #182135;
+    --border-light: #1e293b;
+    --text-muted: #6b7d9b;
+    --text-main: #f1f5f9; /* slate-100 */
+    --text-strong: #ffffff;
+    --shadow-color: rgba(82, 82, 255, 0.05);
+    --glass-bg: rgba(11, 15, 25, 0.6);
+  }
+
+  [data-theme='light'] {
+    --bg-main: #0f172a; /* slate-900 */
+    --bg-panel: #1e293b; /* slate-800 */
+    --bg-hover: #334155; /* slate-700 */
+    --border-main: #334155; /* slate-700 */
+    --border-light: #475569; /* slate-600 */
+    --text-muted: #94a3b8; /* slate-400 */
+    --text-main: #f8fafc; /* slate-50 */
+    --text-strong: #ffffff; /* white */
+    --shadow-color: rgba(0, 0, 0, 0.2);
+    --glass-bg: rgba(30, 41, 59, 0.7);
+  }
+
   body {
-    @apply bg-[#060a13] text-slate-100 antialiased font-sans selection:bg-brand-purple/30 selection:text-white;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    @apply antialiased font-sans selection:bg-brand-purple/30 selection:text-white transition-colors duration-300;
   }
 }
 
 /* Glassmorphism card utility */
 .glass-panel {
-  background: rgba(11, 15, 25, 0.6);
+  background: var(--glass-bg);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(24, 33, 53, 0.7);
+  border: 1px solid var(--border-main);
 }
 
 .glass-panel-hover:hover {
-  border-color: rgba(38, 53, 84, 0.8);
-  box-shadow: 0 4px 20px -2px rgba(82, 82, 255, 0.05);
+  border-color: var(--border-light);
+  box-shadow: 0 4px 20px -2px var(--shadow-color);
 }
 
 /* Custom Scrollbar for modern look */

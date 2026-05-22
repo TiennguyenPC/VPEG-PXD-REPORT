@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HardHat, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
+import ModuleDateHeader from './ModuleDateHeader';
 
 const initialGroups = [
   {
@@ -103,7 +104,6 @@ export default function ConstructionModule({ project, initialData, onProgressCha
         SỐ_NGÀY: '',
         NGÀY_KẾT_THÚC: t.endPlan,
         NGÀY_HT_THỰC_TẾ: t.endActual,
-        TIẾN_ĐỘ_THỰC_TẾ: t.progress
       }))
     }));
     return initialGroups.map(g => ({
@@ -136,6 +136,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   const [groups, setGroups] = useState(() => mergeConstructionData(initialData));
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
 
   useEffect(() => {
     if (initialData) {
@@ -176,10 +177,10 @@ export default function ConstructionModule({ project, initialData, onProgressCha
 
   const handleUpdate = async (groupId, taskId, field, value) => {
     try {
-      setIsUpdating(true);
+      setIsUpdating(true); setSyncStatus("saving");
       
       let updatedTask = null;
-      setGroups(prev => prev.map(g => {
+      const nextGroups = groups.map(g => {
         if (g.id !== groupId) return g;
         return {
           ...g,
@@ -195,7 +196,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
             return t;
           })
         };
-      }));
+      }); setGroups(nextGroups);
 
       if (updatedTask) {
         const payload = {
@@ -219,7 +220,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
     } catch (error) {
       console.error("Update construction error:", error);
     } finally {
-      setIsUpdating(false);
+      setIsUpdating(false); setSyncStatus("success"); setTimeout(() => setSyncStatus(null), 3000);
     }
   };
 
@@ -234,10 +235,10 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   });
 
   return (
-    <div className="glass-panel rounded-xl shadow-lg border border-[#182135] overflow-hidden">
+    <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 bg-[#0b0f19] hover:bg-[#0d1322] transition-colors"
+        className="w-full flex items-center justify-between p-4 bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors"
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded bg-[#eab308]/10 text-[#eab308] flex items-center justify-center">
@@ -247,20 +248,21 @@ export default function ConstructionModule({ project, initialData, onProgressCha
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-3 text-xs font-semibold">
+          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="construction" syncStatus={syncStatus} />
+          <div className="hidden sm:flex items-center justify-end w-[200px] gap-3 text-xs font-semibold">
             {isLoading ? (
-              <div className="flex items-center gap-2 text-[#6b7d9b]">
+              <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>Đang tải...</span>
               </div>
             ) : (
-              <div className="bg-[#182135]/50 border border-[#1e293b] px-3 py-1 rounded-full text-xs text-white">
-                Progress: <span className="text-[#10b981] font-bold">{totalProgress.toFixed(2)}%</span>
+              <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-main)] px-3 py-1 rounded-full text-xs text-[var(--text-main)] min-w-[140px]">
+                <span className="whitespace-nowrap">Progress:</span> <span className="text-brand-green font-bold shrink-0">{Math.round(totalProgress)}%</span>
               </div>
             )}
           </div>
-          <div className="w-[1px] h-6 bg-[#182135] mx-2"></div>
-          {isOpen ? <ChevronUp className="w-4 h-4 text-[#6b7d9b]" /> : <ChevronDown className="w-4 h-4 text-[#6b7d9b]" />}
+          <div className="w-[1px] h-6 bg-[var(--border-main)] mx-2"></div>
+          {isOpen ? <ChevronUp className="w-4 h-4 text-[var(--text-muted)]" /> : <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />}
         </div>
       </button>
 
@@ -272,32 +274,32 @@ export default function ConstructionModule({ project, initialData, onProgressCha
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="p-4 border-t border-[#182135] bg-[#060a13] space-y-4">
+            <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)] space-y-4">
               
               {groups.map(group => {
                 const groupProg = calculateGroupProgress(group.tasks);
                 const isGroupOpen = expandedGroups[group.id];
 
                 return (
-                  <div key={group.id} className="border border-[#182135] rounded-lg overflow-hidden bg-[#0b0f19]">
+                  <div key={group.id} className="border border-[var(--border-main)] rounded-lg overflow-hidden bg-[var(--bg-panel)]">
                     <button 
                       onClick={() => toggleGroup(group.id)}
-                      className="w-full flex items-center justify-between p-3 bg-[#0d1322] hover:bg-[#141c2f] transition-colors border-b border-[#182135]"
+                      className="w-full flex items-center justify-between p-3 bg-[var(--bg-hover)] hover:bg-[#141c2f] transition-colors border-b border-[var(--border-main)]"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-xs font-bold text-white tracking-wider">{group.name}</span>
-                        <span className="text-[10px] font-bold text-[#6b7d9b] bg-[#060a13] px-2 py-0.5 rounded border border-[#182135]">
+                        <span className="text-[10px] font-bold text-[var(--text-muted)] bg-[var(--bg-main)] px-2 py-0.5 rounded border border-[var(--border-main)]">
                           Trọng số: {group.weight}%
                         </span>
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-[#3b82f6]">{groupProg.toFixed(2)}%</span>
-                          <div className="w-24 h-1.5 bg-[#060a13] rounded-full overflow-hidden border border-[#182135]">
+                          <span className="text-xs font-bold text-[#3b82f6]">{Math.round(groupProg)}%</span>
+                          <div className="w-24 h-1.5 bg-[var(--bg-main)] rounded-full overflow-hidden border border-[var(--border-main)]">
                             <div className="h-full bg-[#3b82f6] rounded-full" style={{ width: `${groupProg}%` }}></div>
                           </div>
                         </div>
-                        {isGroupOpen ? <ChevronUp className="w-3.5 h-3.5 text-[#6b7d9b]" /> : <ChevronDown className="w-3.5 h-3.5 text-[#6b7d9b]" />}
+                        {isGroupOpen ? <ChevronUp className="w-3.5 h-3.5 text-[var(--text-muted)]" /> : <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)]" />}
                       </div>
                     </button>
 
@@ -312,7 +314,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                           <div className="overflow-x-auto">
                             <table className="w-full text-left text-xs min-w-[800px]">
                               <thead>
-                                <tr className="bg-[#060a13] text-[#6b7d9b] font-bold uppercase tracking-wider border-b border-[#182135]">
+                                <tr className="bg-[var(--bg-main)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
                                   <th className="p-3 w-16">Mã CV</th>
                                   <th className="p-3">Hạng mục công việc hiện trường</th>
                                   <th className="p-3 w-28">Ngày bắt đầu</th>
@@ -322,10 +324,10 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                   <th className="p-3 w-48 text-right pr-6">Tiến độ thực tế</th>
                                 </tr>
                               </thead>
-                              <tbody className="divide-y divide-[#182135]">
+                              <tbody className="divide-y divide-[var(--border-main)]">
                                 {group.tasks.map(task => (
                                   <tr key={task.id} className="hover:bg-[#141c2f]/40 transition-colors">
-                                    <td className="p-3 font-semibold text-[#6b7d9b]">{task.code}</td>
+                                    <td className="p-3 font-semibold text-[var(--text-muted)]">{task.code}</td>
                                     <td className="p-3 font-semibold text-slate-200">{task.item}</td>
                                     <td className="p-3">
                                       <input 

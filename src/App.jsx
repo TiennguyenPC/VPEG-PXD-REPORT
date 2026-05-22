@@ -30,34 +30,45 @@ import {
   TrendingUp,
   MapPin,
   Clock,
-  Send
+  Send,
+  Sun,
+  Moon
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "./services/api";
+import { useTheme } from "./hooks/useTheme";
 
 export default function App() {
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   // Projects state
   const [projects, setProjects] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch from GAS
   useEffect(() => {
-    const fetchProjects = async () => {
+    const fetchData = async () => {
       try {
         setIsLoading(true);
-        const data = await api.getProjects();
-        if (data && data.length > 0) {
-          setProjects(data);
+        const [projData, empData] = await Promise.all([
+          api.getProjects(),
+          api.getEmployees().catch(() => []) // fail gracefully
+        ]);
+        if (projData && projData.length > 0) {
+          setProjects(projData);
+        }
+        if (empData && empData.length > 0) {
+          setEmployees(empData);
         }
       } catch (error) {
-        console.error("Failed to fetch projects:", error);
+        console.error("Failed to fetch data:", error);
       } finally {
         setIsLoading(false);
       }
     };
-    fetchProjects();
+    fetchData();
   }, []);
 
   // Search state
@@ -215,21 +226,42 @@ export default function App() {
     localStorage.setItem("epc_comments", JSON.stringify(projectComments));
   }, [projectComments]);
 
+  // Inline Issue Editing State
+  const [editingIssueId, setEditingIssueId] = useState(null);
+  const [editIssueValue, setEditIssueValue] = useState("");
+
+  const handleIssueEditSave = async (p) => {
+    if (editIssueValue === p.issue) {
+      setEditingIssueId(null);
+      return;
+    }
+    const updatedProject = { ...p, issue: editIssueValue || "Không có", VƯỚNG_MẮC_CHÍNH: editIssueValue || "Không có" };
+    setProjects(prev => prev.map(proj => proj.id === p.id ? updatedProject : proj));
+    setEditingIssueId(null);
+    try {
+      await api.updateProject(updatedProject);
+    } catch (error) {
+      console.error("Failed to update project issue:", error);
+      // Optional: Revert on error
+    }
+  };
+
   // Add Project Form State
   const [newProject, setNewProject] = useState({
     name: "",
     client: "",
-    pm: "Lê Văn C.",
-    sm: "Bùi M. T.",
+    pm: "",
+    sm: "",
     capacity: 1000,
     progress: 0,
     deviation: 0.0,
+    deviation: 0.0,
+    kickoffDate: "",
     codDays: 90,
-    codDate: "20/08/2026",
+    codDate: "",
     risk: "LOW",
     issue: "Không có",
     region: "Miền Nam",
-    priority: 5,
     status: "in_progress"
   });
 
@@ -239,9 +271,6 @@ export default function App() {
     if (!newProject.name || !newProject.client) return;
 
     let priorityColor = "green";
-    if (newProject.priority <= 3) priorityColor = "red";
-    else if (newProject.priority <= 5) priorityColor = "orange";
-    else if (newProject.priority <= 7) priorityColor = "yellow";
 
     const projectToAdd = {
       ...newProject,
@@ -253,12 +282,12 @@ export default function App() {
       capacity: Number(newProject.capacity),
       actualProgress: Number(newProject.progress),
       delay: Number(newProject.deviation),
+      kickoffDate: newProject.kickoffDate,
       cod: newProject.codDate,
       risk: newProject.risk,
       status: newProject.status,
       updatedAt: "Vừa xong",
       priorityColor,
-      priority: newProject.priority,
       issue: newProject.issue
     };
 
@@ -277,12 +306,12 @@ export default function App() {
         capacity: 1000,
         progress: 0,
         deviation: 0.0,
+        kickoffDate: "",
         codDays: 90,
-        codDate: "20/08/2026",
+        codDate: "",
         risk: "LOW",
         issue: "Không có",
         region: "Miền Nam",
-        priority: 5,
         status: "in_progress"
       });
     } catch (error) {
@@ -355,7 +384,21 @@ export default function App() {
       if (sortField === "capacity") { valA = a.capacity; valB = b.capacity; }
       if (sortField === "progress") { valA = a.actualProgress; valB = b.actualProgress; }
       if (sortField === "deviation") { valA = a.delay; valB = b.delay; }
-      if (sortField === "codDays") { valA = a.cod; valB = b.cod; }
+      if (sortField === "codDays") { 
+        const getCodDays = (codStr) => {
+          if (!codStr) return 9999;
+          const parts = codStr.split('/');
+          if (parts.length === 3) {
+            const d = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            return Math.ceil((d - today) / (1000 * 60 * 60 * 24));
+          }
+          return 9999;
+        };
+        valA = getCodDays(a.cod || '29/06/2026');
+        valB = getCodDays(b.cod || '29/06/2026');
+      }
       if (sortField === "name") { valA = a.name; valB = b.name; }
       if (sortField === "client") { valA = a.client; valB = b.client; }
       if (sortField === "pm") { valA = a.pm; valB = b.pm; }
@@ -505,12 +548,12 @@ export default function App() {
     return (
       <th
         onClick={handleClick}
-        className={`py-2.5 px-4 font-semibold select-none cursor-pointer hover:bg-[#141c2f] hover:text-white transition-all duration-200 border-b border-[#182135] relative group ${
+        className={`py-2.5 px-4 font-semibold select-none cursor-pointer hover:bg-[#141c2f] hover:text-white transition-all duration-200 border-b border-[var(--border-main)] relative group whitespace-nowrap ${
           align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"
-        } ${isSorted ? "text-white bg-[#0e1628]" : "text-[#6b7d9b] bg-[#0d1322]"}`}
+        } ${isSorted ? "text-white bg-[#0e1628]" : "text-[var(--text-muted)] bg-[var(--bg-hover)]"}`}
       >
         <div className={`flex items-center gap-1.5 ${align === "center" ? "justify-center" : align === "right" ? "justify-end" : ""}`}>
-          <span className="font-bold tracking-wider uppercase text-[10px]">{label}</span>
+          <span className="font-bold tracking-wider uppercase text-[10px] whitespace-nowrap">{label}</span>
           <span 
             className={`text-[10px] select-none font-bold transition-all duration-200 ${
               isSorted 
@@ -526,9 +569,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[#060a13] text-slate-100 font-sans relative">
+    <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans relative">
       {isLoading && (
-        <div className="absolute inset-0 z-50 bg-[#060a13]/80 backdrop-blur-sm flex items-center justify-center">
+        <div className="absolute inset-0 z-50 bg-[var(--bg-main)]/80 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
             <div className="w-10 h-10 border-4 border-[#5252ff]/30 border-t-[#5252ff] rounded-full animate-spin"></div>
             <span className="text-white font-medium text-sm tracking-wide">Đang đồng bộ dữ liệu...</span>
@@ -537,10 +580,10 @@ export default function App() {
       )}
       
       {/* 1. LEFT SIDEBAR */}
-      <aside className="w-64 border-r border-[#182135] bg-[#070b14] flex flex-col justify-between shrink-0">
+      <aside className="w-64 border-r border-[var(--border-main)] bg-[#070b14] flex flex-col justify-between shrink-0">
         <div>
           {/* Logo Brand */}
-          <div className="p-6 flex items-center gap-3 border-b border-[#182135]/40">
+          <div className="p-6 flex items-center gap-3 border-b border-[var(--border-main)]/40">
             <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-[#5252ff] to-[#8080ff] shadow-[0_0_12px_rgba(82,82,255,0.7)]"></div>
             <span className="text-sm font-bold tracking-wider text-white">VPEG-PXD-REPORT</span>
           </div>
@@ -549,16 +592,16 @@ export default function App() {
           <nav className="p-4 space-y-1">
             <a
               href="#overview"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#6b7d9b] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
             >
-              <Activity className="w-4 h-4 text-[#6b7d9b]" />
+              <Activity className="w-4 h-4 text-[var(--text-muted)]" />
               <span>TỔNG QUAN</span>
             </a>
             <a
               href="#tasks"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#6b7d9b] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
             >
-              <Briefcase className="w-4 h-4 text-[#6b7d9b]" />
+              <Briefcase className="w-4 h-4 text-[var(--text-muted)]" />
               <span>DANH SÁCH CÔNG VIỆC</span>
             </a>
             <a
@@ -572,8 +615,8 @@ export default function App() {
         </div>
 
         {/* User Profile Bottom */}
-        <div className="p-4 border-t border-[#182135]/50 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[#182135] flex items-center justify-center text-xs font-bold text-slate-300 border border-[#263554]">
+        <div className="p-4 border-t border-[var(--border-main)]/50 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-[var(--border-main)] flex items-center justify-center text-xs font-bold text-slate-300 border border-[#263554]">
             NV
           </div>
           <div className="flex flex-col">
@@ -587,15 +630,22 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         
         {/* 2. TOP HEADER */}
-        <header className="px-8 pt-6 pb-4 border-b border-[#182135]/30 flex justify-between items-center bg-[#070b14]/30 backdrop-blur-md">
+        <header className="px-8 pt-6 pb-4 border-b border-[var(--border-main)]/30 flex justify-between items-center bg-[#070b14]/30 backdrop-blur-md">
           <div>
             <h1 className="text-xl font-bold text-white tracking-tight">DANH SÁCH DỰ ÁN</h1>
-            <p className="text-[11px] text-[#6b7d9b] mt-1 font-medium">Theo dõi và điều phối toàn bộ dự án đang triển khai</p>
+            <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Theo dõi và điều phối toàn bộ dự án đang triển khai</p>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              onClick={toggleTheme}
+              className="border border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-slate-200 text-xs p-2 rounded flex items-center justify-center transition-all cursor-pointer shadow-sm"
+              title={theme === 'dark' ? 'Chuyển sang Giao diện Sáng' : 'Chuyển sang Giao diện Tối'}
+            >
+              {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+            </button>
             <button 
               onClick={handleExportCSV}
-              className="border border-[#182135] bg-[#0b0f19] hover:bg-[#141c2f] hover:border-[#263554] text-slate-200 text-xs px-3.5 py-2 rounded flex items-center gap-2 border shadow-sm transition-all cursor-pointer font-medium"
+              className="border border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[#141c2f] hover:border-[#263554] text-slate-200 text-xs px-3.5 py-2 rounded flex items-center gap-2 border shadow-sm transition-all cursor-pointer font-medium"
             >
               <Download className="w-3.5 h-3.5 text-slate-400" />
               <span>Xuất Excel</span>
@@ -611,7 +661,7 @@ export default function App() {
         </header>
 
         {/* 3. SEARCH + FILTER BAR */}
-        <section className="px-8 py-3 flex justify-between items-center bg-[#060a13] relative z-20 border-b border-[#182135]/20">
+        <section className="px-8 py-3 flex justify-between items-center bg-[var(--bg-main)] relative z-20 border-b border-[var(--border-main)]/20">
           
           {/* Left: Search input + Filter button */}
           <div className="flex items-center gap-3">
@@ -626,7 +676,7 @@ export default function App() {
                   setCurrentPage(1);
                 }}
                 placeholder="Tìm kiếm dự án, khách hàng..."
-                className="bg-[#0b0f19] border border-[#182135] text-slate-200 pl-4 pr-10 py-1.5 rounded text-xs focus:outline-none focus:border-[#5252ff] w-72 placeholder-[#4d5e7a] transition-all"
+                className="bg-[var(--bg-panel)] border border-[var(--border-main)] text-slate-200 pl-4 pr-10 py-1.5 rounded text-xs focus:outline-none focus:border-[#5252ff] w-72 placeholder-[#4d5e7a] transition-all"
               />
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4d5e7a] pointer-events-none" />
             </div>
@@ -635,10 +685,10 @@ export default function App() {
             <div className="relative" ref={filterRef}>
               <button
                 onClick={handleOpenFilter}
-                className={`bg-[#0b0f19] border text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all cursor-pointer font-medium ${
+                className={`bg-[var(--bg-panel)] border text-xs px-3 py-1.5 rounded flex items-center gap-2 transition-all cursor-pointer font-medium ${
                   isFilterOpen || activeFiltersCount > 0 
                     ? "border-[#5252ff] text-[#7373ff] bg-brand-purpleBg/10" 
-                    : "border-[#182135] text-slate-200 hover:bg-[#141c2f] hover:border-[#263554]"
+                    : "border-[var(--border-main)] text-slate-200 hover:bg-[#141c2f] hover:border-[#263554]"
                 }`}
               >
                 <Filter className="w-3.5 h-3.5 text-inherit" />
@@ -653,9 +703,9 @@ export default function App() {
 
               {/* Excel-Style Advanced Filter Popover */}
               {isFilterOpen && (
-                <div className="absolute left-0 mt-2 w-80 bg-[#0b0f19] border border-[#182135] shadow-[0_10px_30px_-5px_rgba(0,0,0,0.8)] rounded-lg overflow-hidden flex flex-col z-50 text-xs text-slate-200 glow-purple">
+                <div className="absolute left-0 mt-2 w-80 bg-[var(--bg-panel)] border border-[var(--border-main)] shadow-[0_10px_30px_-5px_rgba(0,0,0,0.8)] rounded-lg overflow-hidden flex flex-col z-50 text-xs text-slate-200 glow-purple">
                   {/* Popover Header */}
-                  <div className="p-3 border-b border-[#182135] bg-[#0c1221] flex justify-between items-center">
+                  <div className="p-3 border-b border-[var(--border-main)] bg-[#0c1221] flex justify-between items-center">
                     <span className="font-semibold text-slate-200">Bộ lọc nâng cao</span>
                     <button 
                       onClick={() => setIsFilterOpen(false)}
@@ -668,7 +718,7 @@ export default function App() {
                   {/* Popover Body (Split layout) */}
                   <div className="flex h-56">
                     {/* Left: Tab selectors */}
-                    <div className="w-1/3 border-r border-[#182135] bg-[#080d17] flex flex-col">
+                    <div className="w-1/3 border-r border-[var(--border-main)] bg-[#080d17] flex flex-col">
                       {[
                         { id: "pm", label: "PM" },
                         { id: "sm", label: "SM" },
@@ -680,9 +730,9 @@ export default function App() {
                         <button
                           key={tab.id}
                           onClick={() => setActiveFilterTab(tab.id)}
-                          className={`w-full text-left px-3 py-2 border-b border-[#182135]/50 transition-all font-medium ${
+                          className={`w-full text-left px-3 py-2 border-b border-[var(--border-main)]/50 transition-all font-medium ${
                             activeFilterTab === tab.id
-                              ? "bg-[#0b0f19] text-[#7373ff] border-l-2 border-[#5252ff]"
+                              ? "bg-[var(--bg-panel)] text-[#7373ff] border-l-2 border-[#5252ff]"
                               : "text-slate-400 hover:bg-[#0c1322] hover:text-slate-200"
                           }`}
                         >
@@ -695,14 +745,14 @@ export default function App() {
                     </div>
 
                     {/* Right: Multi-select Checkboxes */}
-                    <div className="w-2/3 p-3 overflow-y-auto flex flex-col bg-[#0b0f19]">
-                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[#182135]/40">
+                    <div className="w-2/3 p-3 overflow-y-auto flex flex-col bg-[var(--bg-panel)]">
+                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-[var(--border-main)]/40">
                         <input
                           type="checkbox"
                           id="select-all"
                           checked={tempFilters[activeFilterTab]?.length === filterOptions[activeFilterTab]?.length && filterOptions[activeFilterTab]?.length > 0}
                           onChange={() => toggleTempFilterAll(activeFilterTab)}
-                          className="rounded border-[#182135] bg-[#060a13] text-[#5252ff] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#5252ff]"
+                          className="rounded border-[var(--border-main)] bg-[var(--bg-main)] text-[#5252ff] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#5252ff]"
                         />
                         <label htmlFor="select-all" className="font-semibold text-slate-300 cursor-pointer select-none">
                           Chọn tất cả ({filterOptions[activeFilterTab]?.length || 0})
@@ -717,7 +767,7 @@ export default function App() {
                               id={`opt-${option}`}
                               checked={tempFilters[activeFilterTab]?.includes(option)}
                               onChange={() => toggleTempFilter(activeFilterTab, option)}
-                              className="rounded border-[#182135] bg-[#060a13] text-[#5252ff] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#5252ff]"
+                              className="rounded border-[var(--border-main)] bg-[var(--bg-main)] text-[#5252ff] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#5252ff]"
                             />
                             <label htmlFor={`opt-${option}`} className="text-slate-400 hover:text-slate-200 cursor-pointer select-none truncate">
                               {option === "in_progress" ? "Đang thi công" : option === "completed" ? "Hoàn thành" : option}
@@ -729,7 +779,7 @@ export default function App() {
                   </div>
 
                   {/* Popover Footer */}
-                  <div className="p-2 border-t border-[#182135] bg-[#0c1221] flex justify-between items-center gap-2">
+                  <div className="p-2 border-t border-[var(--border-main)] bg-[#0c1221] flex justify-between items-center gap-2">
                     <button
                       onClick={resetFilters}
                       className="px-3 py-1.5 rounded hover:bg-[#141c2f] hover:text-white text-slate-400 font-medium cursor-pointer transition-all"
@@ -749,13 +799,13 @@ export default function App() {
           </div>
 
           {/* Right: Results Count Indicator */}
-          <div className="text-xs text-[#6b7d9b] font-medium hidden sm:block">
+          <div className="text-xs text-[var(--text-muted)] font-medium hidden sm:block">
             Hiển thị <span className="text-white font-semibold">{processedProjects.length}</span> dự án phù hợp
           </div>
         </section>
 
         {/* 4. KPI SUMMARY CARDS */}
-        <section className="px-8 py-2 grid grid-cols-1 md:grid-cols-4 gap-4 bg-[#060a13]">
+        <section className="px-8 py-2 grid grid-cols-1 md:grid-cols-4 gap-4 bg-[var(--bg-main)]">
           
           {/* Card 1: Total projects */}
           <div className="glass-panel rounded-lg p-4 flex items-center gap-4 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
@@ -763,7 +813,7 @@ export default function App() {
               <Folder className="w-5 h-5 text-[#5252ff]" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] tracking-wider font-bold text-[#6b7d9b] uppercase">TỔNG DỰ ÁN</span>
+              <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG DỰ ÁN</span>
               <span className="text-xl font-bold text-white mt-0.5 tracking-tight">{kpiStats.total}</span>
               <span className="text-[10px] text-[#4d5e7a] font-medium mt-0.5">Dự án</span>
             </div>
@@ -776,7 +826,7 @@ export default function App() {
               <Zap className="w-5 h-5 text-[#3b82f6]" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] tracking-wider font-bold text-[#6b7d9b] uppercase">TỔNG CÔNG SUẤT</span>
+              <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG CÔNG SUẤT</span>
               <span className="text-xl font-bold text-white mt-0.5 tracking-tight">
                 {kpiStats.capacity.toLocaleString()} kWp
               </span>
@@ -791,7 +841,7 @@ export default function App() {
               <HardHat className="w-5 h-5 text-[#f97316]" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] tracking-wider font-bold text-[#6b7d9b] uppercase">TỔNG DỰ ÁN ĐANG THI CÔNG</span>
+              <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG DỰ ÁN ĐANG THI CÔNG</span>
               <span className="text-xl font-bold text-white mt-0.5 tracking-tight">{kpiStats.active}</span>
               <span className="text-[10px] text-[#4d5e7a] font-medium mt-0.5">Dự án</span>
             </div>
@@ -804,7 +854,7 @@ export default function App() {
               <CheckCircle2 className="w-5 h-5 text-[#10b981]" />
             </div>
             <div className="flex flex-col">
-              <span className="text-[10px] tracking-wider font-bold text-[#6b7d9b] uppercase">TỔNG DỰ ÁN HOÀN THÀNH</span>
+              <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG DỰ ÁN HOÀN THÀNH</span>
               <span className="text-xl font-bold text-white mt-0.5 tracking-tight">{kpiStats.completed}</span>
               <span className="text-[10px] text-[#4d5e7a] font-medium mt-0.5">Dự án</span>
             </div>
@@ -813,47 +863,44 @@ export default function App() {
         </section>
 
         {/* 5. PROJECT TABLE SECTION */}
-        <section className="px-8 py-6 bg-[#060a13] flex-1">
+        <section className="px-8 py-6 bg-[var(--bg-main)] flex-1">
           {/* Table Header Section */}
           <div className="mb-3.5 flex justify-between items-center">
             <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
               DANH SÁCH DỰ ÁN 
-              <span className="bg-[#182135] text-slate-300 font-semibold px-2 py-0.5 rounded text-[10px] tracking-normal normal-case">
+              <span className="bg-[var(--border-main)] text-slate-300 font-semibold px-2 py-0.5 rounded text-[10px] tracking-normal normal-case">
                 {processedProjects.length} kết quả
               </span>
             </h2>
           </div>
 
           {/* Main Table Card */}
-          <div className="border border-[#182135] rounded-lg bg-[#0b0f19] overflow-hidden shadow-2xl flex flex-col">
+          <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] overflow-hidden shadow-2xl flex flex-col">
             
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[1200px]">
                 
                 {/* Table Header */}
                 <thead>
-                  <tr className="bg-[#0d1322] border-b border-[#182135] text-[#6b7d9b] text-[10px] font-bold uppercase tracking-wider">
-                    {renderSortableHeader("priority", "Ưu tiên")}
+                  <tr className="bg-[var(--bg-hover)] border-b border-[var(--border-main)] text-[var(--text-muted)] text-[10px] font-bold uppercase tracking-wider">
                     {renderSortableHeader("name", "Dự án")}
                     {renderSortableHeader("client", "Khách hàng")}
                     {renderSortableHeader("pm", "PM")}
-                    {renderSortableHeader("sm", "SM")}
-                    {renderSortableHeader("capacity", "Công suất (kWp)")}
-                    {renderSortableHeader("progress", "% Thực tế")}
-                    {renderSortableHeader("deviation", "Δ Kế hoạch")}
-                    {renderSortableHeader("codDays", "COD còn lại")}
-                    {renderSortableHeader("risk", "Risk")}
+                    {renderSortableHeader("capacity", "Công suất (kWp)", "right")}
+                    {renderSortableHeader("progress", "% Thực tế", "center")}
+                    {renderSortableHeader("deviation", "Δ Kế hoạch", "center")}
+                    {renderSortableHeader("codDays", "COD còn lại", "center")}
+                    {renderSortableHeader("risk", "Risk", "center")}
                     {renderSortableHeader("issue", "Vướng mắc chính")}
-                    {renderSortableHeader("lastUpdated", "Cập nhật cuối")}
-                    <th className="py-2.5 px-4 font-semibold text-center bg-[#0d1322] select-none text-[#6b7d9b]">Action</th>
+                    <th className="py-2.5 px-4 font-semibold text-center bg-[var(--bg-hover)] select-none text-[var(--text-muted)]">Action</th>
                   </tr>
                 </thead>
 
                 {/* Table Body */}
-                <tbody className="divide-y divide-[#182135]/50">
+                <tbody className="divide-y divide-[var(--border-main)]/50">
                   {paginatedProjects.length === 0 ? (
                     <tr>
-                      <td colSpan={13} className="text-center py-10 text-slate-400 text-xs font-medium bg-[#0b0f19]">
+                      <td colSpan={10} className="text-center py-10 text-slate-400 text-xs font-medium bg-[var(--bg-panel)]">
                         Không tìm thấy dự án nào khớp với điều kiện lọc.
                       </td>
                     </tr>
@@ -907,17 +954,8 @@ export default function App() {
                       return (
                         <tr
                           key={p.id}
-                          className="hover:bg-[#111827]/70 transition-all text-xs border-b border-[#182135]/40"
+                          className="hover:bg-[#111827]/70 transition-all text-xs border-b border-[var(--border-main)]/40"
                         >
-                          {/* Priority Column */}
-                          <td className={`py-2.5 px-4 ${
-                            sortField === "priority" ? "bg-[#0e1628]/30" : "bg-inherit"
-                          }`}>
-                            <div className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-[10px] ${priorityClass}`}>
-                              {p.priority || '-'}
-                            </div>
-                          </td>
-
                           {/* Project Name */}
                           <td 
                             className={`py-2.5 px-4 font-bold text-white cursor-pointer hover:underline truncate max-w-[200px] ${
@@ -944,29 +982,22 @@ export default function App() {
                             </span>
                           </td>
 
-                          {/* SM */}
-                          <td className={`py-2.5 px-4 ${
-                            sortField === "sm" ? "bg-[#0e1628]/30" : "bg-inherit"
-                          }`}>
-                            <span className="bg-[#0e2440] text-[#70b0ff] px-2 py-0.5 rounded text-[10px] font-medium border border-[#103d73]/20 whitespace-nowrap">
-                              {p.sm}
-                            </span>
-                          </td>
+
 
                           {/* Capacity */}
-                          <td className={`py-2.5 px-4 font-bold text-slate-200 ${
+                          <td className={`py-2.5 px-4 font-bold text-slate-200 text-right ${
                             sortField === "capacity" ? "text-white bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
                           }`}>
                             {Number(p.capacity || 0).toLocaleString()}
                           </td>
 
                           {/* Progress */}
-                          <td className={`py-2.5 px-4 min-w-[90px] ${
+                          <td className={`py-2.5 px-4 min-w-[90px] text-center ${
                             sortField === "progress" ? "bg-[#0e1628]/30" : "bg-inherit"
                           }`}>
-                            <div className="flex flex-col">
+                            <div className="flex flex-col items-center">
                               <span className={`font-bold ${sortField === "progress" ? "text-[#8a8aff]" : "text-[#5252ff]"}`}>{p.actualProgress || 0}%</span>
-                              <div className="w-16 h-1 bg-[#182135] rounded-full overflow-hidden mt-1.5">
+                              <div className="w-16 h-1 bg-[var(--border-main)] rounded-full overflow-hidden mt-1.5">
                                 <div
                                   className="bg-[#5252ff] h-full rounded-full"
                                   style={{ width: `${Math.min(100, Math.max(0, p.actualProgress || 0))}%` }}
@@ -976,50 +1007,92 @@ export default function App() {
                           </td>
 
                           {/* Delta Plan Deviation */}
-                          <td className={`py-2.5 px-4 font-bold ${
+                          <td className={`py-2.5 px-4 font-bold text-center ${
                             sortField === "deviation" ? "bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
                           }`}>
                             <span className={(p.delay || 0) >= 0 ? "text-[#10b981]" : "text-[#ef4444]"}>
                               {(p.delay || 0) >= 0 ? "+" : ""}
-                              {Number(p.delay || 0).toFixed(2)}%
+                              {Math.round(Number(p.delay || 0))}%
                             </span>
                           </td>
 
                           {/* COD Remaining */}
-                          <td className={`py-2.5 px-4 ${
+                          <td className={`py-2.5 px-4 text-center ${
                             sortField === "codDays" ? "bg-[#0e1628]/30" : "bg-inherit"
                           }`}>
-                            <div className="flex flex-col">
-                              <span className="font-semibold text-slate-200">
-                                {(p.status === "COMPLETED" || p.status === "completed") ? "Completed" : (p.cod || '-')}
-                              </span>
-                              <span className="text-[10px] text-slate-400 mt-0.5">{p.forecastCod || ''}</span>
+                            <div className="flex flex-col items-center">
+                              {(() => {
+                                if (p.status === "COMPLETED" || p.status === "completed") {
+                                  return <span className="font-semibold text-[#10b981]">Hoàn thành</span>;
+                                }
+                                
+                                const finalCod = p.cod || '29/06/2026';
+                                const parseDate = (dateStr) => {
+                                  if (!dateStr) return null;
+                                  const parts = dateStr.split('/');
+                                  if (parts.length === 3) return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+                                  return new Date(dateStr);
+                                };
+                                const parsedCodDate = parseDate(finalCod);
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                const codDays = parsedCodDate ? Math.ceil((parsedCodDate - today) / (1000 * 60 * 60 * 24)) : 0;
+                                
+                                return (
+                                  <>
+                                    <span className="font-semibold text-[#7373ff]">{codDays > 0 ? codDays : 0} ngày</span>
+                                    <span className="text-[10px] text-slate-400 mt-0.5">Hạn: {finalCod}</span>
+                                  </>
+                                );
+                              })()}
                             </div>
                           </td>
 
                           {/* Risk Badge */}
-                          <td className={`py-2.5 px-4 ${
+                          <td className={`py-2.5 px-4 text-center ${
                             sortField === "risk" ? "bg-[#0e1628]/30" : "bg-inherit"
                           }`}>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${riskBadgeClass}`}>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${riskBadgeClass} whitespace-nowrap`}>
                               {p.risk}
                             </span>
                           </td>
 
                           {/* Key Issue */}
-                          <td className={`py-2.5 px-4 max-w-[200px] truncate ${
-                            sortField === "issue" ? "bg-[#0e1628]/30" : "bg-inherit"
-                          }`}>
-                            <div className="flex items-center gap-1.5 text-slate-300 font-medium">
-                              <span className={`w-1.5 h-1.5 rounded-full ${issueDotClass} inline-block`}></span>
-                              <span className="truncate">{p.issue || '-'}</span>
-                            </div>
+                          <td 
+                            className={`py-2.5 px-4 max-w-[200px] truncate cursor-text hover:bg-[var(--bg-hover)] transition-colors group relative ${
+                              sortField === "issue" ? "bg-[#0e1628]/30" : "bg-inherit"
+                            }`}
+                            onDoubleClick={() => {
+                              setEditingIssueId(p.id);
+                              setEditIssueValue(p.issue && p.issue !== "Không có" && p.issue !== "-" ? p.issue : "");
+                            }}
+                            title="Click đúp để chỉnh sửa"
+                          >
+                            {editingIssueId === p.id ? (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="text"
+                                  autoFocus
+                                  className="w-full bg-[#141c2f] border border-[#5252ff] rounded text-slate-200 px-1.5 py-0.5 text-xs outline-none"
+                                  value={editIssueValue}
+                                  onChange={(e) => setEditIssueValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleIssueEditSave(p);
+                                    if (e.key === "Escape") setEditingIssueId(null);
+                                  }}
+                                  onBlur={() => handleIssueEditSave(p)}
+                                />
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-slate-300 font-medium">
+                                <span className={`w-1.5 h-1.5 rounded-full ${issueDotClass} inline-block`}></span>
+                                <span className="truncate">{p.issue || '-'}</span>
+                                <span className="absolute right-2 opacity-0 group-hover:opacity-100 text-[#5252ff] text-[10px] italic pointer-events-none">Sửa</span>
+                              </div>
+                            )}
                           </td>
 
-                          {/* Last Updated */}
-                          <td className={`py-2.5 px-4 font-medium whitespace-nowrap ${
-                            sortField === "lastUpdated" ? "text-slate-100 bg-[#0e1628]/30 font-bold" : "text-[#6b7d9b] bg-inherit"
-                          }`}>{p.updatedAt}</td>
+
 
                           {/* Action icons */}
                           <td className="py-2.5 px-4 bg-inherit">
@@ -1029,14 +1102,14 @@ export default function App() {
                                   navigate('/projects/' + p.id);
                                 }}
                                 title="Xem chi tiết"
-                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[#182135] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
+                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 onClick={handleExportCSV}
                                 title="Xuất báo cáo"
-                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[#182135] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
+                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
                               >
                                 <FileText className="w-3.5 h-3.5" />
                               </button>
@@ -1045,7 +1118,7 @@ export default function App() {
                                   navigate('/projects/' + p.id);
                                 }}
                                 title="Bình luận"
-                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[#182135] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer relative"
+                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer relative"
                               >
                                 <MessageSquare className="w-3.5 h-3.5" />
                                 {projectComments[p.id]?.length > 0 && (
@@ -1054,7 +1127,7 @@ export default function App() {
                               </button>
                               <button
                                 title="Khác"
-                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[#182135] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
+                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
                               >
                                 <MoreHorizontal className="w-3.5 h-3.5" />
                               </button>
@@ -1069,7 +1142,7 @@ export default function App() {
             </div>
 
             {/* 6. PAGINATION */}
-            <div className="flex justify-between items-center p-3.5 border-t border-[#182135] bg-[#0b0f19] text-xs text-[#6b7d9b] font-medium">
+            <div className="flex justify-between items-center p-3.5 border-t border-[var(--border-main)] bg-[var(--bg-panel)] text-xs text-[var(--text-muted)] font-medium">
               {/* Left page sizing */}
               <div className="flex items-center gap-2">
                 <span>Hiển thị</span>
@@ -1079,7 +1152,7 @@ export default function App() {
                     setPageSize(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="bg-[#0b0f19] border border-[#182135] text-slate-200 px-2 py-0.5 rounded text-xs focus:outline-none focus:border-[#5252ff] cursor-pointer"
+                  className="bg-[var(--bg-panel)] border border-[var(--border-main)] text-slate-200 px-2 py-0.5 rounded text-xs focus:outline-none focus:border-[#5252ff] cursor-pointer"
                 >
                   <option value={4}>4</option>
                   <option value={8}>8</option>
@@ -1094,7 +1167,7 @@ export default function App() {
                 <button
                   onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                   disabled={currentPage === 1}
-                  className={`p-1 rounded border border-[#182135] flex items-center justify-center transition-all ${
+                  className={`p-1 rounded border border-[var(--border-main)] flex items-center justify-center transition-all ${
                     currentPage === 1 
                       ? "opacity-40 cursor-not-allowed" 
                       : "hover:bg-[#141c2f] hover:border-[#263554] text-slate-200 cursor-pointer"
@@ -1110,7 +1183,7 @@ export default function App() {
                     className={`px-2.5 py-1 rounded text-xs font-semibold border transition-all cursor-pointer ${
                       currentPage === page
                         ? "bg-[#5252ff] border-[#5252ff] text-white"
-                        : "border-[#182135] text-slate-400 hover:bg-[#141c2f] hover:border-[#263554] hover:text-white"
+                        : "border-[var(--border-main)] text-slate-400 hover:bg-[#141c2f] hover:border-[#263554] hover:text-white"
                     }`}
                   >
                     {page}
@@ -1120,7 +1193,7 @@ export default function App() {
                 <button
                   onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                   disabled={currentPage === totalPages}
-                  className={`p-1 rounded border border-[#182135] flex items-center justify-center transition-all ${
+                  className={`p-1 rounded border border-[var(--border-main)] flex items-center justify-center transition-all ${
                     currentPage === totalPages 
                       ? "opacity-40 cursor-not-allowed" 
                       : "hover:bg-[#141c2f] hover:border-[#263554] text-slate-200 cursor-pointer"
@@ -1145,10 +1218,10 @@ export default function App() {
           <div className="flex-1" onClick={() => setIsDetailDrawerOpen(false)}></div>
           
           {/* Drawer Body */}
-          <div className="w-[500px] h-full bg-[#0b0f19] border-l border-[#182135] flex flex-col z-50 animate-slide-in shadow-[0_0_50px_rgba(0,0,0,0.8)]">
+          <div className="w-[500px] h-full bg-[var(--bg-panel)] border-l border-[var(--border-main)] flex flex-col z-50 animate-slide-in shadow-[0_0_50px_rgba(0,0,0,0.8)]">
             
             {/* Drawer Header */}
-            <div className="p-5 border-b border-[#182135] bg-[#0c1221] flex justify-between items-center shrink-0">
+            <div className="p-5 border-b border-[var(--border-main)] bg-[#0c1221] flex justify-between items-center shrink-0">
               <div className="flex items-center gap-2">
                 <div className={`w-5 h-5 rounded-full border flex items-center justify-center font-bold text-[10px] ${
                   selectedProject.priorityColor === "red" ? "text-brand-red border-[#ef4444]/30" :
@@ -1162,7 +1235,7 @@ export default function App() {
               </div>
               <button 
                 onClick={() => setIsDetailDrawerOpen(false)}
-                className="text-slate-400 hover:text-white p-1 hover:bg-[#182135] rounded-full transition-all"
+                className="text-slate-400 hover:text-white p-1 hover:bg-[var(--border-main)] rounded-full transition-all"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1173,20 +1246,20 @@ export default function App() {
               
               {/* Status Section */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-[#060a13] p-3 rounded-lg border border-[#182135]">
-                  <span className="text-[10px] text-[#6b7d9b] block uppercase font-bold">KHÁCH HÀNG</span>
+                <div className="bg-[var(--bg-main)] p-3 rounded-lg border border-[var(--border-main)]">
+                  <span className="text-[10px] text-[var(--text-muted)] block uppercase font-bold">KHÁCH HÀNG</span>
                   <span className="text-xs font-semibold text-white mt-1 block">{selectedProject.client}</span>
                 </div>
-                <div className="bg-[#060a13] p-3 rounded-lg border border-[#182135]">
-                  <span className="text-[10px] text-[#6b7d9b] block uppercase font-bold">KHU VỰC</span>
+                <div className="bg-[var(--bg-main)] p-3 rounded-lg border border-[var(--border-main)]">
+                  <span className="text-[10px] text-[var(--text-muted)] block uppercase font-bold">KHU VỰC</span>
                   <span className="text-xs font-semibold text-white mt-1 block">{selectedProject.region}</span>
                 </div>
               </div>
 
               {/* PM & SM Contacts */}
-              <div className="bg-[#060a13] p-4 rounded-lg border border-[#182135] space-y-3">
-                <h4 className="text-[10px] text-[#6b7d9b] font-bold uppercase tracking-wider">Đội ngũ phụ trách</h4>
-                <div className="flex justify-between items-center border-b border-[#182135]/40 pb-2">
+              <div className="bg-[var(--bg-main)] p-4 rounded-lg border border-[var(--border-main)] space-y-3">
+                <h4 className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Đội ngũ phụ trách</h4>
+                <div className="flex justify-between items-center border-b border-[var(--border-main)]/40 pb-2">
                   <div className="flex items-center gap-2">
                     <span className="w-6 h-6 rounded-full bg-[#18183c] text-[#a0a0ff] flex items-center justify-center text-[10px] font-bold border border-[#2d2db3]/20">PM</span>
                     <span className="text-xs font-semibold text-slate-200">{selectedProject.pm}</span>
@@ -1203,14 +1276,14 @@ export default function App() {
               </div>
 
               {/* Progress Summary Card */}
-              <div className="bg-[#060a13] p-4 rounded-lg border border-[#182135] space-y-4">
+              <div className="bg-[var(--bg-main)] p-4 rounded-lg border border-[var(--border-main)] space-y-4">
                 <div className="flex justify-between items-center">
-                  <h4 className="text-[10px] text-[#6b7d9b] font-bold uppercase tracking-wider">Tiến độ thi công</h4>
+                  <h4 className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Tiến độ thi công</h4>
                   <span className="text-xs font-bold text-[#5252ff]">{selectedProject.progress}%</span>
                 </div>
                 
                 {/* Horizontal Progress bar */}
-                <div className="w-full h-2 bg-[#182135] rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-[var(--border-main)] rounded-full overflow-hidden">
                   <div 
                     className="bg-[#5252ff] h-full rounded-full shadow-[0_0_8px_rgba(82,82,255,0.6)]" 
                     style={{ width: `${selectedProject.progress}%` }}
@@ -1219,13 +1292,13 @@ export default function App() {
 
                 <div className="grid grid-cols-2 gap-4 pt-1">
                   <div>
-                    <span className="text-[10px] text-[#6b7d9b] block font-medium">Công suất</span>
+                    <span className="text-[10px] text-[var(--text-muted)] block font-medium">Công suất</span>
                     <span className="text-sm font-bold text-white mt-0.5 block">{selectedProject.capacity.toLocaleString()} kWp</span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-[#6b7d9b] block font-medium">Độ lệch kế hoạch</span>
+                    <span className="text-[10px] text-[var(--text-muted)] block font-medium">Độ lệch kế hoạch</span>
                     <span className={`text-sm font-bold mt-0.5 block ${selectedProject.deviation >= 0 ? "text-[#10b981]" : "text-[#ef4444]"}`}>
-                      {selectedProject.deviation >= 0 ? "+" : ""}{selectedProject.deviation.toFixed(2)}%
+                      {selectedProject.deviation >= 0 ? "+" : ""}{Math.round(selectedProject.deviation)}%
                     </span>
                   </div>
                 </div>
@@ -1233,16 +1306,16 @@ export default function App() {
 
               {/* COD & Risk logs */}
               <div className="grid grid-cols-2 gap-4">
-                <div className="bg-[#060a13] p-3 rounded-lg border border-[#182135]">
-                  <span className="text-[10px] text-[#6b7d9b] block uppercase font-bold">COD còn lại</span>
+                <div className="bg-[var(--bg-main)] p-3 rounded-lg border border-[var(--border-main)]">
+                  <span className="text-[10px] text-[var(--text-muted)] block uppercase font-bold">COD còn lại</span>
                   <span className="text-xs font-bold text-slate-200 mt-1 block">
                     {selectedProject.status === "completed" ? "Đã đóng điện" : `${selectedProject.codDays} ngày`}
                   </span>
                   <span className="text-[10px] text-slate-500 mt-0.5 block">{selectedProject.codDate}</span>
                 </div>
 
-                <div className="bg-[#060a13] p-3 rounded-lg border border-[#182135]">
-                  <span className="text-[10px] text-[#6b7d9b] block uppercase font-bold">Mức độ rủi ro (Risk)</span>
+                <div className="bg-[var(--bg-main)] p-3 rounded-lg border border-[var(--border-main)]">
+                  <span className="text-[10px] text-[var(--text-muted)] block uppercase font-bold">Mức độ rủi ro (Risk)</span>
                   <span className={`text-xs font-bold mt-1 block uppercase ${
                     selectedProject.risk === "HIGH" ? "text-[#ef4444]" :
                     selectedProject.risk === "MEDIUM" ? "text-[#f97316]" : "text-[#10b981]"
@@ -1251,8 +1324,8 @@ export default function App() {
               </div>
 
               {/* Key Issue / Vướng mắc */}
-              <div className="bg-[#060a13] p-4 rounded-lg border border-[#182135] space-y-2">
-                <h4 className="text-[10px] text-[#6b7d9b] font-bold uppercase tracking-wider">Vướng mắc chính</h4>
+              <div className="bg-[var(--bg-main)] p-4 rounded-lg border border-[var(--border-main)] space-y-2">
+                <h4 className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Vướng mắc chính</h4>
                 <div className="flex items-center gap-2 pt-1">
                   <span className={`w-2 h-2 rounded-full ${
                     selectedProject.issueType === "danger" ? "bg-[#ef4444]" :
@@ -1264,8 +1337,8 @@ export default function App() {
               </div>
 
               {/* Financial metrics placeholder */}
-              <div className="bg-[#060a13] p-4 rounded-lg border border-[#182135] space-y-3">
-                <h4 className="text-[10px] text-[#6b7d9b] font-bold uppercase tracking-wider">Ngân sách dự án (BOD Metric)</h4>
+              <div className="bg-[var(--bg-main)] p-4 rounded-lg border border-[var(--border-main)] space-y-3">
+                <h4 className="text-[10px] text-[var(--text-muted)] font-bold uppercase tracking-wider">Ngân sách dự án (BOD Metric)</h4>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <span className="text-[10px] text-slate-500 block font-medium">Tổng mức đầu tư</span>
@@ -1279,16 +1352,16 @@ export default function App() {
               </div>
 
               {/* CẬP NHẬT LẦN CUỐI */}
-              <div className="flex items-center gap-2 text-[10px] text-[#6b7d9b] font-medium justify-center pt-2">
-                <Clock className="w-3 h-3 text-[#6b7d9b]" />
+              <div className="flex items-center gap-2 text-[10px] text-[var(--text-muted)] font-medium justify-center pt-2">
+                <Clock className="w-3 h-3 text-[var(--text-muted)]" />
                 <span>Hoạt động cuối cùng được ghi nhận: {selectedProject.lastUpdated}</span>
               </div>
 
               {/* ----------------- COMMENTS SYSTEM ----------------- */}
-              <div className="border-t border-[#182135] pt-6 space-y-4">
+              <div className="border-t border-[var(--border-main)] pt-6 space-y-4">
                 <h4 className="text-[11px] text-slate-200 font-bold uppercase tracking-wider flex items-center gap-2">
                   <span>Nhật ký trao đổi & Phản hồi</span>
-                  <span className="bg-[#182135] text-slate-300 font-semibold px-2 py-0.5 rounded text-[10px]">
+                  <span className="bg-[var(--border-main)] text-slate-300 font-semibold px-2 py-0.5 rounded text-[10px]">
                     {(projectComments[selectedProject.id] || []).length}
                   </span>
                 </h4>
@@ -1303,7 +1376,7 @@ export default function App() {
                       if (e.key === "Enter") handleAddComment(selectedProject.id);
                     }}
                     placeholder="Viết ý kiến phản hồi dự án..."
-                    className="flex-1 bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded text-xs focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
+                    className="flex-1 bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded text-xs focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
                   />
                   <button
                     onClick={() => handleAddComment(selectedProject.id)}
@@ -1316,15 +1389,15 @@ export default function App() {
                 {/* Comment Logs */}
                 <div className="space-y-3.5 pt-2">
                   {(!projectComments[selectedProject.id] || projectComments[selectedProject.id].length === 0) ? (
-                    <div className="text-center py-6 text-[#6b7d9b] text-xs font-medium bg-[#060a13]/30 rounded border border-[#182135]/40 border-dashed">
+                    <div className="text-center py-6 text-[var(--text-muted)] text-xs font-medium bg-[var(--bg-main)]/30 rounded border border-[var(--border-main)]/40 border-dashed">
                       Chưa có trao đổi nào. Hãy để lại nhận xét đầu tiên.
                     </div>
                   ) : (
                     projectComments[selectedProject.id].map((c) => (
-                      <div key={c.id} className="bg-[#060a13] p-3 rounded-lg border border-[#182135]/70 space-y-2">
+                      <div key={c.id} className="bg-[var(--bg-main)] p-3 rounded-lg border border-[var(--border-main)]/70 space-y-2">
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-[#182135] flex items-center justify-center text-[9px] font-bold text-slate-300 border border-[#263554]">
+                            <div className="w-6 h-6 rounded-full bg-[var(--border-main)] flex items-center justify-center text-[9px] font-bold text-slate-300 border border-[#263554]">
                               {c.avatar}
                             </div>
                             <div className="flex flex-col">
@@ -1356,11 +1429,11 @@ export default function App() {
           {/* Drawer Body */}
           <form 
             onSubmit={handleAddProject}
-            className="w-[450px] h-full bg-[#0b0f19] border-l border-[#182135] flex flex-col z-50 animate-slide-in shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+            className="w-[450px] h-full bg-[var(--bg-panel)] border-l border-[var(--border-main)] flex flex-col z-50 animate-slide-in shadow-[0_0_50px_rgba(0,0,0,0.8)]"
           >
             
             {/* Drawer Header */}
-            <div className="p-5 border-b border-[#182135] bg-[#0c1221] flex justify-between items-center shrink-0">
+            <div className="p-5 border-b border-[var(--border-main)] bg-[#0c1221] flex justify-between items-center shrink-0">
               <h3 className="font-bold text-white text-sm tracking-tight flex items-center gap-2">
                 <PlusCircle className="w-4 h-4 text-[#5252ff]" />
                 Khai báo dự án EPC Solar mới
@@ -1368,7 +1441,7 @@ export default function App() {
               <button 
                 type="button"
                 onClick={() => setIsAddDrawerOpen(false)}
-                className="text-slate-400 hover:text-white p-1 hover:bg-[#182135] rounded-full transition-all"
+                className="text-slate-400 hover:text-white p-1 hover:bg-[var(--border-main)] rounded-full transition-all"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1379,202 +1452,105 @@ export default function App() {
               
               {/* Project Name */}
               <div className="space-y-1">
-                <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Tên dự án EPC *</label>
+                <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Tên dự án EPC *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: AEON LONG BIÊN GD2"
                   value={newProject.name}
                   onChange={(e) => setNewProject(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
-                  className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
+                  className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
                 />
               </div>
 
               {/* Client */}
               <div className="space-y-1">
-                <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Khách hàng / Chủ đầu tư *</label>
+                <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Khách hàng / Chủ đầu tư *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ví dụ: AEON"
                   value={newProject.client}
                   onChange={(e) => setNewProject(prev => ({ ...prev, client: e.target.value }))}
-                  className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
+                  className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
                 />
               </div>
 
-              {/* Region Select */}
-              <div className="space-y-1">
-                <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Khu vực địa lý</label>
-                <select
-                  value={newProject.region}
-                  onChange={(e) => setNewProject(prev => ({ ...prev, region: e.target.value }))}
-                  className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] cursor-pointer"
-                >
-                  <option value="Miền Bắc">Miền Bắc</option>
-                  <option value="Miền Trung">Miền Trung</option>
-                  <option value="Miền Nam">Miền Nam</option>
-                </select>
-              </div>
-
-              {/* PM & SM inputs */}
+              {/* PM & Capacity */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Project Manager (PM)</label>
+                  <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Project Manager (PM)</label>
                   <select
                     value={newProject.pm}
                     onChange={(e) => setNewProject(prev => ({ ...prev, pm: e.target.value }))}
-                    className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] cursor-pointer"
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] cursor-pointer"
                   >
-                    <option value="Lê Văn C.">Lê Văn C.</option>
-                    <option value="Trần Văn A.">Trần Văn A.</option>
-                    <option value="Phạm Văn B.">Phạm Văn B.</option>
-                    <option value="Nguyễn H.">Nguyễn H.</option>
+                    <option value="">-- Chọn PM --</option>
+                    {employees.length > 0 ? employees.map((emp, i) => (
+                      <option key={`pm-${i}`} value={emp.NAME || emp.name || emp["HỌ TÊN"]}>{emp.NAME || emp.name || emp["HỌ TÊN"]}</option>
+                    )) : (
+                      <>
+                        <option value="Lê Văn C.">Lê Văn C.</option>
+                        <option value="Trần Văn A.">Trần Văn A.</option>
+                        <option value="Phạm Văn B.">Phạm Văn B.</option>
+                        <option value="Nguyễn H.">Nguyễn H.</option>
+                      </>
+                    )}
                   </select>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Site Manager (SM)</label>
-                  <select
-                    value={newProject.sm}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, sm: e.target.value }))}
-                    className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] cursor-pointer"
-                  >
-                    <option value="Bùi M. T.">Bùi M. T.</option>
-                    <option value="Nguyễn V. K.">Nguyễn V. K.</option>
-                    <option value="Nguyễn T. D.">Nguyễn T. D.</option>
-                    <option value="Đỗ Văn C.">Đỗ Văn C.</option>
-                    <option value="Hoàng A.">Hoàng A.</option>
-                    <option value="Võ Minh Q.">Võ Minh Q.</option>
-                    <option value="Nguyễn Đ. T.">Nguyễn Đ. T.</option>
-                    <option value="Lê Xuân H.">Lê Xuân H.</option>
-                  </select>
-                </div>
-              </div>
 
-              {/* Capacity & Progress */}
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Công suất (kWp)</label>
+                  <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Công suất (kWp)</label>
                   <input
                     type="number"
                     min={0}
                     value={newProject.capacity}
                     onChange={(e) => setNewProject(prev => ({ ...prev, capacity: e.target.value }))}
-                    className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Tiến độ thực tế (%)</label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={newProject.progress}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, progress: e.target.value }))}
-                    className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
                   />
                 </div>
               </div>
 
-              {/* Deviation & Priority */}
+              {/* Dates */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Độ lệch KH (Δ %)</label>
+                  <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Ngày Kickoff</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    value={newProject.deviation}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, deviation: e.target.value }))}
-                    className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
+                    type="text"
+                    placeholder="DD/MM/YYYY"
+                    value={newProject.kickoffDate}
+                    onChange={(e) => setNewProject(prev => ({ ...prev, kickoffDate: e.target.value }))}
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Độ ưu tiên (1 - 15)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={15}
-                    value={newProject.priority}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, priority: e.target.value }))}
-                    className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
-                  />
-                </div>
-              </div>
-
-              {/* COD Days & Date */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Số ngày còn lại (COD)</label>
-                  <input
-                    type="number"
-                    value={newProject.codDays}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, codDays: e.target.value }))}
-                    className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Ngày đóng điện (COD)</label>
+                  <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Ngày đóng điện (COD)</label>
                   <input
                     type="text"
                     placeholder="DD/MM/YYYY"
                     value={newProject.codDate}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, codDate: e.target.value }))}
-                    className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      let codDays = newProject.codDays;
+                      const parts = val.split("/");
+                      if (parts.length === 3 && parts[2].length === 4) {
+                        const codD = new Date(parts[2], parts[1] - 1, parts[0]);
+                        if (!isNaN(codD.getTime())) {
+                          const diffTime = codD.getTime() - new Date().getTime();
+                          codDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        }
+                      }
+                      setNewProject(prev => ({ ...prev, codDate: val, codDays }));
+                    }}
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
                   />
                 </div>
-              </div>
-
-              {/* Risk select */}
-              <div className="space-y-1">
-                <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Mức độ rủi ro (Risk)</label>
-                <select
-                  value={newProject.risk}
-                  onChange={(e) => setNewProject(prev => ({ ...prev, risk: e.target.value }))}
-                  className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] cursor-pointer"
-                >
-                  <option value="LOW">LOW (Thấp)</option>
-                  <option value="MEDIUM">MEDIUM (Trung bình)</option>
-                  <option value="HIGH">HIGH (Cao)</option>
-                </select>
-              </div>
-
-              {/* Status select */}
-              <div className="space-y-1">
-                <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Trạng thái triển khai</label>
-                <select
-                  value={newProject.status}
-                  onChange={(e) => setNewProject(prev => ({ ...prev, status: e.target.value }))}
-                  className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] cursor-pointer"
-                >
-                  <option value="in_progress">Đang thi công</option>
-                  <option value="completed">Đã hoàn thành</option>
-                </select>
-              </div>
-
-              {/* Key Issue */}
-              <div className="space-y-1">
-                <label className="text-[#6b7d9b] font-bold uppercase tracking-wider block">Vướng mắc chính tồn đọng</label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: Thiếu vật tư rail, Thời tiết xấu..."
-                  value={newProject.issue}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    let type = "none";
-                    if (val.toLowerCase().includes("thiếu") || val.toLowerCase().includes("chậm")) type = "danger";
-                    else if (val.toLowerCase().includes("thời tiết") || val.toLowerCase().includes("mưa")) type = "medium";
-                    else if (val.trim() !== "" && !val.toLowerCase().includes("không")) type = "orange";
-                    
-                    setNewProject(prev => ({ ...prev, issue: val, issueType: type }));
-                  }}
-                  className="w-full bg-[#060a13] border border-[#182135] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
-                />
               </div>
 
             </div>
 
             {/* Form Footer Action */}
-            <div className="p-4 border-t border-[#182135] bg-[#0c1221] flex justify-between items-center gap-2 shrink-0">
+            <div className="p-4 border-t border-[var(--border-main)] bg-[#0c1221] flex justify-between items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsAddDrawerOpen(false)}

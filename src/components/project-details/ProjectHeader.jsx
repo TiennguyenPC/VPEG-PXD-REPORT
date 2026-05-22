@@ -1,7 +1,19 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ChevronLeft, Share2, Download } from 'lucide-react';
 
 export default function ProjectHeader({ project, onBack }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleExport = () => {
+    window.print();
+  };
+
   return (
     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#0b0f19] p-6 rounded-xl border border-[#182135] shadow-lg relative overflow-hidden group">
       {/* Background glow */}
@@ -33,21 +45,23 @@ export default function ProjectHeader({ project, onBack }) {
             <span className="flex items-center gap-1.5">
               Công suất: <span className="text-white font-semibold">{Number(project.capacity || 0).toLocaleString()} kWp</span>
             </span>
-            <span className="w-1 h-1 rounded-full bg-[#182135]"></span>
-            <span className="flex items-center gap-1.5">
-              Kế hoạch COD: <span className="text-white font-semibold">{project.cod}</span>
-            </span>
           </div>
         </div>
       </div>
 
       <div className="flex flex-col items-end gap-4 relative z-10 w-full md:w-auto mt-4 md:mt-0">
         <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-          <button className="flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] text-slate-200 px-4 py-2 rounded-lg text-xs font-semibold transition-all">
-            <Share2 className="w-3.5 h-3.5 text-[#7373ff]" />
-            Chia sẻ
+          <button 
+            onClick={handleShare}
+            className={`flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] px-4 py-2 rounded-lg text-xs font-semibold transition-all ${copied ? 'text-[#10b981] border-[#10b981]/50' : 'text-slate-200'}`}
+          >
+            <Share2 className={`w-3.5 h-3.5 ${copied ? 'text-[#10b981]' : 'text-[#7373ff]'}`} />
+            {copied ? 'Đã copy link!' : 'Chia sẻ'}
           </button>
-          <button className="flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] text-slate-200 px-4 py-2 rounded-lg text-xs font-semibold transition-all">
+          <button 
+            onClick={handleExport}
+            className="flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] text-slate-200 px-4 py-2 rounded-lg text-xs font-semibold transition-all"
+          >
             <Download className="w-3.5 h-3.5 text-[#10b981]" />
             Export
           </button>

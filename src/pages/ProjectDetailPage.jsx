@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { 
-  Activity, Briefcase, Folder
+import {
+  Activity, Briefcase, Folder, Sun, Moon
 } from "lucide-react";
+import { useTheme } from "../hooks/useTheme";
 import ProjectHeader from "../components/project-details/ProjectHeader";
 import KPIOverview from "../components/project-details/KPIOverview";
 import MilestoneTimeline from "../components/project-details/MilestoneTimeline";
@@ -49,12 +50,13 @@ const getMondayOfDate = (date) => {
 export default function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+  const { theme, toggleTheme } = useTheme();
+
   // Project & S-Curve State
   const [project, setProject] = useState(null);
   const [scurveData, setScurveData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Centralized Operations State
   const [logs, setLogs] = useState([]);
   const [weeklyLogs, setWeeklyLogs] = useState([]);
@@ -83,14 +85,14 @@ export default function ProjectDetailPage() {
     setModuleProgress(prev => {
       if (prev[moduleKey] === percent) return prev;
       const next = { ...prev, [moduleKey]: percent };
-      
+
       const overall = (next.permit * 0.10) + (next.design * 0.15) + (next.procurement * 0.25) + (next.construction * 0.40) + (next.handover * 0.10);
-      
+
       setProject(p => {
         if (!p) return p;
         const roundedOverall = Math.round(overall * 100) / 100;
         if (p.actualProgress === roundedOverall) return p;
-        
+
         const planVal = p.planProgress || 0;
         return {
           ...p,
@@ -98,7 +100,7 @@ export default function ProjectDetailPage() {
           delay: roundedOverall - planVal
         };
       });
-      
+
       return next;
     });
   };
@@ -118,7 +120,7 @@ export default function ProjectDetailPage() {
           setBundleData(bundle);
           if (bundle.project) setProject(bundle.project);
           if (bundle.scurve) setScurveData(bundle.scurve);
-          
+
           const dailyRes = bundle.siteLogs || [];
           setLogs(dailyRes);
           if (dailyRes.length > 0) {
@@ -241,11 +243,38 @@ export default function ProjectDetailPage() {
 
   const latestActualPoint = [...formattedSCurve].reverse().find(p => p.actual !== null && p.actual !== undefined);
 
+  // Compute live overall progress from module weights
+  const liveOverall = Math.round(
+    (moduleProgress.permit * 0.10) + 
+    (moduleProgress.design * 0.15) + 
+    (moduleProgress.procurement * 0.25) + 
+    (moduleProgress.construction * 0.40) + 
+    (moduleProgress.handover * 0.10)
+  );
+  
+  // Use live module-calculated overall when modules have reported any progress
+  const hasModuleData = Object.values(moduleProgress).some(v => v > 0);
+  
+  const basePlan = project ? (
+    project.planProgress !== undefined && project.planProgress !== null 
+      ? Number(project.planProgress) 
+      : (latestActualPoint ? latestActualPoint.plan : 0)
+  ) : 0;
+  
+  const baseActual = hasModuleData 
+    ? liveOverall 
+    : (project ? (
+        project.actualProgress !== undefined && project.actualProgress !== null 
+          ? Number(project.actualProgress) 
+          : (latestActualPoint ? latestActualPoint.actual : 0)
+      ) : 0);
+
   const enrichedProject = project ? {
     ...project,
-    actualProgress: project.actualProgress !== undefined && project.actualProgress !== null ? project.actualProgress : (latestActualPoint ? latestActualPoint.actual : 0),
-    planProgress: project.planProgress !== undefined && project.planProgress !== null ? project.planProgress : (latestActualPoint ? latestActualPoint.plan : 0),
-    delay: project.delay !== undefined && project.delay !== null ? project.delay : (latestActualPoint ? latestActualPoint.actual - latestActualPoint.plan : 0)
+    cod: project.cod || '29/06/2026',
+    actualProgress: baseActual,
+    planProgress: basePlan,
+    delay: baseActual - basePlan
   } : null;
 
   // Compute active log
@@ -317,10 +346,10 @@ export default function ProjectDetailPage() {
 
   const handleUpdateLog = (field, value) => {
     let targetLogDate = selectedDate;
-    
+
     // Support object of fields
     const updates = typeof field === 'object' ? field : { [field]: value };
-    
+
     // Normalization helper
     const getMappedField = (f) => {
       let mapped = f;
@@ -332,7 +361,7 @@ export default function ProjectDetailPage() {
       if (f === 'ĐÁNH_GIÁ_TUẦN') mapped = 'WEEKLY_ASSESSMENT';
       return mapped;
     };
-    
+
     // Map view edits to correct daily log row
     if (selectedView === 'week') {
       const weekLogs = getLogsInWeek(selectedWeek);
@@ -351,7 +380,7 @@ export default function ProjectDetailPage() {
         targetLogDate = `01/${selectedMonth}`;
       }
     }
-    
+
     const existingLog = logs.find(l => (l.LOG_DATE === targetLogDate || l.NGÀY === targetLogDate)) || {
       PROJECT_ID: id,
       LOG_DATE: targetLogDate,
@@ -366,21 +395,21 @@ export default function ProjectDetailPage() {
       UPDATED_BY: 'NV - GIÁM SÁT',
       UPDATED_AT: ''
     };
-    
+
     const updatedFields = {};
     Object.keys(updates).forEach(k => {
       const mapped = getMappedField(k);
       const val = updates[k];
       updatedFields[mapped] = (mapped === 'MANPOWER' || mapped === 'ENGINEERS' || mapped === 'INCIDENT_COUNT') ? Number(val) : val;
     });
-    
+
     const updatedLog = {
       ...existingLog,
       ...updatedFields,
       UPDATED_BY: 'NV - GIÁM SÁT',
       UPDATED_AT: new Date().toISOString()
     };
-    
+
     // Update local logs list optimistically
     setLogs(prev => {
       const idx = prev.findIndex(l => (l.LOG_DATE === targetLogDate || l.NGÀY === targetLogDate));
@@ -390,7 +419,7 @@ export default function ProjectDetailPage() {
         return [...prev, updatedLog];
       }
     });
-    
+
     // Sync to GAS with debounce
     triggerSave(updatedLog);
   };
@@ -413,38 +442,38 @@ export default function ProjectDetailPage() {
       setSaveStatus('Saved');
       return;
     }
-    
+
     isSavingRef.current = true;
     setSaveStatus('Saving...');
     pendingSaveRef.current = null;
-    
+
     try {
       const payload = {
         PROJECT_ID: String(id),
         LOG_DATE: toSave.LOG_DATE,
         NGÀY: toSave.LOG_DATE,
-        MANPOWER: Number(toSave.MANPOWER || 0),
-        NHÂN_LỰC_SITE: Number(toSave.MANPOWER || 0),
-        ENGINEERS: Number(toSave.ENGINEERS || 0),
-        KỸ_SƯ_GS: Number(toSave.ENGINEERS || 0),
-        WEATHER: toSave.WEATHER || '',
-        THỜI_TIẾT: toSave.WEATHER || '',
-        INCIDENT_COUNT: Number(toSave.INCIDENT_COUNT || 0),
-        SỰ_CỐ: `${toSave.INCIDENT_COUNT || 0} vụ`,
-        DAILY_NOTE: toSave.DAILY_NOTE || '',
-        GHI_CHÚ_HIỆN_TRƯỜNG: toSave.DAILY_NOTE || '',
-        WEEKLY_ASSESSMENT: toSave.WEEKLY_ASSESSMENT || '',
-        ĐÁNH_GIÁ_TUẦN: toSave.WEEKLY_ASSESSMENT || '',
-        MONTHLY_REPORT: toSave.MONTHLY_REPORT || '',
+        MANPOWER: toSave.MANPOWER !== undefined ? Number(toSave.MANPOWER || 0) : Number(toSave.NHÂN_LỰC_SITE || 0),
+        NHÂN_LỰC_SITE: toSave.MANPOWER !== undefined ? Number(toSave.MANPOWER || 0) : Number(toSave.NHÂN_LỰC_SITE || 0),
+        ENGINEERS: toSave.ENGINEERS !== undefined ? Number(toSave.ENGINEERS || 0) : Number(toSave.KỸ_SƯ_GS || 0),
+        KỸ_SƯ_GS: toSave.ENGINEERS !== undefined ? Number(toSave.ENGINEERS || 0) : Number(toSave.KỸ_SƯ_GS || 0),
+        WEATHER: toSave.WEATHER !== undefined ? toSave.WEATHER : (toSave.THỜI_TIẾT || ''),
+        THỜI_TIẾT: toSave.WEATHER !== undefined ? toSave.WEATHER : (toSave.THỜI_TIẾT || ''),
+        INCIDENT_COUNT: toSave.INCIDENT_COUNT !== undefined ? Number(toSave.INCIDENT_COUNT || 0) : Number(parseInt(toSave.SỰ_CỐ) || 0),
+        SỰ_CỐ: `${toSave.INCIDENT_COUNT !== undefined ? Number(toSave.INCIDENT_COUNT || 0) : Number(parseInt(toSave.SỰ_CỐ) || 0)} vụ`,
+        DAILY_NOTE: toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || ''),
+        GHI_CHÚ_HIỆN_TRƯỜNG: toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || ''),
+        WEEKLY_ASSESSMENT: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
+        ĐÁNH_GIÁ_TUẦN: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
+        MONTHLY_REPORT: toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || ''),
         STATUS: 'Saved',
         UPDATED_BY: 'NV - GIÁM SÁT',
         UPDATED_AT: new Date().toISOString(),
         _rowIndex: toSave._rowIndex
       };
-      
+
       const res = await api.updateSiteLog(payload);
       setSaveStatus('Saved');
-      
+
       if (res && res.dailyLogs) {
         setLogs(res.dailyLogs);
         if (res.weeklyLogs) setWeeklyLogs(res.weeklyLogs);
@@ -459,7 +488,7 @@ export default function ProjectDetailPage() {
         if (weeklyRes) setWeeklyLogs(weeklyRes);
         if (monthlyRes) setMonthlyLogs(monthlyRes);
       }
-      
+
     } catch (error) {
       console.error("Autosave error:", error);
       setSaveStatus('Error');
@@ -474,8 +503,8 @@ export default function ProjectDetailPage() {
 
   if (isLoading || !enrichedProject) {
     return (
-      <div className="min-h-screen flex bg-[#060a13] text-slate-100 font-sans relative">
-        <div className="absolute inset-0 z-50 bg-[#060a13]/80 backdrop-blur-sm flex items-center justify-center">
+      <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans relative">
+        <div className="absolute inset-0 z-50 bg-[var(--bg-main)]/80 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
             <div className="w-10 h-10 border-4 border-[#5252ff]/30 border-t-[#5252ff] rounded-full animate-spin"></div>
             <span className="text-white font-medium text-sm tracking-wide">Đang tải chi tiết dự án...</span>
@@ -486,32 +515,32 @@ export default function ProjectDetailPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-[#060a13] text-slate-100 font-sans">
-      
+    <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans">
+
       {/* LEFT SIDEBAR (Duplicated from App.jsx as requested) */}
-      <aside className="w-64 border-r border-[#182135] bg-[#070b14] flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-y-auto hidden md:flex">
+      <aside className="w-64 border-r border-[var(--border-main)] bg-[#070b14] flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-y-auto hidden md:flex">
         <div>
           {/* Logo Brand */}
-          <div className="p-6 flex items-center gap-3 border-b border-[#182135]/40 cursor-pointer" onClick={() => navigate('/')}>
+          <div className="p-6 flex items-center gap-3 border-b border-[var(--border-main)]/40 cursor-pointer" onClick={() => navigate('/')}>
             <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-[#5252ff] to-[#8080ff] shadow-[0_0_12px_rgba(82,82,255,0.7)]"></div>
             <span className="text-sm font-bold tracking-wider text-white">VPEG-PXD-REPORT</span>
           </div>
- 
+
           {/* Navigation Menu */}
           <nav className="p-4 space-y-1">
             <a
               href="#"
               onClick={(e) => { e.preventDefault(); navigate('/'); }}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#6b7d9b] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
             >
-              <Activity className="w-4 h-4 text-[#6b7d9b]" />
+              <Activity className="w-4 h-4 text-[var(--text-muted)]" />
               <span>TỔNG QUAN</span>
             </a>
             <a
               href="#"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[#6b7d9b] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
+              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
             >
-              <Briefcase className="w-4 h-4 text-[#6b7d9b]" />
+              <Briefcase className="w-4 h-4 text-[var(--text-muted)]" />
               <span>DANH SÁCH CÔNG VIỆC</span>
             </a>
             <a
@@ -526,8 +555,8 @@ export default function ProjectDetailPage() {
         </div>
 
         {/* User Profile Bottom */}
-        <div className="p-4 border-t border-[#182135]/50 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[#182135] flex items-center justify-center text-xs font-bold text-slate-300 border border-[#263554]">
+        <div className="p-4 border-t border-[var(--border-main)]/50 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-[var(--border-main)] flex items-center justify-center text-xs font-bold text-slate-300 border border-[#263554]">
             NV
           </div>
           <div className="flex flex-col">
@@ -540,23 +569,23 @@ export default function ProjectDetailPage() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto w-full p-6 space-y-6">
-          
+
           {/* SECTION 1 - HEADER */}
-          <ProjectHeader project={enrichedProject} onBack={() => navigate('/')} />
-          
+          <ProjectHeader project={enrichedProject} milestones={bundleData?.milestones || []} onBack={() => navigate('/')} />
+
           {/* SECTION 2 - KPI OVERVIEW */}
-          <KPIOverview project={enrichedProject} />
-          
+          <KPIOverview project={enrichedProject} milestones={bundleData?.milestones || []} />
+
           {/* SECTION 3 - MILESTONE TIMELINE */}
-          <MilestoneTimeline project={enrichedProject} />
-          
+          <MilestoneTimeline project={enrichedProject} moduleProgress={moduleProgress} milestonesData={bundleData?.milestones || []} />
+
           {/* SECTION 4 - S-CURVE CHART (FULL WIDTH) */}
-          <SCurveChart project={enrichedProject} />
-          
+          <SCurveChart project={enrichedProject} milestonesData={bundleData?.milestones || []} />
+
           {/* SECTION 5 - SITE LOGS & OPERATIONS */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className={selectedView === 'day' ? 'lg:col-span-3' : 'lg:col-span-2'}>
-              <SiteLogPanel 
+              <SiteLogPanel
                 project={enrichedProject}
                 logs={logs}
                 weeklyLogs={weeklyLogs}
@@ -576,7 +605,7 @@ export default function ProjectDetailPage() {
             </div>
             {selectedView !== 'day' && (
               <div className="lg:col-span-1">
-                <WeeklyKPI 
+                <WeeklyKPI
                   project={enrichedProject}
                   logs={logs}
                   weeklyLogs={weeklyLogs}
@@ -592,7 +621,7 @@ export default function ProjectDetailPage() {
               </div>
             )}
           </div>
-          
+
           {/* SECTION 7 - MAIN ACCORDION MODULES */}
           <div className="space-y-4 pt-4">
             <RiskModule project={enrichedProject} initialData={bundleData?.risks} />
@@ -602,7 +631,7 @@ export default function ProjectDetailPage() {
             <ConstructionModule project={enrichedProject} initialData={bundleData?.constructions} onProgressChange={(pct) => handleModuleProgressChange('construction', pct)} />
             <HandoverModule project={enrichedProject} initialData={bundleData?.handovers} onProgressChange={(pct) => handleModuleProgressChange('handover', pct)} />
           </div>
-          
+
         </div>
       </main>
     </div>

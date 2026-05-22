@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PenTool, ChevronDown, ChevronUp, Loader2, Compass, CloudOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
+import ModuleDateHeader from './ModuleDateHeader';
 
 const defaultDesigns = [
   'Bản vẽ sơ bộ làm giấy phép',
@@ -14,24 +15,41 @@ export default function DesignModule({ project, initialData, onProgressChange })
   const [isOpen, setIsOpen] = useState(false);
 
   const mergeDesignData = (data) => {
+    const getVal = (row, keys) => {
+      if (!row) return null;
+      const rowKeys = Object.keys(row);
+      for (const key of keys) {
+        const cleanKey = key.toLowerCase().replace(/[\s_]/g, '');
+        const match = rowKeys.find(k => k.toLowerCase().replace(/[\s_]/g, '') === cleanKey);
+        if (match && row[match] !== undefined && row[match] !== null && row[match] !== '') {
+          return row[match];
+        }
+      }
+      return null;
+    };
+
     return defaultDesigns.map((name, index) => {
       const nameLower = name.toLowerCase().replace(/\s+/g, '');
-      const row = data ? data.find(r => r.HẠNG_MỤC_BẢN_VẼ && r.HẠNG_MỤC_BẢN_VẼ.toLowerCase().replace(/\s+/g, '') === nameLower) : null;
+      const row = data ? data.find(r => {
+        const hm = getVal(r, ['HẠNG_MỤC', 'HANG_MUC', 'hangmuc', 'HẠNG_MỤC_BẢN_VẼ']);
+        return hm && hm.toLowerCase().replace(/\s+/g, '') === nameLower;
+      }) : null;
+
       if (row) {
         return {
           id: `design_${index}`,
           _rowIndex: row._rowIndex,
-          HẠNG_MỤC_BẢN_VẼ: name,
-          TÌNH_TRẠNG: row.TÌNH_TRẠNG || 'Chưa làm',
-          PHÊ_DUYỆT: row.PHÊ_DUYỆT || 'Chưa phản hồi',
-          BƯỚC_TIẾP_THEO: row.BƯỚC_TIẾP_THEO || row.BƯỚC_TIẾP || 'Vẽ mới',
-          KẾT_QUẢ_CUỐI: row.KẾT_QUẢ_CUỐI || '-'
+          HẠNG_MỤC: name,
+          TÌNH_TRẠNG: getVal(row, ['TÌNH_TRẠNG', 'tinhtrang']) || 'Chưa làm',
+          PHÊ_DUYỆT: getVal(row, ['PHÊ_DUYỆT', 'pheduyet', 'KẾT_QUẢ_PHẢN_HỒI', 'KẾ_QUẢ_PHẢN_HỒI']) || 'Chưa phản hồi',
+          BƯỚC_TIẾP_THEO: getVal(row, ['BƯỚC_TIẾP_THEO', 'buoctieptheo', 'buoctiep']) || 'Vẽ mới',
+          KẾT_QUẢ_CUỐI: getVal(row, ['KẾT_QUẢ_CUỐI', 'KẾ_QUẢ_CUỐI', 'ketquacuoi', 'ket_qua_cuoi', 'kequacuoi']) || '-'
         };
       }
       return {
         id: `design_${index}`,
         _rowIndex: undefined,
-        HẠNG_MỤC_BẢN_VẼ: name,
+        HẠNG_MỤC: name,
         TÌNH_TRẠNG: 'Chưa làm',
         PHÊ_DUYỆT: 'Chưa phản hồi',
         BƯỚC_TIẾP_THEO: 'Vẽ mới',
@@ -52,6 +70,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
   });
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
   const [syncError, setSyncError] = useState(false);
 
   useEffect(() => {
@@ -72,7 +91,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
         setSyncError(false);
       } catch (error) {
         console.error("Fetch design error:", error);
-        setSyncError(true);
+        setSyncError(true); setSyncStatus("error"); setTimeout(() => setSyncStatus(null), 3000);
         try {
           const cached = localStorage.getItem(STORAGE_KEY);
           if (cached) setDesigns(mergeDesignData(JSON.parse(cached)));
@@ -91,23 +110,18 @@ export default function DesignModule({ project, initialData, onProgressChange })
   }, [designs, onProgressChange]);
 
   const handleUpdate = async (id, field, value) => {
-    let updatedItems = [];
     let updatedItem = null;
-
-    setDesigns(prev => {
-      const next = prev.map(d => {
-        if (d.id === id) {
-          updatedItem = { ...d, [field]: value };
-          return updatedItem;
-        }
-        return d;
-      });
-      updatedItems = next;
-      return next;
+    const nextItems = designs.map(d => {
+      if (d.id === id) {
+        updatedItem = { ...d, [field]: value };
+        return updatedItem;
+      }
+      return d;
     });
+    setDesigns(nextItems);
 
-    if (updatedItems.length > 0) {
-      const rawData = updatedItems.map(d => ({
+    if (nextItems.length > 0) {
+      const rawData = nextItems.map(d => ({
         _rowIndex: d._rowIndex,
         PROJECT_ID: project?.PROJECT_ID || project?.id,
         HẠNG_MỤC_BẢN_VẼ: d.HẠNG_MỤC_BẢN_VẼ,
@@ -120,28 +134,49 @@ export default function DesignModule({ project, initialData, onProgressChange })
     }
 
     if (updatedItem) {
-      setIsUpdating(true);
       try {
         const payload = {
           _rowIndex: updatedItem._rowIndex,
           PROJECT_ID: project?.PROJECT_ID || project?.id,
+          NGÀY_BẮT_ĐẦU_MODULE: JSON.parse(localStorage.getItem(`dates_design_${project?.PROJECT_ID || project?.id}`) || '{}').start || '',
+          SỐ_NGÀY_MODULE: JSON.parse(localStorage.getItem(`dates_design_${project?.PROJECT_ID || project?.id}`) || '{}').days || '',
+          TÊN_DỰ_ÁN: project?.name || project?.TÊN_DỰ_ÁN || '-',
           HẠNG_MỤC_BẢN_VẼ: updatedItem.HẠNG_MỤC_BẢN_VẼ,
+          
           TÌNH_TRẠNG: updatedItem.TÌNH_TRẠNG,
+          tinhtrang: updatedItem.TÌNH_TRẠNG,
+          
           PHÊ_DUYỆT: updatedItem.PHÊ_DUYỆT,
+          pheduyet: updatedItem.PHÊ_DUYỆT,
+          
           BƯỚC_TIẾP_THEO: updatedItem.BƯỚC_TIẾP_THEO,
-          KẾT_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI
+          BƯỚC_TIẾP: updatedItem.BƯỚC_TIẾP_THEO,
+          buoctieptheo: updatedItem.BƯỚC_TIẾP_THEO,
+          
+          KẾT_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI,
+          KẾ_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI,
+          ketquacuoi: updatedItem.KẾT_QUẢ_CUỐI
         };
         const response = await api.updateDesign(payload);
         if (response && response.data && response.data.length > 0) {
-          setDesigns(mergeDesignData(response.data));
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(response.data));
+          setDesigns(prev => {
+            const next = prev.map(d => {
+              const serverRow = response.data.find(r => 
+                (r.HẠNG_MỤC || r.HẠNG_MỤC_BẢN_VẼ || '').toLowerCase().replace(/\s+/g, '') === d.HẠNG_MỤC.toLowerCase().replace(/\s+/g, '')
+              );
+              if (serverRow && serverRow._rowIndex) {
+                return { ...d, _rowIndex: serverRow._rowIndex };
+              }
+              return d;
+            });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+            return next;
+          });
           setSyncError(false);
         }
       } catch (error) {
         console.warn("GAS sync failed (data saved locally):", error);
-        setSyncError(true);
-      } finally {
-        setIsUpdating(false);
+        setSyncError(true); setSyncStatus("error"); setTimeout(() => setSyncStatus(null), 3000);
       }
     }
   };
@@ -191,10 +226,10 @@ export default function DesignModule({ project, initialData, onProgressChange })
   const progressPercent = designs.length > 0 ? Math.round((completedCount / designs.length) * 100) : 0;
 
   return (
-    <div className="glass-panel rounded-xl shadow-lg border border-[#182135] overflow-hidden">
+    <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 bg-[#0b0f19] hover:bg-[#0d1322] transition-colors"
+        className="w-full flex items-center justify-between p-4 bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors"
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded bg-[#a855f7]/10 text-[#a855f7] flex items-center justify-center">
@@ -204,30 +239,31 @@ export default function DesignModule({ project, initialData, onProgressChange })
         </div>
         
         <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-3 text-xs font-semibold">
+          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="design" syncStatus={syncStatus}  />
+          <div className="hidden sm:flex items-center justify-end w-[200px] gap-3 text-xs font-semibold">
             {isLoading ? (
-              <div className="flex items-center gap-2 text-[#6b7d9b]">
+              <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>Đang tải...</span>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 justify-end w-full">
                 {syncError && (
                   <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-full text-xs text-amber-400">
                     <CloudOff className="w-3 h-3" />
-                    <span>Lưu cục bộ</span>
+                    <span className="hidden xl:inline">Lưu cục bộ</span>
                   </div>
                 )}
-                <div className="flex items-center gap-2 bg-[#182135]/50 border border-[#1e293b] px-3 py-1 rounded-full text-xs">
-                  <span className="text-[#8ca0c3]">{completedCount}/{designs.length} hoàn thành</span>
-                  <span className="w-1 h-1 bg-[#10b981] rounded-full"></span>
-                  <span className="text-[#10b981] font-bold">{progressPercent}%</span>
+                <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-light)] px-3 py-1 rounded-full text-xs min-w-[140px]">
+                  <span className="text-[#8ca0c3] whitespace-nowrap">{completedCount}/{designs.length} hoàn thành</span>
+                  <span className="w-1 h-1 bg-[#10b981] rounded-full shrink-0"></span>
+                  <span className="text-[#10b981] font-bold shrink-0">{progressPercent}%</span>
                 </div>
               </div>
             )}
           </div>
-          <div className="w-[1px] h-6 bg-[#182135] mx-2"></div>
-          {isOpen ? <ChevronUp className="w-4 h-4 text-[#6b7d9b]" /> : <ChevronDown className="w-4 h-4 text-[#6b7d9b]" />}
+          <div className="w-[1px] h-6 bg-[var(--border-main)] mx-2"></div>
+          {isOpen ? <ChevronUp className="w-4 h-4 text-[var(--text-muted)]" /> : <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />}
         </div>
       </button>
 
@@ -239,11 +275,11 @@ export default function DesignModule({ project, initialData, onProgressChange })
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="p-4 border-t border-[#182135] bg-[#060a13]">
-              <div className="overflow-x-auto rounded-lg border border-[#182135]">
+            <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
+              <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
                 <table className="w-full text-left text-xs min-w-[800px]">
                   <thead>
-                    <tr className="bg-[#0b0f19] text-[#6b7d9b] font-bold uppercase tracking-wider border-b border-[#182135]">
+                    <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
                       <th className="p-3">Hạng mục bản vẽ</th>
                       <th className="p-3">Tình trạng</th>
                       <th className="p-3">Phê duyệt</th>
@@ -251,67 +287,67 @@ export default function DesignModule({ project, initialData, onProgressChange })
                       <th className="p-3">Kết quả cuối</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#182135]">
+                  <tbody className="divide-y divide-[var(--border-main)]">
                     {designs.map(d => (
-                      <tr key={d.id} className="hover:bg-[#0b0f19]/50 transition-colors">
+                      <tr key={d.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
                         <td className="p-3 font-semibold text-slate-200 flex items-center gap-2">
                           <Compass className="w-3.5 h-3.5 text-slate-400" />
                           <span>{d.HẠNG_MỤC_BẢN_VẼ}</span>
                         </td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(d.TÌNH_TRẠNG)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(d.TÌNH_TRẠNG)}`}
                             value={d.TÌNH_TRẠNG || ''}
                             onChange={(e) => handleUpdate(d.id, 'TÌNH_TRẠNG', e.target.value)}
                           >
-                            <option className="bg-[#0b0f19] text-slate-200">Chưa làm</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đang vẽ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã gửi nội bộ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã gửi CĐT</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đang chỉnh sửa</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Chưa làm</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đang vẽ</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đã gửi nội bộ</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đã gửi CĐT</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đang chỉnh sửa</option>
                           </select>
                         </td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getApprovalColor(d.PHÊ_DUYỆT)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getApprovalColor(d.PHÊ_DUYỆT)}`}
                             value={d.PHÊ_DUYỆT || ''}
                             onChange={(e) => handleUpdate(d.id, 'PHÊ_DUYỆT', e.target.value)}
                           >
-                            <option className="bg-[#0b0f19] text-slate-200">Chưa phản hồi</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã duyệt</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Duyệt có điều kiện</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Yêu cầu chỉnh sửa</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Không đạt</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Chưa phản hồi</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đã duyệt</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Duyệt có điều kiện</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Yêu cầu chỉnh sửa</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Không đạt</option>
                           </select>
                         </td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(d.BƯỚC_TIẾP_THEO)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(d.BƯỚC_TIẾP_THEO)}`}
                             value={d.BƯỚC_TIẾP_THEO || ''}
                             onChange={(e) => handleUpdate(d.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                           >
-                            <option className="bg-[#0b0f19] text-slate-200">Vẽ mới</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Chỉnh sửa bản vẽ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Gửi duyệt nội bộ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Gửi CĐT</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Giải trình</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Chốt hồ sơ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Hoàn tất thiết kế</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Vẽ mới</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Chỉnh sửa bản vẽ</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Gửi duyệt nội bộ</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Gửi CĐT</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Giải trình</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Chốt hồ sơ</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Hoàn tất thiết kế</option>
                           </select>
                         </td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(d.KẾT_QUẢ_CUỐI)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(d.KẾT_QUẢ_CUỐI)}`}
                             value={d.KẾT_QUẢ_CUỐI || ''}
                             onChange={(e) => handleUpdate(d.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                           >
-                            <option className="bg-[#0b0f19] text-slate-200" value="-">-</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã duyệt bản vẽ sơ bộ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã duyệt bản vẽ thi công</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã chốt BOQ</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã có bản vẽ hoàn công</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Hoàn tất thiết kế</option>
-                            <option className="bg-[#0b0f19] text-slate-200">N/A</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200" value="-">-</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đã duyệt bản vẽ sơ bộ</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đã duyệt bản vẽ thi công</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đã chốt BOQ</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đã có bản vẽ hoàn công</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Hoàn tất thiết kế</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">N/A</option>
                           </select>
                         </td>
                       </tr>

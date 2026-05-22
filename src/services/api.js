@@ -1,5 +1,5 @@
 // Replace this URL with your deployed Google Apps Script Web App URL
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxojmRJFocx0sMvf3VmjaLhdIl6T9ATJdizWa_V43gIT0jWxIQn0pdRrIvYTTgcjETo/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxNaUFpEkBt8Zk9Wa163WQWrwsJMZjxNt3TpIKrO75xIPq1nU03_99D_YhIDTnSOxsT/exec';
 
 function normalizeProject(project) {
   if (!project) return null;
@@ -11,6 +11,7 @@ function normalizeProject(project) {
     sm: project.SM || project.sm || "-",
     capacity: Number(project.CÔNG_SUẤT_KWP || project.CAPACITY_KWP || project.capacity || 0),
     cod: project.KẾ_HOẠCH_COD || project.COD_PLAN || project.cod || "-",
+    kickoffDate: project.KICKOFF_DATE || project.NGÀY_KICKOFF || project.KICKOFF || "-",
     forecastCod: project.DỰ_BÁO_COD || project.forecastCod || "",
     planProgress: Number(project.TIẾN_ĐỘ_KẾ_HOẠCH || project.PLAN_PROGRESS || project.planProgress || 0),
     actualProgress: Number(project.TIẾN_ĐỘ_THỰC_TẾ || project.ACTUAL_PROGRESS || project.actualProgress || 0),
@@ -20,7 +21,7 @@ function normalizeProject(project) {
     updatedAt: project.CẬP_NHẬT_CUỐI || project.UPDATED_AT || project.updatedAt || "-",
     priority: project.priority || "-",
     priorityColor: project.priorityColor || "green",
-    issue: project.issue || "Không có",
+    issue: project.VƯỚNG_MẮC_CHÍNH || project.issue || "Không có",
     issueType: project.issueType || "success",
     _rowIndex: project._rowIndex
   };
@@ -40,8 +41,10 @@ function mapProjectToSheet(project) {
     TIẾN_ĐỘ_KẾ_HOẠCH: project.planProgress,
     TIẾN_ĐỘ_THỰC_TẾ: project.actualProgress,
     DELAY: project.delay,
+    KICKOFF_DATE: project.kickoffDate,
     TRẠNG_THÁI: project.status,
     RISK_LEVEL: project.risk,
+    VƯỚNG_MẮC_CHÍNH: project.issue || "Không có",
     CẬP_NHẬT_CUỐI: project.updatedAt || new Date().toLocaleString(),
     _rowIndex: project._rowIndex
   };
@@ -56,6 +59,8 @@ async function fetchFromGAS(action, params = {}) {
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.append(key, value);
   }
+  // Cache busting
+  url.searchParams.append('t', Date.now().toString());
 
   try {
     const response = await fetch(url.toString(), {
@@ -107,6 +112,10 @@ export const api = {
     const data = await fetchFromGAS('projects');
     return (data || []).map(normalizeProject);
   },
+  getEmployees: async () => {
+    const data = await fetchFromGAS('employees');
+    return data || [];
+  },
   getProject: async (id) => {
     const data = await fetchFromGAS('project', { id });
     return normalizeProject(data);
@@ -138,6 +147,7 @@ export const api = {
   updateConstruction: (data) => postToGAS('update-construction', data),
   updateHandover: (data) => postToGAS('update-handover', data),
   updateSiteLog: (data) => postToGAS('update-site-log', data),
+  updateModuleDates: (data) => postToGAS('update-module-dates', data),
   updateProject: (data) => postToGAS('update-project', mapProjectToSheet(data)),
   createProject: (data) => postToGAS('add-project', mapProjectToSheet(data)),
   addRisk: (data) => postToGAS('add-risk', data),

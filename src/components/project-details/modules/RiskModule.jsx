@@ -77,11 +77,11 @@ export default function RiskModule({ project, initialData }) {
   const closedCount = risks.filter(r => r.TRẠNG_THÁI === 'Đã đóng').length;
 
   return (
-    <div className="glass-panel rounded-xl shadow-lg border border-[#182135] overflow-hidden">
+    <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
       {/* Header / Accordion Trigger */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between p-4 bg-[#0b0f19] hover:bg-[#0d1322] transition-colors"
+        className="w-full flex items-center justify-between p-4 bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors"
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded bg-[#ef4444]/10 text-[#ef4444] flex items-center justify-center">
@@ -93,21 +93,21 @@ export default function RiskModule({ project, initialData }) {
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-3 text-xs font-semibold">
             {isLoading ? (
-              <div className="flex items-center gap-2 text-[#6b7d9b]">
+              <div className="flex items-center gap-2 text-[var(--text-muted)]">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 <span>Đang tải...</span>
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Tổng</span> <span className="text-white">{risks.length}</span></div>
-                <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Xử lý</span> <span className="text-blue-400">{activeCount}</span></div>
-                <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Theo dõi</span> <span className="text-orange-400">{watchCount}</span></div>
-                <div className="flex items-center gap-1.5"><span className="text-[#6b7d9b]">Đã đóng</span> <span className="text-emerald-400">{closedCount}</span></div>
+                <div className="flex items-center gap-1.5"><span className="text-[var(--text-muted)]">Tổng</span> <span className="text-white">{risks.length}</span></div>
+                <div className="flex items-center gap-1.5"><span className="text-[var(--text-muted)]">Xử lý</span> <span className="text-blue-400">{activeCount}</span></div>
+                <div className="flex items-center gap-1.5"><span className="text-[var(--text-muted)]">Theo dõi</span> <span className="text-orange-400">{watchCount}</span></div>
+                <div className="flex items-center gap-1.5"><span className="text-[var(--text-muted)]">Đã đóng</span> <span className="text-emerald-400">{closedCount}</span></div>
               </>
             )}
           </div>
-          <div className="w-[1px] h-6 bg-[#182135] mx-2"></div>
-          {isOpen ? <ChevronUp className="w-4 h-4 text-[#6b7d9b]" /> : <ChevronDown className="w-4 h-4 text-[#6b7d9b]" />}
+          <div className="w-[1px] h-6 bg-[var(--border-main)] mx-2"></div>
+          {isOpen ? <ChevronUp className="w-4 h-4 text-[var(--text-muted)]" /> : <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />}
         </div>
       </button>
 
@@ -120,7 +120,7 @@ export default function RiskModule({ project, initialData }) {
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="p-4 border-t border-[#182135] bg-[#060a13]">
+            <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
               <div className="flex justify-end mb-3">
                 <button 
                   onClick={async () => {
@@ -148,16 +148,16 @@ export default function RiskModule({ project, initialData }) {
                       console.error("Add risk error:", e); 
                     }
                   }}
-                  className="bg-[#182135] hover:bg-[#263554] text-slate-200 text-xs font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors"
+                  className="bg-[var(--border-main)] hover:bg-[#263554] text-slate-200 text-xs font-semibold px-3 py-1.5 rounded flex items-center gap-1.5 transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" /> Thêm rủi ro
                 </button>
               </div>
               
-              <div className="overflow-x-auto rounded-lg border border-[#182135]">
+              <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
                 <table className="w-full text-left text-xs">
                   <thead>
-                    <tr className="bg-[#0b0f19] text-[#6b7d9b] font-bold uppercase tracking-wider border-b border-[#182135]">
+                    <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
                       <th className="p-3 w-32">Mức độ</th>
                       <th className="p-3">Nội dung</th>
                       <th className="p-3">Ảnh hưởng</th>
@@ -166,18 +166,18 @@ export default function RiskModule({ project, initialData }) {
                       <th className="p-3 w-28">Ngày</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#182135]">
+                  <tbody className="divide-y divide-[var(--border-main)]">
                     {risks.map(r => (
-                      <tr key={r._rowIndex || r.id} className="hover:bg-[#0b0f19]/50 transition-colors">
+                      <tr key={r._rowIndex || r.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
                         <td className="p-3">
                           <select 
                             className={`bg-transparent text-xs font-bold focus:outline-none appearance-none cursor-pointer px-2 py-1 rounded border ${getSeverityColor(r.MỨC_ĐỘ)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
                             value={r.MỨC_ĐỘ}
                             onChange={(e) => handleUpdate(r._rowIndex || r.id, 'MỨC_ĐỘ', e.target.value)}
                           >
-                            <option className="bg-[#0b0f19] text-slate-200">Cao</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Trung bình</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Thấp</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Cao</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Trung bình</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Thấp</option>
                           </select>
                         </td>
                         <td className="p-3">
@@ -212,10 +212,10 @@ export default function RiskModule({ project, initialData }) {
                             value={r.TRẠNG_THÁI}
                             onChange={(e) => handleUpdate(r._rowIndex || r.id, 'TRẠNG_THÁI', e.target.value)}
                           >
-                            <option className="bg-[#0b0f19] text-slate-200">Open</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đang xử lý</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Theo dõi</option>
-                            <option className="bg-[#0b0f19] text-slate-200">Đã đóng</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Open</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đang xử lý</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Theo dõi</option>
+                            <option className="bg-[var(--bg-panel)] text-slate-200">Đã đóng</option>
                           </select>
                         </td>
                         <td className="p-3">
@@ -234,7 +234,7 @@ export default function RiskModule({ project, initialData }) {
                         <td className="p-3">
                           <input 
                             type="text" 
-                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[#6b7d9b] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[var(--text-muted)] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
                             value={r.NGÀY || ''}
                             placeholder="DD/MM/YYYY"
                             onChange={(e) => {

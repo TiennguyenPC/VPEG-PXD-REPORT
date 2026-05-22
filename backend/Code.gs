@@ -28,6 +28,7 @@ function doGet(e) {
         break;
       case 'dashboard-bundle':
         const projectId = id;
+        initializeProjectDetails(ss, projectId);
         const siteLogs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId));
         data = {
           project: getSheetDataAsObjects(ss, 'PROJECT_MASTER').find(p => (p.PROJECT_ID == projectId || p.id == projectId)) || null,
@@ -46,6 +47,9 @@ function doGet(e) {
         break;
       case 'projects':
         data = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
+        break;
+      case 'employees':
+        data = getSheetDataAsObjects(ss, 'EMPLOYEE');
         break;
       case 'project':
         const allProjects = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
@@ -99,7 +103,7 @@ function doPost(e) {
     const action = e.parameter.action;
     // We expect payload to be sent as stringified JSON in postData
     // Note: When calling from frontend, set Content-Type to text/plain to avoid CORS preflight OPTIONS request
-    const payload = JSON.parse(e.postData.contents);
+    const payload = JSON.parse(e.postData.getDataAsString("UTF-8"));
     const ss = getSpreadsheet();
     
     let sheetName = '';
@@ -125,6 +129,9 @@ function doPost(e) {
         break;
       case 'update-site-log':
         sheetName = 'DAILY_SITE_LOG';
+        break;
+      case 'update-module-dates':
+        sheetName = payload.sheetName; // passed from web
         break;
       case 'update-project':
         sheetName = 'PROJECT_MASTER';
@@ -154,7 +161,7 @@ function doPost(e) {
         if (action === 'add-project') {
           const projectId = payload.PROJECT_ID || payload.id;
           if (projectId) {
-            initializeProjectDetails(ss, projectId);
+            initializeProjectDetails(ss, projectId, payload.KICKOFF_DATE, payload.KẾ_HOẠCH_COD);
           }
         }
       } else {
@@ -167,7 +174,7 @@ function doPost(e) {
         recalculateProjectProgress(ss, projectId);
       }
       
-      if (action !== 'update-site-log') {
+      if (action !== 'update-site-log' && action !== 'update-module-dates') {
         if (projectId) {
           const updatedList = getSheetDataAsObjects(ss, sheetName).filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId));
           return createResponse({
@@ -189,6 +196,27 @@ function doPost(e) {
         weeklyLogs: getWeeklyAggregates(ss, projectId, dailyLogs),
         monthlyLogs: getMonthlyAggregates(ss, projectId, dailyLogs)
       });
+    }
+    if (action === 'update-module-dates') {
+      const sheet = ss.getSheetByName(sheetName);
+      if (sheet) {
+        const projectId = payload.PROJECT_ID || payload.id;
+        const data = sheet.getDataRange().getValues();
+        const headers = data[0];
+        const idColIndex = findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']);
+        const startDateColIndex = findColumnIndex(headers, ['NGÀY_BẮT_ĐẦU_MODULE', 'NGÀY_BẮT_ĐẦU']);
+        const daysColIndex = findColumnIndex(headers, ['SỐ_NGÀY_MODULE', 'NGÀY', 'SỐ_NGÀY']);
+        
+        if (idColIndex !== -1 && startDateColIndex !== -1 && daysColIndex !== -1) {
+          for (let i = 1; i < data.length; i++) {
+            if (data[i][idColIndex] == projectId) {
+              sheet.getRange(i + 1, startDateColIndex + 1).setValue(payload.NGÀY_BẮT_ĐẦU_MODULE);
+              sheet.getRange(i + 1, daysColIndex + 1).setValue(payload.SỐ_NGÀY_MODULE);
+            }
+          }
+        }
+      }
+      return createResponse({ status: 'success', message: 'Dates updated across all rows' });
     }
     
     return createResponse({ status: 'success', message: 'Data updated successfully' });
@@ -236,11 +264,11 @@ const STANDARD_KEYS_MAP = {
   // permit/handover
   'hangmuc': 'HẠNG_MỤC',
   'tinhtrang': 'TÌNH_TRẠNG',
-  'ketquaphanhoi': 'KẾ_QUẢ_PHẢN_HỒI',
-  'phanhoi': 'KẾ_QUẢ_PHẢN_HỒI',
+  'ketquaphanhoi': 'KẾT_QUẢ_PHẢN_HỒI',
+  'phanhoi': 'KẾT_QUẢ_PHẢN_HỒI',
   'buoctieptheo': 'BƯỚC_TIẾP_THEO',
   'buoctiep': 'BƯỚC_TIẾP_THEO',
-  'ketquacuoi': 'KẾ_QUẢ_CUỐI',
+  'ketquacuoi': 'KẾT_QUẢ_CUỐI',
   'capnhatboi': 'CẬP_NHẬT_BỞI',
   'ngaycapnhat': 'NGÀY_CẬP_NHẬT',
   
@@ -437,6 +465,13 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     'DAILY_NOTE':      ['DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
     'WEEKLY_ASSESSMENT': ['WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN'],
     'MONTHLY_REPORT':  ['MONTHLY_REPORT', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'TÊN_DỰ_ÁN':       ['TÊN_DỰ_ÁN', 'PROJECT_NAME'],
+    'KHÁCH_HÀNG':      ['KHÁCH_HÀNG', 'CLIENT'],
+    'CÔNG_SUẤT_KWP':   ['CÔNG_SUẤT_KWP', 'CAPACITY_KWP'],
+    'KẾ_HOẠCH_COD':    ['KẾ_HOẠCH_COD', 'COD_PLAN', 'NGÀY_ĐÓNG_ĐIỆN', 'NGÀY_ĐÓNG_ĐIỆN_COD'],
+    'KICKOFF_DATE':    ['KICKOFF_DATE', 'NGÀY_KICKOFF', 'KICKOFF'],
+    'TIẾN_ĐỘ_KẾ_HOẠCH':['TIẾN_ĐỘ_KẾ_HOẠCH', 'PLAN_PROGRESS'],
+    'TIẾN_ĐỘ_THỰC_TẾ': ['TIẾN_ĐỘ_THỰC_TẾ', 'ACTUAL_PROGRESS'],
     // Vietnamese → English reverse aliases
     'NGÀY':                   ['NGÀY', 'LOG_DATE'],
     'NHÂN_LỰC_SITE':          ['NHÂN_LỰC_SITE', 'MANPOWER'],
@@ -699,6 +734,13 @@ function appendRow(ss, sheetName, payload) {
     'DAILY_NOTE':        ['DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
     'WEEKLY_ASSESSMENT': ['WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN'],
     'MONTHLY_REPORT':    ['MONTHLY_REPORT', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'TÊN_DỰ_ÁN':         ['TÊN_DỰ_ÁN', 'PROJECT_NAME'],
+    'KHÁCH_HÀNG':        ['KHÁCH_HÀNG', 'CLIENT'],
+    'CÔNG_SUẤT_KWP':     ['CÔNG_SUẤT_KWP', 'CAPACITY_KWP'],
+    'KẾ_HOẠCH_COD':      ['KẾ_HOẠCH_COD', 'COD_PLAN', 'NGÀY_ĐÓNG_ĐIỆN', 'NGÀY_ĐÓNG_ĐIỆN_COD'],
+    'KICKOFF_DATE':      ['KICKOFF_DATE', 'NGÀY_KICKOFF', 'KICKOFF'],
+    'TIẾN_ĐỘ_KẾ_HOẠCH':  ['TIẾN_ĐỘ_KẾ_HOẠCH', 'PLAN_PROGRESS'],
+    'TIẾN_ĐỘ_THỰC_TẾ':   ['TIẾN_ĐỘ_THỰC_TẾ', 'ACTUAL_PROGRESS'],
     'NGÀY':                   ['NGÀY', 'LOG_DATE'],
     'NHÂN_LỰC_SITE':          ['NHÂN_LỰC_SITE', 'MANPOWER'],
     'KỸ_SƯ_GS':              ['KỸ_SƯ_GS', 'ENGINEERS'],
@@ -757,15 +799,15 @@ function getDefaultHeaders(sheetName) {
     case 'PROJECT_RISK':
       return ['PROJECT_ID', 'MỨC_ĐỘ', 'NỘI_DUNG', 'ẢNH_HƯỞNG', 'TRẠNG_THÁI', 'PHỤ_TRÁCH', 'NGÀY', 'GHI_CHÚ'];
     case 'PROJECT_PERMIT':
-      return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾ_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾ_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
+      return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾT_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
     case 'PROJECT_DESIGN':
-      return ['PROJECT_ID', 'HẠNG_MỤC_BẢN_VẼ', 'TÌNH_TRẠNG', 'PHÊ_DUYỆT', 'BƯỚC_TIẾP_THEO', 'KẾ_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
+      return ['PROJECT_ID', 'HẠNG_MỤC_BẢN_VẼ', 'TÌNH_TRẠNG', 'PHÊ_DUYỆT', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
     case 'PROJECT_PROCUREMENT':
       return ['PROJECT_ID', 'HẠNG_MỤC_MUA_HÀNG', 'NGÀY_VỀ_DỰ_KIẾN', 'NGÀY_VỀ_THỰC_TẾ', 'TÌNH_TRẠNG_VẬT_TƯ', 'ĐÁNH_GIÁ_TIẾN_ĐỘ', 'NCC', 'GHI_CHÚ'];
     case 'PROJECT_CONSTRUCTION':
       return ['PROJECT_ID', 'NHÓM_THI_CÔNG', 'MÃ_CV', 'HẠNG_MỤC_CÔNG_VIỆC', 'NGÀY_BẮT_ĐẦU', 'SỐ_NGÀY', 'NGÀY_KẾT_THÚC', 'NGÀY_HT_THỰC_TẾ', 'TIẾN_ĐỘ_THỰC_TẾ', 'TRỌNG_SỐ'];
     case 'PROJECT_HANDOVER':
-      return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾ_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾ_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
+      return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾT_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
     case 'PROJECT_MILESTONE':
       return ['PROJECT_ID', 'MILESTONE', 'NGÀY_KẾ_HOẠCH', 'NGÀY_THỰC_TẾ', 'STATUS'];
     case 'DAILY_SITE_LOG':
@@ -866,7 +908,7 @@ function recalculateProjectProgress(ss, projectId) {
   const handoverProg = handovers.length > 0 ? (handoversComp / handovers.length) * 100 : 0;
   
   // 6. Overall calculation
-  const overall = (permitProg * 0.10) + (designProg * 0.15) + (procurementProg * 0.25) + (constructionProg * 0.40) + (handoverProg * 0.10);
+  const overall = (permitProg * 0.10) + (designProg * 0.15) + (procurementProg * 0.20) + (constructionProg * 0.45) + (handoverProg * 0.10);
   const roundedOverall = Math.round(overall * 100) / 100;
   
   // 7. Update PROJECT_MASTER sheet
@@ -887,7 +929,21 @@ function recalculateProjectProgress(ss, projectId) {
           }
           if (delayIndex !== -1 && planIndex !== -1) {
             const planVal = Number(masterData[i][planIndex] || 0);
-            masterSheet.getRange(i + 1, delayIndex + 1).setValue(roundedOverall - planVal);
+            
+            const deviation = roundedOverall - planVal;
+            masterSheet.getRange(i + 1, delayIndex + 1).setValue(deviation);
+            
+            // Auto Update Risk based on deviation
+            const riskIndex = findColumnIndex(headers, 'RISK_LEVEL');
+            const mucDoRuiRoIndex = findColumnIndex(headers, 'MỨC_ĐỘ_RỦI_RO');
+            const targetRiskIndex = riskIndex !== -1 ? riskIndex : mucDoRuiRoIndex;
+            if (targetRiskIndex !== -1) {
+              let computedRisk = "LOW";
+              if (deviation < -10) computedRisk = "HIGH";
+              else if (deviation < -5) computedRisk = "MEDIUM";
+              masterSheet.getRange(i + 1, targetRiskIndex + 1).setValue(computedRisk);
+            }
+
           }
           break;
         }
@@ -896,191 +952,327 @@ function recalculateProjectProgress(ss, projectId) {
   }
 }
 
-function initializeProjectDetails(ss, projectId) {
+
+function getOrCreateSheet(ss, sheetName) {
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    initializeSheetIfEmpty(sheet, sheetName);
+  }
+  return sheet;
+}
+
+
+function batchAppendRows(ss, sheetName, rowsData) {
+  if (!rowsData || rowsData.length === 0) return;
+  const sheet = getOrCreateSheet(ss, sheetName);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  const FIELD_ALIASES = {
+    'LOG_DATE':          ['LOG_DATE', 'NGÀY'],
+    'MANPOWER':          ['MANPOWER', 'NHÂN_LỰC_SITE'],
+    'ENGINEERS':         ['ENGINEERS', 'KỸ_SƯ_GS'],
+    'WEATHER':           ['WEATHER', 'THỜI_TIẾT'],
+    'INCIDENT_COUNT':    ['INCIDENT_COUNT', 'SỰ_CỐ'],
+    'DAILY_NOTE':        ['DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'WEEKLY_ASSESSMENT': ['WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN'],
+    'MONTHLY_REPORT':    ['MONTHLY_REPORT', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'NGÀY':                   ['NGÀY', 'LOG_DATE'],
+    'NHÂN_LỰC_SITE':          ['NHÂN_LỰC_SITE', 'MANPOWER'],
+    'KỸ_SƯ_GS':              ['KỸ_SƯ_GS', 'ENGINEERS'],
+    'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
+    'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
+    'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
+    'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT']
+  };
+
+  const rowsArray = rowsData.map(rowObj => {
+    const newRow = new Array(headers.length).fill("");
+    for (const key in rowObj) {
+      if (key === '_rowIndex') continue;
+      let colIndex = findColumnIndex(headers, key);
+      if (colIndex === -1 && FIELD_ALIASES[key]) {
+        colIndex = findColumnIndex(headers, FIELD_ALIASES[key]);
+      }
+      if (colIndex === -1 && STANDARD_KEYS_MAP[key.toLowerCase().replace(/\s+/g, '')]) {
+        const standardHeader = STANDARD_KEYS_MAP[key.toLowerCase().replace(/\s+/g, '')];
+        colIndex = findColumnIndex(headers, standardHeader);
+      }
+      if (colIndex !== -1) {
+        newRow[colIndex] = rowObj[key];
+      }
+    }
+    return newRow;
+  });
+  
+  if (rowsArray.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rowsArray.length, headers.length).setValues(rowsArray);
+  }
+}
+function initializeProjectDetails(ss, projectId, kickoffDate = '', codDate = '') {
   if (!projectId) return;
 
   // 1. Permits
-  const permitSheet = ss.getSheetByName('PROJECT_PERMIT');
+  const permitSheet = getOrCreateSheet(ss, 'PROJECT_PERMIT');
   if (permitSheet) {
-    initializeSheetIfEmpty(permitSheet, 'PROJECT_PERMIT');
-    const defaultPermits = [
-      'Sở công thương',
-      'EVN (Pmax, Scada)',
-      'PCCC (Thông báo)',
-      'Đăng ký môi trường',
-      'Sở xây dựng/BQL'
-    ];
-    defaultPermits.forEach(function(item) {
-      appendRow(ss, 'PROJECT_PERMIT', {
-        PROJECT_ID: projectId,
-        HẠNG_MỤC: item,
-        TÌNH_TRẠNG: 'Chưa làm',
-        KẾ_QUẢ_PHẢN_HỒI: 'Chưa có phản hồi',
-        BƯỚC_TIẾP_THEO: 'Nộp hồ sơ',
-        KẾ_QUẢ_CUỐI: 'N/A'
-      });
-    });
+    const permits = getSheetDataAsObjects(ss, 'PROJECT_PERMIT').filter(r => r.PROJECT_ID == projectId);
+    if (permits.length === 0) {
+      const defaultPermits = [
+        'Sở công thương',
+        'EVN (Pmax, Scada)',
+        'PCCC (Thông báo)',
+        'Đăng ký môi trường',
+        'Sở xây dựng/BQL'
+      ];
+      const data = defaultPermits.map(function(item) { return {
+          PROJECT_ID: projectId,
+          HẠNG_MỤC: item,
+          TÌNH_TRẠNG: 'Chưa làm',
+          KẾ_QUẢ_PHẢN_HỒI: 'Chưa có phản hồi',
+          BƯỚC_TIẾP_THEO: 'Nộp hồ sơ',
+          KẾ_QUẢ_CUỐI: 'N/A'
+        }; }); batchAppendRows(ss, 'PROJECT_PERMIT', data);
+    }
   }
 
   // 2. Designs
-  const designSheet = ss.getSheetByName('PROJECT_DESIGN');
+  const designSheet = getOrCreateSheet(ss, 'PROJECT_DESIGN');
   if (designSheet) {
-    initializeSheetIfEmpty(designSheet, 'PROJECT_DESIGN');
-    const defaultDesigns = [
-      'Bản vẽ sơ bộ làm giấy phép',
-      'Bản vẽ thi công',
-      'BOQ',
-      'Bản vẽ hoàn công'
-    ];
-    defaultDesigns.forEach(function(item) {
-      appendRow(ss, 'PROJECT_DESIGN', {
-        PROJECT_ID: projectId,
-        HẠNG_MỤC_BẢN_VẼ: item,
-        TÌNH_TRẠNG: 'Chưa làm',
-        PHÊ_DUYỆT: 'Chưa phản hồi',
-        BƯỚC_TIẾP_THEO: 'Vẽ mới',
-        KẾ_QUẢ_CUỐI: '-'
-      });
-    });
+    const designs = getSheetDataAsObjects(ss, 'PROJECT_DESIGN').filter(r => r.PROJECT_ID == projectId);
+    if (designs.length === 0) {
+      const defaultDesigns = [
+        'Bản vẽ sơ bộ làm giấy phép',
+        'Bản vẽ thi công',
+        'BOQ',
+        'Bản vẽ hoàn công'
+      ];
+      const data = defaultDesigns.map(function(item) { return {
+          PROJECT_ID: projectId,
+          HẠNG_MỤC_BẢN_VẼ: item,
+          TÌNH_TRẠNG: 'Chưa làm',
+          PHÊ_DUYỆT: 'Chưa phản hồi',
+          BƯỚC_TIẾP_THEO: 'Vẽ mới',
+          KẾ_QUẢ_CUỐI: '-'
+        }; }); batchAppendRows(ss, 'PROJECT_DESIGN', data);
+    }
   }
 
   // 3. Procurements
-  const procurementSheet = ss.getSheetByName('PROJECT_PROCUREMENT');
+  const procurementSheet = getOrCreateSheet(ss, 'PROJECT_PROCUREMENT');
   if (procurementSheet) {
-    initializeSheetIfEmpty(procurementSheet, 'PROJECT_PROCUREMENT');
-    const defaultProcurements = [
-      'An toàn tạm',
-      'Dây cáp (AC/DC/Cứu sinh/dây mạng/dây tín hiệu,...)',
-      'Lan can cứng',
-      'Walkway',
-      'Hệ thống khung đỡ (Rail, xà gồ, kẹp biên, kẹp giữa, kẹp seamlock, Pad L,..)',
-      'Tấm pin PV ( Kẹp tiếp địa, kẹp thoát nước,...)',
-      'Máng cáp (Máng DC, AC, nắp đậy máng, thanh V làm support,..)',
-      'Nhà biến tần (khung lưới, mái tôn, chân trụ, bản mã, xà gồ, khung treo biến tần,...)',
-      'Biến tần (Inverter, phụ kiện bấm MC4,...)',
-      'Tủ điện (Isolator, ACDB)',
-      'Hệ thống tiếp địa (dây PE, kẹp tiếp địa, hộp test box, dây đồng trần,...)',
-      'Hệ PCCC (Quả cầu PCCC, tiêu lệnh, bình xịt PCCC,...)',
-      'Hệ thống giám sát (Tủ Mornitoring, Bluelog, Data logger, UPS, nguồn điện,...)',
-      'Hệ thống tủ thông tin/không phát ngược lưới (Tủ zero export, Multi Meter, CT,...)',
-      'Hệ thống vệ sinh pin (Bơm, phụ kiện bơm, bồn nước, CB bơm, ống nước, khơi thủy)'
-    ];
-    defaultProcurements.forEach(function(item) {
-      appendRow(ss, 'PROJECT_PROCUREMENT', {
-        PROJECT_ID: projectId,
-        HẠNG_MỤC_MUA_HÀNG: item,
-        NGÀY_VỀ_DỰ_KIẾN: '',
-        NGÀY_VỀ_THỰC_TẾ: '',
-        TÌNH_TRẠNG_VẬT_TƯ: '',
-        ĐÁNH_GIÁ_TIẾN_ĐỘ: ''
-      });
-    });
+    const procurements = getSheetDataAsObjects(ss, 'PROJECT_PROCUREMENT').filter(r => r.PROJECT_ID == projectId);
+    if (procurements.length === 0) {
+      const defaultProcurements = [
+        'An toàn tạm',
+        'Dây cáp (AC/DC/Cứu sinh/dây mạng/dây tín hiệu,...)',
+        'Lan can cứng',
+        'Walkway',
+        'Hệ thống khung đỡ (Rail, xà gồ, kẹp biên, kẹp giữa, kẹp seamlock, Pad L,..)',
+        'Tấm pin PV ( Kẹp tiếp địa, kẹp thoát nước,...)',
+        'Máng cáp (Máng DC, AC, nắp đậy máng, thanh V làm support,..)',
+        'Nhà biến tần (khung lưới, mái tôn, chân trụ, bản mã, xà gồ, khung treo biến tần,...)',
+        'Biến tần (Inverter, phụ kiện bấm MC4,...)',
+        'Tủ điện (Isolator, ACDB)',
+        'Hệ thống tiếp địa (dây PE, kẹp tiếp địa, hộp test box, dây đồng trần,...)',
+        'Hệ PCCC (Quả cầu PCCC, tiêu lệnh, bình xịt PCCC,...)',
+        'Hệ thống giám sát (Tủ Mornitoring, Bluelog, Data logger, UPS, nguồn điện,...)',
+        'Hệ thống tủ thông tin/không phát ngược lưới (Tủ zero export, Multi Meter, CT,...)',
+        'Hệ thống vệ sinh pin (Bơm, phụ kiện bơm, bồn nước, CB bơm, ống nước, khơi thủy)'
+      ];
+      const data = defaultProcurements.map(function(item) { return {
+          PROJECT_ID: projectId,
+          HẠNG_MỤC_MUA_HÀNG: item,
+          NGÀY_VỀ_DỰ_KIẾN: '',
+          NGÀY_VỀ_THỰC_TẾ: '',
+          TÌNH_TRẠNG_VẬT_TƯ: '',
+          ĐÁNH_GIÁ_TIẾN_ĐỘ: ''
+        }; }); batchAppendRows(ss, 'PROJECT_PROCUREMENT', data);
+    }
   }
 
   // 4. Constructions
-  const constructionSheet = ss.getSheetByName('PROJECT_CONSTRUCTION');
+  const constructionSheet = getOrCreateSheet(ss, 'PROJECT_CONSTRUCTION');
   if (constructionSheet) {
-    initializeSheetIfEmpty(constructionSheet, 'PROJECT_CONSTRUCTION');
-    const defaultConstructions = [
-      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Đặt văn phòng BCH', start: '01/05/2026', endPlan: '-', endActual: '15/05/2026', weight: 15 },
-      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Khu vực tập kết vật tư', start: '02/05/2026', endPlan: '-', endActual: '-', weight: 15 },
-      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Lắp đặt lối truy cập mái', start: '03/05/2026', endPlan: '-', endActual: '-', weight: 15 },
-      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Lắp đặt các công tác tạm', start: '04/05/2026', endPlan: '-', endActual: '-', weight: 15 },
-      { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Nhận bàn giao mặt bằng thi công (Nhà biến tần, mặt bằng mái...)', start: '05/05/2026', endPlan: '-', endActual: '-', weight: 15 },
-      
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt lan can cứng', start: '06/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt lối đi bộ', start: '07/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Định vị & lắp đặt kẹp', start: '08/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt thanh rail', start: '09/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt giá đỡ máng cáp DC/AC', start: '10/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt máng cáp DC/AC', start: '11/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Kéo cáp DC từ chuỗi PV đến Inverter', start: '12/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt tấm pin mặt trời (PV Module)', start: '13/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt hệ thống nối đất DC trên mái (Kẹp tiếp địa, cáp nối đất DC)', start: '14/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt trạm thời tiết (cảm biến, kéo cáp)', start: '15/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt hệ thống rửa nước', start: '16/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt thang truy cập mái', start: '17/05/2026', endPlan: '-', endActual: '-', weight: 40 },
-      
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt khung inverter (Đổ bê tông nếu cần)', start: '18/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt biến tần', start: '19/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt tủ ACDB và tủ trung gian, đấu nối', start: '20/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt máng cáp DC/AC tại trạm inverter/ Tủ MSB của nhà máy', start: '21/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Kéo cáp AC từ Inverter đến tủ ACDB Solar', start: '22/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Kéo cáp AC từ tủ ACDB solar đến tủ MSB hiện hữu của nhà máy', start: '23/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống giám sát (lắp datalogger, UPS, nguồn điện, router và cài đặt)', start: '24/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt tủ Zero export', start: '25/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống tiếp địa AC/DC', start: '26/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống PCCC (Bảng tiêu lệnh, quả cầu PCCC, bình PCCC)', start: '27/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống chiếu sáng', start: '28/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Ngắt điện để đấu nối và chỉnh sửa tủ MSB (Nếu cần)', start: '29/05/2026', endPlan: '-', endActual: '-', weight: 30 },
-      
-      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Đóng điện cho T&C (Thử nghiệm & Nghiệm thu)', start: '30/05/2026', endPlan: '-', endActual: '-', weight: 15 },
-      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'T&C (Thử nghiệm & Nghiệm thu)', start: '31/05/2026', endPlan: '-', endActual: '-', weight: 15 },
-      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Phân tích chất lượng điện của Inverter', start: '01/06/2026', endPlan: '-', endActual: '-', weight: 15 },
-      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Ngày vận hành thương mại (COD)', start: '15/06/2026', endPlan: '-', endActual: '-', weight: 15 },
-      { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Kiểm tra hiệu suất PR', start: '16/06/2026', endPlan: '-', endActual: '-', weight: 15 }
-    ];
-    defaultConstructions.forEach(function(task) {
-      appendRow(ss, 'PROJECT_CONSTRUCTION', {
-        PROJECT_ID: projectId,
-        NHÓM_THI_CÔNG: task.group,
-        MÃ_CV: task.code,
-        HẠNG_MỤC_CÔNG_VIỆC: task.item,
-        NGÀY_BẮT_ĐẦU: task.start,
-        SỐ_NGÀY: '',
-        NGÀY_KẾT_THÚC: task.endPlan,
-        NGÀY_HT_THỰC_TẾ: task.endActual,
-        TIẾN_ĐỘ_THỰC_TẾ: 0,
-        TRỌNG_SỐ: task.weight
-      });
-    });
+    const constructions = getSheetDataAsObjects(ss, 'PROJECT_CONSTRUCTION').filter(r => r.PROJECT_ID == projectId);
+    if (constructions.length === 0) {
+      const defaultConstructions = [
+        { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Đặt văn phòng BCH', start: '01/05/2026', endPlan: '-', endActual: '15/05/2026', weight: 15 },
+        { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Khu vực tập kết vật tư', start: '02/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+        { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Lắp đặt lối truy cập mái', start: '03/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+        { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Lắp đặt các công tác tạm', start: '04/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+        { group: '[A] CÔNG TÁC TẠM BAN ĐẦU', code: '1', item: 'Nhận bàn giao mặt bằng thi công (Nhà biến tần, mặt bằng mái...)', start: '05/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+        
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt lan can cứng', start: '06/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt lối đi bộ', start: '07/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Định vị & lắp đặt kẹp', start: '08/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt thanh rail', start: '09/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt giá đỡ máng cáp DC/AC', start: '10/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt máng cáp DC/AC', start: '11/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Kéo cáp DC từ chuỗi PV đến Inverter', start: '12/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt tấm pin mặt trời (PV Module)', start: '13/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt hệ thống nối đất DC trên mái (Kẹp tiếp địa, cáp nối đất DC)', start: '14/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt trạm thời tiết (cảm biến, kéo cáp)', start: '15/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt hệ thống rửa nước', start: '16/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        { group: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI', code: '2', item: 'Lắp đặt thang truy cập mái', start: '17/05/2026', endPlan: '-', endActual: '-', weight: 40 },
+        
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt khung inverter (Đổ bê tông nếu cần)', start: '18/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt biến tần', start: '19/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt tủ ACDB và tủ trung gian, đấu nối', start: '20/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt máng cáp DC/AC tại trạm inverter/ Tủ MSB của nhà máy', start: '21/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Kéo cáp AC từ Inverter đến tủ ACDB Solar', start: '22/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Kéo cáp AC từ tủ ACDB solar đến tủ MSB hiện hữu của nhà máy', start: '23/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống giám sát (lắp datalogger, UPS, nguồn điện, router và cài đặt)', start: '24/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt tủ Zero export', start: '25/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống tiếp địa AC/DC', start: '26/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống PCCC (Bảng tiêu lệnh, quả cầu PCCC, bình PCCC)', start: '27/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Lắp đặt hệ thống chiếu sáng', start: '28/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        { group: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN', code: '3', item: 'Ngắt điện để đấu nối và chỉnh sửa tủ MSB (Nếu cần)', start: '29/05/2026', endPlan: '-', endActual: '-', weight: 30 },
+        
+        { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Đóng điện cho T&C (Thử nghiệm & Nghiệm thu)', start: '30/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+        { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'T&C (Thử nghiệm & Nghiệm thu)', start: '31/05/2026', endPlan: '-', endActual: '-', weight: 15 },
+        { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Phân tích chất lượng điện của Inverter', start: '01/06/2026', endPlan: '-', endActual: '-', weight: 15 },
+        { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Ngày vận hành thương mại (COD)', start: '15/06/2026', endPlan: '-', endActual: '-', weight: 15 },
+        { group: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN', code: '4', item: 'Kiểm tra hiệu suất PR', start: '16/06/2026', endPlan: '-', endActual: '-', weight: 15 }
+      ];
+      const data = defaultConstructions.map(function(task) { return {
+          PROJECT_ID: projectId,
+          NHÓM_THI_CÔNG: task.group,
+          MÃ_CV: task.code,
+          HẠNG_MỤC_CÔNG_VIỆC: task.item,
+          NGÀY_BẮT_ĐẦU: task.start,
+          SỐ_NGÀY: '',
+          NGÀY_KẾT_THÚC: task.endPlan,
+          NGÀY_HT_THỰC_TẾ: task.endActual,
+          TIẾN_ĐỘ_THỰC_TẾ: 0,
+          TRỌNG_SỐ: task.weight
+        }; }); batchAppendRows(ss, 'PROJECT_CONSTRUCTION', data);
+    }
   }
 
   // 5. Handovers
-  const handoverSheet = ss.getSheetByName('PROJECT_HANDOVER');
+  const handoverSheet = getOrCreateSheet(ss, 'PROJECT_HANDOVER');
   if (handoverSheet) {
-    initializeSheetIfEmpty(handoverSheet, 'PROJECT_HANDOVER');
-    const defaultHandovers = [
-      'Hồ sơ thiết kế hoàn công',
-      'Tài liệu hướng dẫn vận hành & bảo trì (O&M Manuals)',
-      'Biên bản nghiệm thu hoàn thành T&C và chạy thử',
-      'Giấy chứng nhận/biên bản kiểm định thiết bị',
-      'Biên bản nghiệm thu COD & Bàn giao đưa vào sử dụng'
-    ];
-    defaultHandovers.forEach(function(item) {
-      appendRow(ss, 'PROJECT_HANDOVER', {
-        PROJECT_ID: projectId,
-        HẠNG_MỤC: item,
-        TÌNH_TRẠNG: 'Chưa làm',
-        KẾ_QUẢ_PHẢN_HỒI: 'Chưa có phản hồi',
-        BƯỚC_TIẾP_THEO: 'Chuẩn bị hồ sơ',
-        KẾ_QUẢ_CUỐI: 'N/A'
-      });
-    });
+    const handovers = getSheetDataAsObjects(ss, 'PROJECT_HANDOVER').filter(r => r.PROJECT_ID == projectId);
+    if (handovers.length === 0) {
+      const defaultHandovers = [
+        'Hồ sơ thiết kế hoàn công',
+        'Tài liệu hướng dẫn vận hành & bảo trì (O&M Manuals)',
+        'Biên bản nghiệm thu hoàn thành T&C và chạy thử',
+        'Giấy chứng nhận/biên bản kiểm định thiết bị',
+        'Biên bản nghiệm thu COD & Bàn giao đưa vào sử dụng'
+      ];
+        const data = defaultHandovers.map(function(item) { return {
+          PROJECT_ID: projectId,
+          HẠNG_MỤC: item,
+          TÌNH_TRẠNG: 'Chưa làm',
+          KẾ_QUẢ_PHẢN_HỒI: 'Chưa có phản hồi',
+          BƯỚC_TIẾP_THEO: 'Chuẩn bị hồ sơ',
+          KẾ_QUẢ_CUỐI: 'N/A'
+        }; }); batchAppendRows(ss, 'PROJECT_HANDOVER', data);
+    }
   }
 
   // 6. Milestones
-  const milestoneSheet = ss.getSheetByName('PROJECT_MILESTONE');
+  const milestoneSheet = getOrCreateSheet(ss, 'PROJECT_MILESTONE');
   if (milestoneSheet) {
-    initializeSheetIfEmpty(milestoneSheet, 'PROJECT_MILESTONE');
-    const defaultMilestones = [
-      { title: 'KICKOFF', date: '01/04/2026', status: 'completed' },
-      { title: 'PHÁP LÝ', date: '15/04/2026', status: 'completed' },
-      { title: 'THIẾT KẾ', date: '25/05/2026', status: 'in-progress' },
-      { title: 'VẬT TƯ', date: '10/06/2026', status: 'pending' },
-      { title: 'THI CÔNG', date: '25/06/2026', status: 'pending' },
-      { title: 'COMMISSIONING', date: '05/07/2026', status: 'pending' },
-      { title: 'COD', date: '29/06/2026', status: 'delay' },
-      { title: 'BÀN GIAO HỒ SƠ', date: '15/07/2026', status: 'pending' }
-    ];
-    defaultMilestones.forEach(function(m) {
-      appendRow(ss, 'PROJECT_MILESTONE', {
-        PROJECT_ID: projectId,
-        MILESTONE: m.title,
-        NGÀY_KẾ_HOẠCH: m.date,
-        NGÀY_THỰC_TẾ: '',
-        STATUS: m.status
-      });
-    });
+    const milestones = getSheetDataAsObjects(ss, 'PROJECT_MILESTONE').filter(r => r.PROJECT_ID == projectId);
+    if (milestones.length === 0) {
+      const defaultMilestones = [
+        { title: 'KICKOFF', date: kickoffDate, status: kickoffDate ? 'completed' : 'pending' },
+        { title: 'PHÁP LÝ', date: '', status: 'pending' },
+        { title: 'THIẾT KẾ', date: '', status: 'pending' },
+        { title: 'VẬT TƯ', date: '', status: 'pending' },
+        { title: 'THI CÔNG', date: '', status: 'pending' },
+        { title: 'COD', date: codDate, status: codDate ? 'delay' : 'pending' },
+        { title: 'BÀN GIAO HỒ SƠ', date: '', status: 'pending' }
+      ];
+      const data = defaultMilestones.map(function(m) { return {
+          PROJECT_ID: projectId,
+          MILESTONE: m.title,
+          NGÀY_KẾ_HOẠCH: m.date || "",
+          NGÀY_THỰC_TẾ: '',
+          STATUS: m.status
+        }; }); batchAppendRows(ss, 'PROJECT_MILESTONE', data);
+    }
   }
+}
+
+function onEdit(e) {
+  if (!e) return;
+  const ss = e.source;
+  if (!ss) return;
+  
+  const activeSheet = ss.getActiveSheet();
+  const editedRange = e.range;
+
+  // Kiểm tra nếu sửa ở sheet PROJECT_MASTER, cột A (PROJECT_ID), dòng > 1
+  if (activeSheet.getName() === "PROJECT_MASTER") {
+    
+    // Nếu là nhập ID mới ở cột 1
+    if (editedRange.getColumn() === 1 && editedRange.getRow() > 1) {
+      const projectId = editedRange.getValue(); // ID mới sau khi sửa
+      if (projectId && projectId !== "") {
+        initializeProjectDetails(ss, projectId);
+      }
+    }
+    
+    // Luôn dọn dẹp các dự án rác sau mỗi lần sửa đổi ở Master (như xóa hàng)
+    cleanupOrphanedProjects(ss);
+  }
+}
+
+function cleanupOrphanedProjects(ss) {
+  const masterSheet = ss.getSheetByName('PROJECT_MASTER');
+  if (!masterSheet) return;
+  
+  // Lấy danh sách ID dự án đang có
+  const masterData = masterSheet.getDataRange().getValues();
+  if (masterData.length <= 1) return;
+  
+  const activeProjectIds = new Set();
+  for (let i = 1; i < masterData.length; i++) {
+    const id = String(masterData[i][0]).trim();
+    if (id) activeProjectIds.add(id);
+  }
+
+  const sheetsToClean = [
+    'PROJECT_RISK', 'PROJECT_PERMIT', 'PROJECT_DESIGN', 
+    'PROJECT_PROCUREMENT', 'PROJECT_CONSTRUCTION',
+    'PROJECT_HANDOVER', 'PROJECT_MILESTONE', 'PROJECT_S_CURVE', 'DAILY_SITE_LOG'
+  ];
+
+  sheetsToClean.forEach(sheetName => {
+    const sheet = ss.getSheetByName(sheetName);
+    if (!sheet) return;
+    
+    const data = sheet.getDataRange().getValues();
+    if (data.length <= 1) return;
+    
+    const headers = data[0];
+    
+    // Tìm cột PROJECT_ID
+    let idColIndex = -1;
+    for (let j = 0; j < headers.length; j++) {
+      const h = String(headers[j]).trim().toUpperCase();
+      if (h === 'PROJECT_ID' || h === 'ID' || h === 'PROJECTID') {
+        idColIndex = j;
+        break;
+      }
+    }
+    
+    if (idColIndex !== -1) {
+      let deletedCount = 0;
+      for (let i = data.length - 1; i > 0; i--) {
+        const id = String(data[i][idColIndex]).trim();
+        // Nếu ID trong sheet phụ KHÔNG có mặt trong tập hợp ID của sheet Master thì xóa
+        if (id && !activeProjectIds.has(id)) {
+          sheet.deleteRow(i + 1);
+          deletedCount++;
+        }
+      }
+      if (deletedCount > 0) {
+        SpreadsheetApp.flush();
+      }
+    }
+  });
 }

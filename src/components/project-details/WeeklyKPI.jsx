@@ -27,16 +27,19 @@ const getWeekNumber = (d) => {
 
 const getWeatherIcon = (weather) => {
   const w = String(weather || '').toLowerCase();
-  if (w.includes('nắng') || w.includes('clear') || w.includes('hot')) {
+  if (!w || w === '-' || w === 'null') {
+    return <span className="text-slate-500 font-bold">-</span>;
+  }
+  if (w.includes('nắng') || w.includes('nang') || w.includes('clear') || w.includes('hot')) {
     return <Sun className="w-4 h-4 text-amber-400 shrink-0" />;
   }
-  if (w.includes('mưa lớn') || w.includes('mưa to') || w.includes('bão')) {
+  if (w.includes('mưa lớn') || w.includes('mưa to') || w.includes('bão') || w.includes('bao')) {
     return <CloudLightning className="w-4 h-4 text-blue-400 shrink-0" />;
   }
-  if (w.includes('mưa')) {
+  if (w.includes('mưa') || w.includes('mua')) {
     return <CloudRain className="w-4 h-4 text-blue-300 shrink-0" />;
   }
-  if (w.includes('mây') || w.includes('âm u') || w.includes('sương')) {
+  if (w.includes('mây') || w.includes('may') || w.includes('âm u') || w.includes('sương')) {
     return <Cloud className="w-4 h-4 text-slate-400 shrink-0" />;
   }
   return <Sun className="w-4 h-4 text-amber-400 shrink-0" />; // default to sun
@@ -119,10 +122,10 @@ export default function WeeklyKPI({
     const updateFieldName = 'DAILY_NOTE';
 
     return (
-      <div className="glass-panel p-5 rounded-xl shadow-lg border border-[#182135]">
+      <div className="glass-panel p-5 rounded-xl shadow-lg border border-[var(--border-main)]">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            CHỈ SỐ VẬN HÀNH <span className="text-[#6b7d9b] font-medium normal-case tracking-normal">
+            CHỈ SỐ VẬN HÀNH <span className="text-[var(--text-muted)] font-medium normal-case tracking-normal">
               (Ngày {selectedDate})
             </span>
           </h3>
@@ -130,32 +133,32 @@ export default function WeeklyKPI({
 
         <div className="grid grid-cols-4 gap-3 mb-4">
           {/* Tiến độ thực tế */}
-          <div className="bg-[#0b0f19] border border-[#182135] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
-            <p className="text-[9px] font-bold text-[#6b7d9b] uppercase tracking-wider">Tiến độ thực tế</p>
-            <p className="text-lg font-bold text-white">{actualProgress.toFixed(2)}%</p>
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
+            <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Tiến độ thực tế</p>
+            <p className="text-lg font-bold text-white">{Math.round(actualProgress)}%</p>
           </div>
 
           {/* So với KH */}
-          <div className="bg-[#0b0f19] border border-[#182135] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
-            <p className="text-[9px] font-bold text-[#6b7d9b] uppercase tracking-wider">So với KH</p>
-            <p className={`text-lg font-bold ${delayColor}`}>{delaySign}{deviation.toFixed(2)}%</p>
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
+            <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">So với KH</p>
+            <p className={`text-lg font-bold ${delayColor}`}>{delaySign}{Math.round(deviation)}%</p>
           </div>
 
           {/* Dynamic Metric 3 */}
-          <div className="bg-[#0b0f19] border border-[#182135] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
-            <p className="text-[9px] font-bold text-[#6b7d9b] uppercase tracking-wider">{stat3Label}</p>
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
+            <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{stat3Label}</p>
             <p className="text-lg font-bold text-white">{stat3Val}</p>
           </div>
 
           {/* Dynamic Metric 4 */}
-          <div className="bg-[#0b0f19] border border-[#182135] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
-            <p className="text-[9px] font-bold text-[#6b7d9b] uppercase tracking-wider">{stat4Label}</p>
+          <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
+            <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{stat4Label}</p>
             <p className="text-lg font-bold text-white">{stat4Val}</p>
           </div>
         </div>
 
-        <div className="bg-[#0b0f19] border border-[#182135] rounded-lg p-3">
-          <p className="text-[10px] font-bold text-[#6b7d9b] uppercase tracking-wider mb-2">{textareaLabel}</p>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg p-3">
+          <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">{textareaLabel}</p>
           <AutoGrowTextarea
             value={textareaVal}
             onChange={(e) => onUpdateLog(updateFieldName, e.target.value)}
@@ -243,11 +246,11 @@ export default function WeeklyKPI({
     }
 
     // Weather count
-    if (weather.includes('mưa')) {
+    if (weather.includes('mưa') || weather.includes('mua')) {
       rainDays++;
-    } else if (weather.includes('mây') || weather.includes('âm u') || weather.includes('sương')) {
+    } else if (weather.includes('mây') || weather.includes('may') || weather.includes('âm u') || weather.includes('sương')) {
       cloudyDays++;
-    } else if (weather.includes('nắng') || weather.includes('clear')) {
+    } else if (weather.includes('nắng') || weather.includes('nang') || weather.includes('clear')) {
       sunnyDays++;
     }
 
@@ -262,7 +265,7 @@ export default function WeeklyKPI({
     weatherIconsRow.push({
       weekday: day.weekday,
       dateLabel: day.dateStr.substring(0, 5),
-      weatherText: day.log ? (day.log.WEATHER !== undefined ? day.log.WEATHER : (day.log.THỜI_TIẾT || 'Nắng')) : 'Nắng'
+      weatherText: day.log ? (day.log.WEATHER !== undefined ? day.log.WEATHER : (day.log.THỜI_TIẾT || '-')) : '-'
     });
 
     // Outstanding issues list
@@ -291,7 +294,7 @@ export default function WeeklyKPI({
   const sundayVal = monday ? formatDateStr(new Date(new Date(monday).setDate(monday.getDate() + 6))) : '';
 
   return (
-    <div className="glass-panel p-5 rounded-xl shadow-lg border border-[#182135]">
+    <div className="glass-panel p-5 rounded-xl shadow-lg border border-[var(--border-main)]">
       <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center justify-between">
         <span>TỔNG HỢP TUẦN {weekNum}</span>
         <span className="text-[10px] text-slate-400 font-medium normal-case tracking-normal">
@@ -301,25 +304,25 @@ export default function WeeklyKPI({
 
       {/* 4 KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <div className="bg-[#0b0f19] border border-[#182135] p-3 rounded-lg flex flex-col items-center justify-center text-center">
-          <p className="text-[9px] font-bold text-[#6b7d9b] uppercase tracking-wider mb-1">Tổng nhân sự</p>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center">
+          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Tổng nhân sự</p>
           <p className="text-lg font-bold text-white">{totalManpower}</p>
           <p className="text-[9px] text-slate-500 mt-0.5">người</p>
         </div>
-        <div className="bg-[#0b0f19] border border-[#182135] p-3 rounded-lg flex flex-col items-center justify-center text-center">
-          <p className="text-[9px] font-bold text-[#6b7d9b] uppercase tracking-wider mb-1">Trung bình / ngày</p>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center">
+          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Trung bình / ngày</p>
           <p className="text-lg font-bold text-white">{avgManpower}</p>
           <p className="text-[9px] text-slate-500 mt-0.5">người/ngày</p>
         </div>
-        <div className="bg-[#0b0f19] border border-[#182135] p-3 rounded-lg flex flex-col items-center justify-center text-center">
-          <p className="text-[9px] font-bold text-[#6b7d9b] uppercase tracking-wider mb-1">Cao nhất</p>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center">
+          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Cao nhất</p>
           <p className="text-lg font-bold text-emerald-400">{maxManpower}</p>
           <p className="text-[8px] text-slate-500 mt-0.5 truncate max-w-full">
             {maxDates.length > 0 ? `${maxDates[0].dateStr.substring(0, 5)} (${maxDates[0].weekday})` : '-'}
           </p>
         </div>
-        <div className="bg-[#0b0f19] border border-[#182135] p-3 rounded-lg flex flex-col items-center justify-center text-center">
-          <p className="text-[9px] font-bold text-[#6b7d9b] uppercase tracking-wider mb-1">Thấp nhất</p>
+        <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center">
+          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Thấp nhất</p>
           <p className="text-lg font-bold text-amber-500">{minManpower}</p>
           <p className="text-[8px] text-slate-500 mt-0.5 truncate max-w-full">
             {minDates.map(d => d.dateStr.substring(0, 5)).join(', ')}
@@ -329,42 +332,42 @@ export default function WeeklyKPI({
 
       {/* 4 Weather/Incident Summary Cards */}
       <div className="grid grid-cols-4 gap-2 mb-4">
-        <div className="bg-[#0b0f19]/60 border border-[#182135] p-2 rounded-lg flex flex-col items-center justify-center text-center">
+        <div className="bg-[var(--bg-panel)]/60 border border-[var(--border-main)] p-2 rounded-lg flex flex-col items-center justify-center text-center">
           <CloudRain className="w-4 h-4 text-blue-400 mb-1" />
-          <p className="text-[8px] font-bold text-[#6b7d9b] uppercase tracking-wider">Ngày mưa</p>
+          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Ngày mưa</p>
           <p className="text-xs font-bold text-white mt-0.5">{rainDays} ngày</p>
         </div>
-        <div className="bg-[#0b0f19]/60 border border-[#182135] p-2 rounded-lg flex flex-col items-center justify-center text-center">
+        <div className="bg-[var(--bg-panel)]/60 border border-[var(--border-main)] p-2 rounded-lg flex flex-col items-center justify-center text-center">
           <Cloud className="w-4 h-4 text-slate-400 mb-1" />
-          <p className="text-[8px] font-bold text-[#6b7d9b] uppercase tracking-wider">Nhiều mây</p>
+          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Nhiều mây</p>
           <p className="text-xs font-bold text-white mt-0.5">{cloudyDays} ngày</p>
         </div>
-        <div className="bg-[#0b0f19]/60 border border-[#182135] p-2 rounded-lg flex flex-col items-center justify-center text-center">
+        <div className="bg-[var(--bg-panel)]/60 border border-[var(--border-main)] p-2 rounded-lg flex flex-col items-center justify-center text-center">
           <Sun className="w-4 h-4 text-amber-400 mb-1" />
-          <p className="text-[8px] font-bold text-[#6b7d9b] uppercase tracking-wider">Ngày nắng</p>
+          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Ngày nắng</p>
           <p className="text-xs font-bold text-white mt-0.5">{sunnyDays} ngày</p>
         </div>
-        <div className="bg-[#0b0f19]/60 border border-[#182135] p-2 rounded-lg flex flex-col items-center justify-center text-center">
+        <div className="bg-[var(--bg-panel)]/60 border border-[var(--border-main)] p-2 rounded-lg flex flex-col items-center justify-center text-center">
           <ShieldAlert className="w-4 h-4 text-red-400 mb-1" />
-          <p className="text-[8px] font-bold text-[#6b7d9b] uppercase tracking-wider">Tổng sự cố</p>
+          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Tổng sự cố</p>
           <p className="text-xs font-bold text-white mt-0.5">{totalIncidents} sự cố</p>
         </div>
       </div>
 
       {/* BIỂU ĐỒ NHÂN LỰC THEO NGÀY */}
-      <div className="bg-[#0b0f19] border border-[#182135] rounded-lg p-3 mb-4">
-        <p className="text-[10px] font-bold text-[#6b7d9b] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg p-3 mb-4">
+        <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <Activity className="w-3.5 h-3.5 text-[#5252ff]" /> BIỂU ĐỒ NHÂN LỰC THEO NGÀY
         </p>
         <div className="h-[120px] w-full mt-2">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartPoints} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#182135" vertical={false} />
-              <XAxis dataKey="name" stroke="#4d5e7a" tick={{ fill: '#6b7d9b', fontSize: 8 }} />
-              <YAxis stroke="#4d5e7a" tick={{ fill: '#6b7d9b', fontSize: 8 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border-main)" vertical={false} />
+              <XAxis dataKey="name" stroke="#4d5e7a" tick={{ fill: 'var(--text-muted)', fontSize: 8 }} />
+              <YAxis stroke="#4d5e7a" tick={{ fill: 'var(--text-muted)', fontSize: 8 }} />
               <Tooltip 
-                contentStyle={{ backgroundColor: '#0b0f19', borderColor: '#182135', borderRadius: '6px' }}
-                labelStyle={{ fontSize: '10px', color: '#6b7d9b', fontWeight: 'bold' }}
+                contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border-main)', borderRadius: '6px' }}
+                labelStyle={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 'bold' }}
                 itemStyle={{ fontSize: '10px', color: '#fff' }}
               />
               <Line type="monotone" dataKey="manpower" name="Tổng nhân sự" stroke="#5252ff" strokeWidth={2} dot={{ r: 3, fill: '#5252ff' }} />
@@ -374,14 +377,14 @@ export default function WeeklyKPI({
       </div>
 
       {/* THỜI TIẾT TRONG TUẦN */}
-      <div className="bg-[#0b0f19] border border-[#182135] rounded-lg p-3 mb-4">
-        <p className="text-[10px] font-bold text-[#6b7d9b] uppercase tracking-wider mb-2">🌦️ THỜI TIẾT TRONG TUẦN</p>
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg p-3 mb-4">
+        <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">🌦️ THỜI TIẾT TRONG TUẦN</p>
         <div className="grid grid-cols-7 gap-1 mt-2 text-center">
           {weatherIconsRow.map((item, idx) => (
             <div key={idx} className="flex flex-col items-center">
               <span className="text-[9px] font-bold text-white">{item.weekday}</span>
               <span className="text-[8px] text-slate-500 mb-1">{item.dateLabel}</span>
-              <div className="p-1 bg-[#141d30]/50 rounded border border-[#182135] flex items-center justify-center w-8 h-8">
+              <div className="p-1 bg-[#141d30]/50 rounded border border-[var(--border-main)] flex items-center justify-center w-8 h-8">
                 {getWeatherIcon(item.weatherText)}
               </div>
             </div>
@@ -390,16 +393,16 @@ export default function WeeklyKPI({
       </div>
 
       {/* SỰ CỐ & VẤN ĐỀ NỔI BẬT */}
-      <div className="bg-[#0b0f19] border border-[#182135] rounded-lg p-3">
-        <p className="text-[10px] font-bold text-[#6b7d9b] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+      <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg p-3">
+        <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> SỰ CỐ & VẤN ĐỀ NỔI BẬT
         </p>
         {incidentsList.length > 0 ? (
           <div className="space-y-2 max-h-[150px] overflow-y-auto mt-2">
             {incidentsList.map((item, idx) => (
-              <div key={idx} className="flex justify-between items-start gap-2 bg-[#141d30]/30 border border-[#182135] p-2 rounded text-[11px] leading-relaxed">
+              <div key={idx} className="flex justify-between items-start gap-2 bg-[#141d30]/30 border border-[var(--border-main)] p-2 rounded text-[11px] leading-relaxed">
                 <div className="flex items-start gap-1.5 min-w-0">
-                  <span className="font-bold text-[#6b7d9b] shrink-0">{item.dateStr}:</span>
+                  <span className="font-bold text-[var(--text-muted)] shrink-0">{item.dateStr}:</span>
                   <span className="text-slate-300 truncate max-w-[200px]" title={item.description}>{item.description}</span>
                 </div>
                 <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold shrink-0 ${
