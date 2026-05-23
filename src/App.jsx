@@ -33,26 +33,44 @@ import {
   Send,
   Sun,
   Moon,
-  Trash2
+  Trash2,
+  Menu
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "./services/api";
 import { useTheme } from "./hooks/useTheme";
+import { useSidebar } from "./hooks/useSidebar";
+import Sidebar from "./components/Sidebar";
+import { updateDashboardContext } from "./utils/dashboardContext";
 
 export default function App() {
   const navigate = useNavigate();
+  const { isCollapsed, toggleSidebar } = useSidebar();
   const { theme, toggleTheme } = useTheme();
-  // Projects state
-  const [projects, setProjects] = useState([]);
+  
+  // Projects state initialized from cache if available for instant render
+  const [projects, setProjects] = useState(() => {
+    try {
+      const cached = localStorage.getItem('epc_projects_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  
+  // Expose to AI Assistant
+  useEffect(() => {
+    updateDashboardContext({ projects });
+  }, [projects]);
   const [employees, setEmployees] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(() => projects.length === 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch from GAS
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setIsLoading(true);
+        if (projects.length === 0) setIsLoading(true);
         const [projData, empData] = await Promise.all([
           api.getProjects(),
           api.getEmployees().catch(() => []) // fail gracefully
@@ -586,7 +604,7 @@ export default function App() {
   };
 
   // Render sorting-enabled headers with pointers, transitions, and indicators
-  const renderSortableHeader = (field, label, align = "left") => {
+  const renderSortableHeader = (field, label, align = "left", extraClass = "") => {
     const isSorted = sortField === field;
     let indicator = "↕";
     if (isSorted) {
@@ -609,15 +627,15 @@ export default function App() {
         onClick={handleClick}
         className={`py-2.5 px-4 font-semibold select-none cursor-pointer hover:bg-[#141c2f] hover:text-white transition-all duration-200 border-b border-[var(--border-main)] relative group whitespace-nowrap ${
           align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"
-        } ${isSorted ? "text-white bg-[#0e1628]" : "text-[var(--text-muted)] bg-[var(--bg-hover)]"}`}
+        } ${isSorted ? "text-white bg-[#0e1628]" : "text-[var(--text-muted)] bg-[var(--bg-hover)]"} ${extraClass}`}
       >
-        <div className={`flex items-center gap-1.5 ${align === "center" ? "justify-center" : align === "right" ? "justify-end" : ""}`}>
-          <span className="font-bold tracking-wider uppercase text-[10px] whitespace-nowrap">{label}</span>
+        <div className={`flex items-center w-full ${align === "center" ? "justify-center" : align === "right" ? "justify-end" : ""}`}>
+          <span className="font-bold tracking-wider uppercase text-[10px] whitespace-nowrap z-10">{label}</span>
           <span 
-            className={`text-[10px] select-none font-bold transition-all duration-200 ${
+            className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] select-none font-bold transition-all duration-200 ${
               isSorted 
                 ? "text-[#7373ff] opacity-100 scale-110 drop-shadow-[0_0_4px_rgba(82,82,255,0.4)]" 
-                : "opacity-40 text-slate-400 group-hover:opacity-85"
+                : "opacity-0 text-slate-400 group-hover:opacity-60"
             }`}
           >
             {indicator}
@@ -639,60 +657,18 @@ export default function App() {
       )}
       
       {/* 1. LEFT SIDEBAR */}
-      <aside className="w-64 border-r border-[var(--border-main)] bg-[#070b14] flex flex-col justify-between shrink-0">
-        <div>
-          {/* Logo Brand */}
-          <div className="p-6 flex items-center gap-3 border-b border-[var(--border-main)]/40">
-            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-[#5252ff] to-[#8080ff] shadow-[0_0_12px_rgba(82,82,255,0.7)]"></div>
-            <span className="text-sm font-bold tracking-wider text-white">VPEG-PXD-REPORT</span>
-          </div>
-
-          {/* Navigation Menu */}
-          <nav className="p-4 space-y-1">
-            <a
-              href="#overview"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
-            >
-              <Activity className="w-4 h-4 text-[var(--text-muted)]" />
-              <span>TỔNG QUAN</span>
-            </a>
-            <a
-              href="#tasks"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
-            >
-              <Briefcase className="w-4 h-4 text-[var(--text-muted)]" />
-              <span>DANH SÁCH CÔNG VIỆC</span>
-            </a>
-            <a
-              href="#projects"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-brand-purpleBg/25 text-[#7373ff] border-l-2 border-[#5252ff] shadow-[0_0_15px_rgba(82,82,255,0.08)] transition-all text-xs font-semibold"
-            >
-              <Folder className="w-4 h-4 text-[#5252ff]" />
-              <span>DANH SÁCH DỰ ÁN</span>
-            </a>
-          </nav>
-        </div>
-
-        {/* User Profile Bottom */}
-        <div className="p-4 border-t border-[var(--border-main)]/50 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[var(--border-main)] flex items-center justify-center text-xs font-bold text-slate-300 border border-[#263554]">
-            NV
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-white">Nhân viên</span>
-            <span className="text-[10px] text-[#3b82f6] font-bold tracking-wider mt-0.5">GIÁM SÁT</span>
-          </div>
-        </div>
-      </aside>
+      <Sidebar activeItem="projects" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         
         {/* 2. TOP HEADER */}
         <header className="px-8 pt-6 pb-4 border-b border-[var(--border-main)]/30 flex justify-between items-center bg-[#070b14]/30 backdrop-blur-md">
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">DANH SÁCH DỰ ÁN</h1>
-            <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Theo dõi và điều phối toàn bộ dự án đang triển khai</p>
+          <div className="flex items-center gap-4">
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-tight">DANH SÁCH DỰ ÁN</h1>
+              <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Theo dõi và điều phối toàn bộ dự án đang triển khai</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -937,21 +913,21 @@ export default function App() {
           <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] overflow-hidden shadow-2xl flex flex-col">
             
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[1200px]">
+              <table className="w-full text-left border-collapse">
                 
                 {/* Table Header */}
                 <thead>
                   <tr className="bg-[var(--bg-hover)] border-b border-[var(--border-main)] text-[var(--text-muted)] text-[10px] font-bold uppercase tracking-wider">
                     {renderSortableHeader("name", "Dự án")}
                     {renderSortableHeader("client", "Khách hàng")}
-                    {renderSortableHeader("pm", "PM")}
-                    {renderSortableHeader("capacity", "Công suất (kWp)", "right")}
+                    {renderSortableHeader("pm", "PM", "center")}
+                    {renderSortableHeader("capacity", "Công suất (kWp)", "center")}
                     {renderSortableHeader("progress", "% Thực tế", "center")}
                     {renderSortableHeader("deviation", "Δ Kế hoạch", "center")}
                     {renderSortableHeader("codDays", "COD còn lại", "center")}
                     {renderSortableHeader("risk", "Risk", "center")}
-                    {renderSortableHeader("issue", "Vướng mắc chính")}
-                    <th className="py-2.5 px-4 font-semibold text-center bg-[var(--bg-hover)] select-none text-[var(--text-muted)]">Action</th>
+                    {renderSortableHeader("issue", "Vướng mắc")}
+                    <th className="py-2.5 px-4 font-semibold text-center w-[80px] bg-[var(--bg-hover)] select-none text-[var(--text-muted)]">Action</th>
                   </tr>
                 </thead>
 
@@ -1017,7 +993,7 @@ export default function App() {
                         >
                           {/* Project Name */}
                           <td 
-                            className={`py-2.5 px-4 font-bold text-white cursor-pointer hover:underline truncate max-w-[200px] ${
+                            className={`align-middle py-2.5 px-4 font-bold text-white cursor-pointer hover:underline truncate max-w-[200px] ${
                               sortField === "name" ? "text-slate-100 bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
                             }`}
                             onClick={() => {
@@ -1028,12 +1004,12 @@ export default function App() {
                           </td>
 
                           {/* Client */}
-                          <td className={`py-2.5 px-4 text-slate-300 font-medium ${
+                          <td className={`align-middle py-2.5 px-4 text-slate-300 font-medium min-w-[250px] ${
                             sortField === "client" ? "text-slate-100 bg-[#0e1628]/30 font-bold" : "bg-inherit"
                           }`}>{p.client}</td>
 
                           {/* PM */}
-                          <td className={`py-2.5 px-4 ${
+                          <td className={`align-middle py-2.5 px-4 text-center ${
                             sortField === "pm" ? "bg-[#0e1628]/30" : "bg-inherit"
                           }`}>
                             <span className="bg-[#18183c] text-[#a0a0ff] px-2 py-0.5 rounded text-[10px] font-medium border border-[#2d2db3]/20 whitespace-nowrap">
@@ -1044,14 +1020,14 @@ export default function App() {
 
 
                           {/* Capacity */}
-                          <td className={`py-2.5 px-4 font-bold text-slate-200 text-right ${
+                          <td className={`align-middle py-2.5 px-4 font-bold text-slate-200 text-center ${
                             sortField === "capacity" ? "text-white bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
                           }`}>
                             {Number(p.capacity || 0).toLocaleString()}
                           </td>
 
                           {/* Progress */}
-                          <td className={`py-2.5 px-4 min-w-[90px] text-center ${
+                          <td className={`align-middle py-2.5 px-4 min-w-[90px] text-center ${
                             sortField === "progress" ? "bg-[#0e1628]/30" : "bg-inherit"
                           }`}>
                             <div className="flex flex-col items-center">
@@ -1066,7 +1042,7 @@ export default function App() {
                           </td>
 
                           {/* Delta Plan Deviation */}
-                          <td className={`py-2.5 px-4 font-bold text-center ${
+                          <td className={`align-middle py-2.5 px-4 font-bold text-center ${
                             sortField === "deviation" ? "bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
                           }`}>
                             <span className={(p.delay || 0) >= 0 ? "text-[#10b981]" : "text-[#ef4444]"}>
@@ -1076,7 +1052,7 @@ export default function App() {
                           </td>
 
                           {/* COD Remaining */}
-                          <td className={`py-2.5 px-4 text-center ${
+                          <td className={`align-middle py-2.5 px-4 text-center ${
                             sortField === "codDays" ? "bg-[#0e1628]/30" : "bg-inherit"
                           }`}>
                             <div className="flex flex-col items-center">
@@ -1108,7 +1084,7 @@ export default function App() {
                           </td>
 
                           {/* Risk Badge */}
-                          <td className={`py-2.5 px-4 text-center ${
+                          <td className={`align-middle py-2.5 px-4 text-center ${
                             sortField === "risk" ? "bg-[#0e1628]/30" : "bg-inherit"
                           }`}>
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${riskBadgeClass} whitespace-nowrap`}>
@@ -1118,7 +1094,7 @@ export default function App() {
 
                           {/* Key Issue */}
                           <td 
-                            className={`py-2.5 px-4 max-w-[200px] truncate cursor-text hover:bg-[var(--bg-hover)] transition-colors group relative ${
+                            className={`align-middle py-2.5 px-4 max-w-[200px] truncate cursor-text hover:bg-[var(--bg-hover)] transition-colors group relative ${
                               sortField === "issue" ? "bg-[#0e1628]/30" : "bg-inherit"
                             }`}
                             onDoubleClick={() => {
@@ -1154,7 +1130,7 @@ export default function App() {
 
 
                           {/* Action icons */}
-                          <td className="py-2.5 px-4 bg-inherit">
+                          <td className="align-middle py-2.5 px-4 bg-inherit">
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => {
@@ -1164,32 +1140,6 @@ export default function App() {
                                 className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={handleExportCSV}
-                                title="Xuất báo cáo"
-                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
-                              >
-                                <FileText className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={(e) => handleDeleteProject(p.id || p.PROJECT_ID, e)}
-                                title="Xóa dự án"
-                                className="p-1.5 hover:text-red-400 text-slate-400 hover:bg-red-500/10 hover:shadow-[0_0_8px_rgba(239,68,68,0.2)] border border-transparent hover:border-red-500/30 rounded transition-all duration-200 cursor-pointer"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  navigate('/projects/' + encodeURIComponent(p.name || p.id || p.PROJECT_ID));
-                                }}
-                                title="Bình luận"
-                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer relative"
-                              >
-                                <MessageSquare className="w-3.5 h-3.5" />
-                                {projectComments[p.id]?.length > 0 && (
-                                  <span className="absolute top-1 right-1 w-2 h-2 bg-[#5252ff] rounded-full"></span>
-                                )}
                               </button>
                               <button
                                 title="Khác"
@@ -1208,7 +1158,7 @@ export default function App() {
             </div>
 
             {/* 6. PAGINATION */}
-            <div className="flex justify-between items-center p-3.5 border-t border-[var(--border-main)] bg-[var(--bg-panel)] text-xs text-[var(--text-muted)] font-medium">
+            <div className="flex justify-between items-center py-2 px-3 border-t border-[var(--border-main)] bg-[var(--bg-panel)] text-xs text-[var(--text-muted)] font-medium">
               {/* Left page sizing */}
               <div className="flex items-center gap-2">
                 <span>Hiển thị</span>

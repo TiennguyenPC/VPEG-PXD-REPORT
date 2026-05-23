@@ -4,6 +4,8 @@ import {
   Activity, Briefcase, Folder, Sun, Moon
 } from "lucide-react";
 import { useTheme } from "../hooks/useTheme";
+import { useSidebar } from "../hooks/useSidebar";
+import Sidebar from "../components/Sidebar";
 import ProjectHeader from "../components/project-details/ProjectHeader";
 import KPIOverview from "../components/project-details/KPIOverview";
 import MilestoneTimeline from "../components/project-details/MilestoneTimeline";
@@ -17,6 +19,7 @@ import ProcurementModule from "../components/project-details/modules/Procurement
 import ConstructionModule from "../components/project-details/modules/ConstructionModule";
 import HandoverModule from "../components/project-details/modules/HandoverModule";
 import { api } from "../services/api";
+import { updateDashboardContext } from "../utils/dashboardContext";
 
 const getTodayStr = () => {
   const today = new Date();
@@ -48,9 +51,10 @@ const getMondayOfDate = (date) => {
 };
 
 export default function ProjectDetailPage() {
-  let id = useParams()["*"];
+  const { id } = useParams();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
+  const { isCollapsed, toggleSidebar } = useSidebar();
 
   // Project & S-Curve State
   const [project, setProject] = useState(null);
@@ -280,6 +284,20 @@ export default function ProjectDetailPage() {
     planProgress: basePlan,
     delay: baseActual - basePlan
   } : null;
+
+  useEffect(() => {
+    if (!project || !id) return;
+    updateDashboardContext({
+      projectId: id,
+      currentProject: {
+        ...project,
+        actualProgress: baseActual,
+        planProgress: basePlan,
+        delay: baseActual - basePlan,
+      },
+      milestones: bundleData?.milestones,
+    });
+  }, [id, project, baseActual, basePlan, bundleData?.milestones]);
 
   // Persist the calculated progress back to localStorage so the main Dashboard can read it
   useEffect(() => {
@@ -533,60 +551,18 @@ export default function ProjectDetailPage() {
     <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans">
 
       {/* LEFT SIDEBAR (Duplicated from App.jsx as requested) */}
-      <aside className="w-64 border-r border-[var(--border-main)] bg-[#070b14] flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-y-auto hidden md:flex print:hidden">
-        <div>
-          {/* Logo Brand */}
-          <div className="p-6 flex items-center gap-3 border-b border-[var(--border-main)]/40 cursor-pointer" onClick={() => navigate('/')}>
-            <div className="w-5 h-5 rounded-full bg-gradient-to-tr from-blue-500 via-[#5252ff] to-[#8080ff] shadow-[0_0_12px_rgba(82,82,255,0.7)]"></div>
-            <span className="text-sm font-bold tracking-wider text-white">VPEG-PXD-REPORT</span>
-          </div>
-
-          {/* Navigation Menu */}
-          <nav className="p-4 space-y-1">
-            <a
-              href="#"
-              onClick={(e) => { e.preventDefault(); navigate('/'); }}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
-            >
-              <Activity className="w-4 h-4 text-[var(--text-muted)]" />
-              <span>TỔNG QUAN</span>
-            </a>
-            <a
-              href="#"
-              className="flex items-center gap-3 px-4 py-3 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-[#141c2f]/50 transition-all text-xs font-medium"
-            >
-              <Briefcase className="w-4 h-4 text-[var(--text-muted)]" />
-              <span>DANH SÁCH CÔNG VIỆC</span>
-            </a>
-            <a
-              href="#"
-              onClick={(e) => { e.preventDefault(); navigate('/'); }}
-              className="flex items-center gap-3 px-4 py-3 rounded-lg bg-[#5252ff]/10 text-[#7373ff] border-l-2 border-[#5252ff] shadow-[0_0_15px_rgba(82,82,255,0.08)] transition-all text-xs font-semibold"
-            >
-              <Folder className="w-4 h-4 text-[#5252ff]" />
-              <span>CHI TIẾT DỰ ÁN</span>
-            </a>
-          </nav>
-        </div>
-
-        {/* User Profile Bottom */}
-        <div className="p-4 border-t border-[var(--border-main)]/50 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-[var(--border-main)] flex items-center justify-center text-xs font-bold text-slate-300 border border-[#263554]">
-            NV
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-white">Nhân viên</span>
-            <span className="text-[10px] text-[#3b82f6] font-bold tracking-wider mt-0.5">GIÁM SÁT</span>
-          </div>
-        </div>
-      </aside>
+      <Sidebar activeItem="project-detail" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto print:overflow-visible">
-        <div className="max-w-7xl mx-auto w-full p-6 print:p-0 print:max-w-none space-y-6">
-
-          {/* SECTION 1 - HEADER */}
-          <ProjectHeader project={enrichedProject} milestones={bundleData?.milestones || []} onBack={() => navigate('/')} />
+        <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
+          <ProjectHeader 
+            project={enrichedProject} 
+            milestones={bundleData?.milestones || []} 
+            onBack={() => navigate('/')} 
+            onToggleSidebar={toggleSidebar}
+            isSidebarCollapsed={isCollapsed}
+          />
 
           {/* SECTION 2 - KPI OVERVIEW */}
           <KPIOverview project={enrichedProject} milestones={bundleData?.milestones || []} />

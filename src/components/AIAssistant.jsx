@@ -1,81 +1,111 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, User, Sparkles, Loader2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Bot, Send, User, Sparkles } from 'lucide-react';
+import { buildSystemInstruction, getOfflineAppHint } from '../data/aiKnowledge';
+import { sendGeminiChat, hasGeminiApiKey } from '../services/geminiChat';
+import { getPageLabel } from '../utils/dashboardContext';
+import AIMessageContent from './AIMessageContent';
+
+const WELCOME =
+  'Xin chào! Tôi là **AI PXD** — trợ lý trên Dashboard VPEG-PXD.\n\n' +
+  'Tôi có thể:\n' +
+  '- **Hướng dẫn sử dụng** từng màn hình (thêm dự án, công việc, nhật ký site, S-Curve…)\n' +
+  '- **Đọc số liệu** dự án/công việc bạn đang xem\n' +
+  '- **Tư vấn kỹ thuật** Solar EPC\n\n' +
+  'Thử hỏi: *"Làm sao thêm dự án?"* hoặc *"Trang này dùng để làm gì?"*';
+
+const QUICK_PROMPTS = [
+  'Hướng dẫn trang tôi đang xem',
+  'Làm sao thêm dự án?',
+  'Làm sao thêm công việc?',
+  'Giải thích S-Curve và milestone',
+];
 
 export default function AIAssistant() {
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    { role: 'ai', content: 'Xin chào, tôi là trợ lý toàn năng của PXD. Tôi có thể giúp gì cho bạn hôm nay?' }
-  ]);
+  const [messages, setMessages] = useState([{ role: 'ai', content: WELCOME }]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  // Hardcoded API Key to prevent employees from tampering
-  const apiKey = 'AIzaSyBVvLtBMF7pfIeiLq3kbT9yw57Qh_Y0UKU';
   const messagesEndRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef({ startX: 0, startY: 0 });
+
+  const buildContext = useCallback(() => {
+    const data = typeof window !== 'undefined' ? window.__DASHBOARD_DATA__ || {} : {};
+    return {
+      currentPath: location.pathname,
+      currentPage: getPageLabel(location.pathname),
+      projects: data.projects,
+      tasks: data.tasks,
+      currentProject: data.currentProject,
+      projectId: data.projectId,
+    };
+  }, [location.pathname]);
+
+  const handlePointerDown = (e) => {
+    setIsDragging(true);
+    dragRef.current.startX = e.clientX - position.x;
+    dragRef.current.startY = e.clientY - position.y;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDragging) return;
+    setPosition({
+      x: e.clientX - dragRef.current.startX,
+      y: e.clientY - dragRef.current.startY,
+    });
+  };
+
+  const handlePointerUp = (e) => {
+    setIsDragging(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
   };
 
   useEffect(() => {
     if (isOpen) {
-      scrollToBottom();
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isOpen]);
+  }, [messages, isOpen, isTyping]);
 
-  const handleSend = async () => {
-    if (!inputValue.trim()) return;
+  const handleSend = async (textOverride) => {
+    const userMsg = (textOverride ?? inputValue).trim();
+    if (!userMsg || isTyping) return;
 
-    const userMsg = inputValue;
-    setMessages(prev => [...prev, { role: 'user', content: userMsg }]);
+    let snapshot;
+    setMessages((prev) => {
+      snapshot = [...prev, { role: 'user', content: userMsg }];
+      return snapshot;
+    });
     setInputValue('');
-    setIsTyping(true);
 
-    if (!apiKey) {
-      setTimeout(() => {
-        setMessages(prev => [...prev, { role: 'ai', content: '⚠️ Lỗi cấu hình hệ thống: Không tìm thấy API Key.' }]);
-        setIsTyping(false);
-      }, 1000);
+    if (!hasGeminiApiKey()) {
+      const hint = getOfflineAppHint(userMsg);
+      const fallback =
+        hint ||
+        '⚠️ Chưa cấu hình API Gemini. Tạo file `.env` với `VITE_GEMINI_API_KEY=...` rồi khởi động lại `npm run dev`.';
+      setMessages([...snapshot, { role: 'ai', content: fallback }]);
       return;
     }
 
+    setIsTyping(true);
     try {
-      // Chuẩn bị dữ liệu ngữ cảnh (Context)
-      const contextData = window.__DASHBOARD_DATA__ || {};
-      let systemPrompt = "Bạn là AI PXD - Trợ lý ảo phân tích dự án EPC Solar xuất sắc. Dưới đây là dữ liệu hiện tại của hệ thống dưới dạng JSON (bao gồm danh sách dự án và công việc):\\n";
-      systemPrompt += JSON.stringify(contextData) + "\\n";
-      systemPrompt += "Ngoài ra, đây là hướng dẫn sử dụng giao diện phần mềm để bạn hướng dẫn người dùng khi được hỏi:\\n";
-      systemPrompt += "- Để THÊM CÔNG VIỆC (TÁC VỤ): Hướng dẫn họ bấm vào nút '+ Thêm tác vụ' màu xanh ở góc trên bên phải màn hình Danh sách công việc.\\n";
-      systemPrompt += "- Để THÊM DỰ ÁN: Hướng dẫn họ bấm vào nút '+ Thêm dự án' màu xanh ở góc trên bên phải màn hình Tổng quan.\\n";
-      systemPrompt += "- Để XEM CHI TIẾT/CẬP NHẬT CÔNG VIỆC: Nhấn đúp (click) vào một dòng công việc trong bảng hoặc nhấn vào nút 3 chấm ở cuối dòng.\\n";
-      systemPrompt += "- Để XEM BIỂU ĐỒ: Chọn tab 'Biểu đồ' hoặc 'Tiến độ S-Curve'.\\n";
-      systemPrompt += "Nhiệm vụ của bạn: Hãy trả lời câu hỏi của người dùng thật ngắn gọn, chính xác, lịch sử dựa trên dữ liệu và hướng dẫn trên. Trả lời bằng tiếng Việt. Dùng Markdown để in đậm nếu cần.";
-
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            { role: "user", parts: [{ text: systemPrompt }] },
-            { role: "user", parts: [{ text: userMsg }] }
-          ],
-          generationConfig: {
-            temperature: 0.2,
-            maxOutputTokens: 500,
-          }
-        })
+      const systemInstruction = buildSystemInstruction(buildContext());
+      const aiText = await sendGeminiChat({
+        messages: snapshot,
+        systemInstruction,
       });
-
-      const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error.message || 'Lỗi API');
-      }
-
-      const aiResponse = data.candidates[0].content.parts[0].text;
-      setMessages(prev => [...prev, { role: 'ai', content: aiResponse }]);
+      setMessages([...snapshot, { role: 'ai', content: aiText }]);
     } catch (err) {
       console.error(err);
-      setMessages(prev => [...prev, { role: 'ai', content: `❌ Lỗi khi phân tích: ${err.message}. Có thể API Key không đúng hoặc lỗi mạng.` }]);
+      const hint = getOfflineAppHint(userMsg);
+      const errMsg = hint
+        ? `${hint}\n\n_(API tạm lỗi: ${err.message}. Thử lại sau.)_`
+        : `❌ ${err.message}. Kiểm tra API key hoặc kết nối mạng.`;
+      setMessages([...snapshot, { role: 'ai', content: errMsg }]);
     } finally {
       setIsTyping(false);
     }
@@ -90,23 +120,34 @@ export default function AIAssistant() {
 
   return (
     <>
-      {/* Nút bấm mở chat - print:hidden giúp ẩn khi in ấn */}
-      <button 
+      <button
         onClick={() => setIsOpen(true)}
         className={`fixed bottom-4 right-1 w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 transition-all z-50 print:hidden ${isOpen ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'}`}
-        title="Trợ lý ảo Gemini"
+        title="Trợ lý AI PXD"
+        type="button"
       >
         <Sparkles className="w-4 h-4 animate-pulse" />
       </button>
 
-      {/* Cửa sổ Chat - print:hidden giúp ẩn khi in ấn */}
-      <div 
-        className={`fixed bottom-6 right-6 w-80 md:w-[380px] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] flex flex-col transition-all duration-300 transform origin-bottom-right z-50 print:hidden ${isOpen ? 'scale-100 opacity-100' : 'scale-50 opacity-0 pointer-events-none'}`}
-        style={{ height: '550px', maxHeight: '80vh' }}
+      <div
+        className={`fixed bottom-6 right-6 w-80 md:w-[400px] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] flex flex-col transition-all duration-300 z-50 print:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        style={{
+          height: '580px',
+          maxHeight: '85vh',
+          transform: isOpen
+            ? `translate(${position.x}px, ${position.y}px) scale(1)`
+            : `translate(${position.x}px, ${position.y}px) scale(0.5)`,
+          transformOrigin: 'bottom right',
+        }}
       >
-        {/* Header */}
-        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 rounded-t-2xl flex items-center justify-between text-white shadow-md relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/4"></div>
+        <div
+          className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 rounded-t-2xl flex items-center justify-between text-white shadow-md relative overflow-hidden cursor-move select-none"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/4" />
           <div className="flex items-center gap-3 relative z-10">
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm border border-white/30">
               <Bot className="w-6 h-6 text-white" />
@@ -114,54 +155,60 @@ export default function AIAssistant() {
             <div>
               <h3 className="font-bold text-sm leading-tight">AI PXD</h3>
               <p className="text-[10px] text-indigo-100 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span> Sẵn sàng hỗ trợ
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                Hướng dẫn app · Solar EPC
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-1 relative z-10">
-            <button 
-              onClick={() => setIsOpen(false)}
-              className="p-2 hover:bg-white/20 rounded-full transition-colors relative z-10"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              setIsOpen(false);
+            }}
+            className="p-2 hover:bg-white/20 rounded-full transition-colors relative z-10 cursor-pointer"
+            title="Ẩn xuống"
+          >
+            <div className="w-4 h-0.5 bg-white rounded-full" />
+          </button>
         </div>
 
-        {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 min-h-0">
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div className={`flex gap-2 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-                
-                {/* Avatar */}
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-auto shadow-sm ${msg.role === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-indigo-100 text-indigo-600'}`}>
+              <div className={`flex gap-2 max-w-[90%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-auto shadow-sm ${msg.role === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-indigo-100 text-indigo-600'}`}
+                >
                   {msg.role === 'user' ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
                 </div>
-
-                {/* Bubble */}
-                <div className={`p-3 rounded-2xl text-sm shadow-sm ${
-                  msg.role === 'user' 
-                    ? 'bg-blue-600 text-white rounded-br-sm' 
-                    : 'bg-white border border-slate-100 text-slate-700 rounded-bl-sm'
-                }`}>
-                  {msg.content}
+                <div
+                  className={`p-3 rounded-2xl shadow-sm ${
+                    msg.role === 'user'
+                      ? 'bg-blue-600 text-white rounded-br-sm text-sm'
+                      : 'bg-white border border-slate-100 text-slate-700 rounded-bl-sm'
+                  }`}
+                >
+                  {msg.role === 'user' ? (
+                    <span className="text-sm whitespace-pre-wrap">{msg.content}</span>
+                  ) : (
+                    <AIMessageContent content={msg.content} />
+                  )}
                 </div>
-
               </div>
             </div>
           ))}
-          
+
           {isTyping && (
             <div className="flex justify-start">
-              <div className="flex gap-2 max-w-[85%] flex-row">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-auto shadow-sm bg-indigo-100 text-indigo-600">
+              <div className="flex gap-2 flex-row">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-indigo-100 text-indigo-600">
                   <Sparkles className="w-4 h-4" />
                 </div>
-                <div className="p-4 rounded-2xl bg-white border border-slate-100 text-slate-700 rounded-bl-sm flex items-center gap-1 shadow-sm">
-                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                <div className="p-4 rounded-2xl bg-white border border-slate-100 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" />
+                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:150ms]" />
+                  <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:300ms]" />
                 </div>
               </div>
             </div>
@@ -169,28 +216,43 @@ export default function AIAssistant() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="p-3 bg-white border-t border-slate-100 rounded-b-2xl">
-          <div className="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all shadow-inner">
+        {!isTyping && messages.length <= 2 && (
+          <div className="px-3 pb-2 flex flex-wrap gap-1.5 bg-slate-50/80 border-t border-slate-100">
+            {QUICK_PROMPTS.map((q) => (
+              <button
+                key={q}
+                type="button"
+                onClick={() => handleSend(q)}
+                className="text-[10px] px-2 py-1 rounded-full bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition-colors"
+              >
+                {q}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="p-3 bg-white border-t border-slate-100 rounded-b-2xl shrink-0">
+          <div className="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Hỏi AI về dự án của bạn..."
+              placeholder="Hỏi cách dùng app, số liệu dự án, kỹ thuật Solar..."
               className="flex-1 max-h-32 min-h-[44px] bg-transparent border-none outline-none resize-none p-3 text-sm text-slate-700"
               rows={1}
             />
-            <button 
-              onClick={handleSend}
+            <button
+              type="button"
+              onClick={() => handleSend()}
               disabled={!inputValue.trim() || isTyping}
               className="p-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors shrink-0 mb-0.5 mr-0.5"
             >
               <Send className="w-4 h-4" />
             </button>
           </div>
-          <div className="text-center mt-2">
-            <span className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Gemini AI Engine</span>
-          </div>
+          <p className="text-center mt-1.5 text-[9px] text-slate-400">
+            {getPageLabel(location.pathname)} · Gemini
+          </p>
         </div>
       </div>
     </>
