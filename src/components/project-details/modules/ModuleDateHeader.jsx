@@ -95,7 +95,7 @@ export default function ModuleDateHeader({ projectId, moduleKey, syncStatus, ini
           value={dateInfo.start} 
           onChange={e => updateDateInfo('start', e.target.value)}
           onBlur={handleBlur}
-          className="bg-transparent text-[11px] font-semibold text-slate-200 focus:outline-none w-[95px] cursor-pointer"
+          className="bg-transparent text-[11px] font-semibold text-slate-200 focus:outline-none w-[95px] cursor-pointer [color-scheme:dark]"
         />
       </div>
       

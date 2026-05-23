@@ -10,11 +10,11 @@ const initialGroups = [
     name: '[A] CÔNG TÁC TẠM BAN ĐẦU',
     weight: 15,
     tasks: [
-      { id: 'A1', code: '1', item: 'Đặt văn phòng BCH', start: '01/05/2026', endPlan: '-', endActual: '15/05/2026', progress: 0 },
-      { id: 'A2', code: '1', item: 'Khu vực tập kết vật tư', start: '02/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'A3', code: '1', item: 'Lắp đặt lối truy cập mái', start: '03/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'A4', code: '1', item: 'Lắp đặt các công tác tạm', start: '04/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'A5', code: '1', item: 'Nhận bàn giao mặt bằng thi công (Nhà biến tần, mặt bằng mái...)', start: '05/05/2026', endPlan: '-', endActual: '-', progress: 0 },
+      { id: 'A1', code: '1', item: 'Đặt văn phòng BCH', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'A2', code: '1', item: 'Khu vực tập kết vật tư', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'A3', code: '1', item: 'Lắp đặt lối truy cập mái', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'A4', code: '1', item: 'Lắp đặt các công tác tạm', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'A5', code: '1', item: 'Nhận bàn giao mặt bằng thi công (Nhà biến tần, mặt bằng mái...)', start: '', endPlan: '', endActual: '', progress: 0 },
     ]
   },
   {
@@ -22,18 +22,18 @@ const initialGroups = [
     name: '[B] KHU VỰC LẮP ĐẶT TRÊN MÁI',
     weight: 40,
     tasks: [
-      { id: 'B1', code: '2', item: 'Lắp đặt lan can cứng', start: '06/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B2', code: '2', item: 'Lắp đặt lối đi bộ', start: '07/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B3', code: '2', item: 'Định vị & lắp đặt kẹp', start: '08/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B4', code: '2', item: 'Lắp đặt thanh rail', start: '09/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B5', code: '2', item: 'Lắp đặt giá đỡ máng cáp DC/AC', start: '10/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B6', code: '2', item: 'Lắp đặt máng cáp DC/AC', start: '11/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B7', code: '2', item: 'Kéo cáp DC từ chuỗi PV đến Inverter', start: '12/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B8', code: '2', item: 'Lắp đặt tấm pin mặt trời (PV Module)', start: '13/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B9', code: '2', item: 'Lắp đặt hệ thống nối đất DC trên mái (Kẹp tiếp địa, cáp nối đất DC)', start: '14/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B10', code: '2', item: 'Lắp đặt trạm thời tiết (cảm biến, kéo cáp)', start: '15/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B11', code: '2', item: 'Lắp đặt hệ thống rửa nước', start: '16/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'B12', code: '2', item: 'Lắp đặt thang truy cập mái', start: '17/05/2026', endPlan: '-', endActual: '-', progress: 0 },
+      { id: 'B1', code: '2', item: 'Lắp đặt lan can cứng', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B2', code: '2', item: 'Lắp đặt lối đi bộ', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B3', code: '2', item: 'Định vị & lắp đặt kẹp', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B4', code: '2', item: 'Lắp đặt thanh rail', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B5', code: '2', item: 'Lắp đặt giá đỡ máng cáp DC/AC', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B6', code: '2', item: 'Lắp đặt máng cáp DC/AC', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B7', code: '2', item: 'Kéo cáp DC từ chuỗi PV đến Inverter', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B8', code: '2', item: 'Lắp đặt tấm pin mặt trời (PV Module)', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B9', code: '2', item: 'Lắp đặt hệ thống nối đất DC trên mái (Kẹp tiếp địa, cáp nối đất DC)', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B10', code: '2', item: 'Lắp đặt trạm thời tiết (cảm biến, kéo cáp)', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B11', code: '2', item: 'Lắp đặt hệ thống rửa nước', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'B12', code: '2', item: 'Lắp đặt thang truy cập mái', start: '', endPlan: '', endActual: '', progress: 0 },
     ]
   },
   {
@@ -41,18 +41,18 @@ const initialGroups = [
     name: '[C] KHU VỰC PHÒNG INVERTER & TRẠM ĐIỆN',
     weight: 30,
     tasks: [
-      { id: 'C1', code: '3', item: 'Lắp đặt khung inverter (Đổ bê tông nếu cần)', start: '18/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C2', code: '3', item: 'Lắp đặt biến tần', start: '19/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C3', code: '3', item: 'Lắp đặt tủ ACDB và tủ trung gian, đấu nối', start: '20/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C4', code: '3', item: 'Lắp đặt máng cáp DC/AC tại trạm inverter/ Tủ MSB của nhà máy', start: '21/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C5', code: '3', item: 'Kéo cáp AC từ Inverter đến tủ ACDB Solar', start: '22/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C6', code: '3', item: 'Kéo cáp AC từ tủ ACDB solar đến tủ MSB hiện hữu của nhà máy', start: '23/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C7', code: '3', item: 'Lắp đặt hệ thống giám sát (lắp datalogger, UPS, nguồn điện, router và cài đặt)', start: '24/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C8', code: '3', item: 'Lắp đặt tủ Zero export', start: '25/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C9', code: '3', item: 'Lắp đặt hệ thống tiếp địa AC/DC', start: '26/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C10', code: '3', item: 'Lắp đặt hệ thống PCCC (Bảng tiêu lệnh, quả cầu PCCC, bình PCCC)', start: '27/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C11', code: '3', item: 'Lắp đặt hệ thống chiếu sáng', start: '28/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'C12', code: '3', item: 'Ngắt điện để đấu nối và chỉnh sửa tủ MSB (Nếu cần)', start: '29/05/2026', endPlan: '-', endActual: '-', progress: 0 },
+      { id: 'C1', code: '3', item: 'Lắp đặt khung inverter (Đổ bê tông nếu cần)', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C2', code: '3', item: 'Lắp đặt biến tần', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C3', code: '3', item: 'Lắp đặt tủ ACDB và tủ trung gian, đấu nối', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C4', code: '3', item: 'Lắp đặt máng cáp DC/AC tại trạm inverter/ Tủ MSB của nhà máy', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C5', code: '3', item: 'Kéo cáp AC từ Inverter đến tủ ACDB Solar', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C6', code: '3', item: 'Kéo cáp AC từ tủ ACDB solar đến tủ MSB hiện hữu của nhà máy', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C7', code: '3', item: 'Lắp đặt hệ thống giám sát (lắp datalogger, UPS, nguồn điện, router và cài đặt)', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C8', code: '3', item: 'Lắp đặt tủ Zero export', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C9', code: '3', item: 'Lắp đặt hệ thống tiếp địa AC/DC', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C10', code: '3', item: 'Lắp đặt hệ thống PCCC (Bảng tiêu lệnh, quả cầu PCCC, bình PCCC)', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C11', code: '3', item: 'Lắp đặt hệ thống chiếu sáng', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'C12', code: '3', item: 'Ngắt điện để đấu nối và chỉnh sửa tủ MSB (Nếu cần)', start: '', endPlan: '', endActual: '', progress: 0 },
     ]
   },
   {
@@ -60,36 +60,16 @@ const initialGroups = [
     name: '[D] CÔNG TÁC NGHIỆM THU T&C ĐÓNG ĐIỆN',
     weight: 15,
     tasks: [
-      { id: 'D1', code: '4', item: 'Đóng điện cho T&C (Thử nghiệm & Nghiệm thu)', start: '30/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'D2', code: '4', item: 'T&C (Thử nghiệm & Nghiệm thu)', start: '31/05/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'D3', code: '4', item: 'Phân tích chất lượng điện của Inverter', start: '01/06/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'D4', code: '4', item: 'Ngày vận hành thương mại (COD)', start: '15/06/2026', endPlan: '-', endActual: '-', progress: 0 },
-      { id: 'D5', code: '4', item: 'Kiểm tra hiệu suất PR', start: '16/06/2026', endPlan: '-', endActual: '-', progress: 0 },
+      { id: 'D1', code: '4', item: 'Đóng điện cho T&C (Thử nghiệm & Nghiệm thu)', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'D2', code: '4', item: 'T&C (Thử nghiệm & Nghiệm thu)', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'D3', code: '4', item: 'Phân tích chất lượng điện của Inverter', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'D4', code: '4', item: 'Ngày vận hành thương mại (COD)', start: '', endPlan: '', endActual: '', progress: 0 },
+      { id: 'D5', code: '4', item: 'Kiểm tra hiệu suất PR', start: '', endPlan: '', endActual: '', progress: 0 },
     ]
   }
 ];
 
-const addDaysToDateStr = (dateStr, days) => {
-  if (!dateStr || dateStr === '-') return '-';
-  const cleanDays = parseInt(days, 10);
-  if (isNaN(cleanDays) || cleanDays <= 0) return dateStr;
 
-  const parts = dateStr.split('/');
-  if (parts.length !== 3) return dateStr;
-  const day = parseInt(parts[0], 10);
-  const month = parseInt(parts[1], 10) - 1;
-  const year = parseInt(parts[2], 10);
-
-  const date = new Date(year, month, day);
-  if (isNaN(date.getTime())) return dateStr;
-
-  date.setDate(date.getDate() + cleanDays);
-
-  const d = String(date.getDate()).padStart(2, '0');
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
-};
 
 export default function ConstructionModule({ project, initialData, onProgressChange }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -115,7 +95,6 @@ export default function ConstructionModule({ project, initialData, onProgressCha
             ...t,
             _rowIndex: row._rowIndex,
             NGÀY_BẮT_ĐẦU: row.NGÀY_BẮT_ĐẦU !== undefined ? row.NGÀY_BẮT_ĐẦU : t.start,
-            SỐ_NGÀY: row.SỐ_NGÀY !== undefined ? row.SỐ_NGÀY : '',
             NGÀY_KẾT_THÚC: row.NGÀY_KẾT_THÚC !== undefined ? row.NGÀY_KẾT_THÚC : t.endPlan,
             NGÀY_HT_THỰC_TẾ: row.NGÀY_HT_THỰC_TẾ !== undefined ? row.NGÀY_HT_THỰC_TẾ : t.endActual,
             TIẾN_ĐỘ_THỰC_TẾ: row.TIẾN_ĐỘ_THỰC_TẾ !== undefined ? Number(row.TIẾN_ĐỘ_THỰC_TẾ) : t.progress
@@ -124,7 +103,6 @@ export default function ConstructionModule({ project, initialData, onProgressCha
         return {
           ...t,
           NGÀY_BẮT_ĐẦU: t.start,
-          SỐ_NGÀY: '',
           NGÀY_KẾT_THÚC: t.endPlan,
           NGÀY_HT_THỰC_TẾ: t.endActual,
           TIẾN_ĐỘ_THỰC_TẾ: t.progress
@@ -187,9 +165,6 @@ export default function ConstructionModule({ project, initialData, onProgressCha
           tasks: g.tasks.map(t => {
             if (t.id === taskId) {
               let temp = { ...t, [field]: value };
-              if (field === 'NGÀY_BẮT_ĐẦU' || field === 'SỐ_NGÀY') {
-                temp.NGÀY_KẾT_THÚC = addDaysToDateStr(temp.NGÀY_BẮT_ĐẦU, temp.SỐ_NGÀY);
-              }
               updatedTask = temp;
               return updatedTask;
             }
@@ -206,7 +181,6 @@ export default function ConstructionModule({ project, initialData, onProgressCha
           MÃ_CV: updatedTask.code,
           HẠNG_MỤC_CÔNG_VIỆC: updatedTask.item,
           NGÀY_BẮT_ĐẦU: updatedTask.NGÀY_BẮT_ĐẦU,
-          SỐ_NGÀY: updatedTask.SỐ_NGÀY,
           NGÀY_KẾT_THÚC: updatedTask.NGÀY_KẾT_THÚC,
           NGÀY_HT_THỰC_TẾ: updatedTask.NGÀY_HT_THỰC_TẾ,
           TIẾN_ĐỘ_THỰC_TẾ: updatedTask.TIẾN_ĐỘ_THỰC_TẾ,
@@ -318,7 +292,6 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                   <th className="p-3 w-16">Mã CV</th>
                                   <th className="p-3">Hạng mục công việc hiện trường</th>
                                   <th className="p-3 w-28">Ngày bắt đầu</th>
-                                  <th className="p-3 w-20">Số ngày</th>
                                   <th className="p-3 w-28">Ngày kết thúc</th>
                                   <th className="p-3 w-28">Ngày HT thực tế</th>
                                   <th className="p-3 w-48 text-right pr-6">Tiến độ thực tế</th>
@@ -348,18 +321,17 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                       <input
                                         type="text"
                                         className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
-                                        value={task.SỐ_NGÀY || ''}
-                                        placeholder="0"
+                                        value={task.NGÀY_KẾT_THÚC || ''}
+                                        placeholder="-"
                                         onChange={(e) => {
                                           const v = e.target.value;
                                           setGroups(prev => prev.map(g => g.id === group.id ? {
-                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, SỐ_NGÀY: v } : t)
+                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, NGÀY_KẾT_THÚC: v } : t)
                                           } : g));
                                         }}
-                                        onBlur={(e) => handleUpdate(group.id, task.id, 'SỐ_NGÀY', e.target.value)}
+                                        onBlur={(e) => handleUpdate(group.id, task.id, 'NGÀY_KẾT_THÚC', e.target.value)}
                                       />
                                     </td>
-                                    <td className="p-3 text-slate-400 font-semibold">{task.NGÀY_KẾT_THÚC || '-'}</td>
                                     <td className="p-3">
                                       <input
                                         type="text"

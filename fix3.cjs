@@ -1,0 +1,4 @@
+const fs = require('fs');
+let c = fs.readFileSync('backend/Code.gs', 'utf8');
+c = c.replace(/\['([^']+)'\]([^\s\(\)\[\]\{\}\.\,\;\:\+\-\*\/\=\!\?\<\>\|\\\&\%\"']+)/g, (m, p1, p2) => `['${p1}${p2}']`);
+fs.writeFileSync('backend/Code.gs', c, 'utf8');

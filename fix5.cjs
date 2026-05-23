@@ -1,0 +1,1 @@
+const fs = require('fs'); let c = fs.readFileSync('backend/Code.gs', 'utf8'); c = c.replace(/p\['TAONH_TR\S+'\]\S+NG_V\S+T_T\S+/g, p['TÌNH_TR?NG_V?T_TU']); c = c.replace(/r\['NHA\S+M_THI_C\S+'\]A\S+NG/g, ['NHÓM_THI_CÔNG']); c = c.replace(/r\['MA\S+_CV'\]/g, ['MÃ_CV']); fs.writeFileSync('backend/Code.gs', c, 'utf8');

@@ -1,5 +1,5 @@
 // Replace this URL with your deployed Google Apps Script Web App URL
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbxNaUFpEkBt8Zk9Wa163WQWrwsJMZjxNt3TpIKrO75xIPq1nU03_99D_YhIDTnSOxsT/exec';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbx24cjqbqLywou_ACCiS66ZhVrR4PXReA6JRJ5XyDqO_Cjv6tt8nJ1RtdJU_of44Iq0/exec';
 
 function normalizeProject(project) {
   if (!project) return null;
@@ -150,6 +150,7 @@ export const api = {
   updateModuleDates: (data) => postToGAS('update-module-dates', data),
   updateProject: (data) => postToGAS('update-project', mapProjectToSheet(data)),
   createProject: (data) => postToGAS('add-project', mapProjectToSheet(data)),
+  deleteProject: (id) => postToGAS('delete-project', { PROJECT_ID: id }),
   addRisk: (data) => postToGAS('add-risk', data),
   addPermit: (data) => postToGAS('add-permit', data),
   addDesign: (data) => postToGAS('add-design', data),

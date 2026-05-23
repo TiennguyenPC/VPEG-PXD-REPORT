@@ -32,7 +32,8 @@ import {
   Clock,
   Send,
   Sun,
-  Moon
+  Moon,
+  Trash2
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "./services/api";
@@ -272,9 +273,27 @@ export default function App() {
 
     let priorityColor = "green";
 
+    const year = new Date().getFullYear();
+    const prefix = `${year}-`;
+    let maxNum = 0;
+    
+    projects.forEach(p => {
+      const pid = p.id || p.PROJECT_ID || '';
+      if (pid.startsWith(prefix)) {
+        const parts = pid.split('-');
+        if (parts.length === 2) {
+          const num = parseInt(parts[1], 10);
+          if (!isNaN(num) && num > maxNum) {
+            maxNum = num;
+          }
+        }
+      }
+    });
+    const newId = `${prefix}${String(maxNum + 1).padStart(2, '0')}`;
+
     const projectToAdd = {
       ...newProject,
-      id: `NEW-${Date.now()}`,
+      id: newId,
       name: newProject.name,
       client: newProject.client,
       pm: newProject.pm,
@@ -319,6 +338,19 @@ export default function App() {
       alert("Lỗi khi thêm dự án: " + error.message);
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteProject = async (id, e) => {
+    e.stopPropagation();
+    if (window.confirm("Bạn có chắc chắn muốn xóa dự án này? Toàn bộ dữ liệu liên quan trong tất cả các module sẽ bị xóa vĩnh viễn và không thể khôi phục.")) {
+      try {
+        await api.deleteProject(id);
+        setProjects(projects.filter(p => p.id !== id && p.PROJECT_ID !== id));
+      } catch (error) {
+        console.error("Failed to delete project:", error);
+        alert("Lỗi khi xóa dự án: " + error.message);
+      }
     }
   };
 
@@ -989,7 +1021,7 @@ export default function App() {
                               sortField === "name" ? "text-slate-100 bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
                             }`}
                             onClick={() => {
-                              navigate('/projects/' + p.id);
+                              navigate('/projects/' + encodeURIComponent(p.name || p.id || p.PROJECT_ID));
                             }}
                           >
                             {p.name}
@@ -1126,7 +1158,7 @@ export default function App() {
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => {
-                                  navigate('/projects/' + p.id);
+                                  navigate('/projects/' + encodeURIComponent(p.name || p.id || p.PROJECT_ID));
                                 }}
                                 title="Xem chi tiết"
                                 className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
@@ -1141,8 +1173,15 @@ export default function App() {
                                 <FileText className="w-3.5 h-3.5" />
                               </button>
                               <button
+                                onClick={(e) => handleDeleteProject(p.id || p.PROJECT_ID, e)}
+                                title="Xóa dự án"
+                                className="p-1.5 hover:text-red-400 text-slate-400 hover:bg-red-500/10 hover:shadow-[0_0_8px_rgba(239,68,68,0.2)] border border-transparent hover:border-red-500/30 rounded transition-all duration-200 cursor-pointer"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
                                 onClick={() => {
-                                  navigate('/projects/' + p.id);
+                                  navigate('/projects/' + encodeURIComponent(p.name || p.id || p.PROJECT_ID));
                                 }}
                                 title="Bình luận"
                                 className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer relative"
@@ -1543,25 +1582,22 @@ export default function App() {
                 <div className="space-y-1">
                   <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Ngày Kickoff</label>
                   <input
-                    type="text"
-                    placeholder="DD/MM/YYYY"
+                    type="date"
                     value={newProject.kickoffDate}
                     onChange={(e) => setNewProject(prev => ({ ...prev, kickoffDate: e.target.value }))}
-                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] [color-scheme:dark]"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Ngày đóng điện (COD)</label>
                   <input
-                    type="text"
-                    placeholder="DD/MM/YYYY"
+                    type="date"
                     value={newProject.codDate}
                     onChange={(e) => {
                       const val = e.target.value;
                       let codDays = newProject.codDays;
-                      const parts = val.split("/");
-                      if (parts.length === 3 && parts[2].length === 4) {
-                        const codD = new Date(parts[2], parts[1] - 1, parts[0]);
+                      if (val) {
+                        const codD = new Date(val);
                         if (!isNaN(codD.getTime())) {
                           const diffTime = codD.getTime() - new Date().getTime();
                           codDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -1569,7 +1605,7 @@ export default function App() {
                       }
                       setNewProject(prev => ({ ...prev, codDate: val, codDays }));
                     }}
-                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] [color-scheme:dark]"
                   />
                 </div>
               </div>

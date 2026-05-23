@@ -48,7 +48,7 @@ const getMondayOfDate = (date) => {
 };
 
 export default function ProjectDetailPage() {
-  const { id } = useParams();
+  let id = useParams()["*"];
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
 
