@@ -4,45 +4,34 @@ import {
   Sun, Cloud, CloudLightning, Wrench, Pencil, CalendarClock, AlertCircle, Check, X, CheckCircle2
 } from 'lucide-react';
 
-// --- IndexedDB Utils for Image Storage ---
-const initDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open("SiteLogImagesDB", 1);
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains("images")) {
-        db.createObjectStore("images", { keyPath: "id" });
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-};
-
-const saveImagesDB = async (projectId, date, base64Array) => {
+// --- Imgur API Upload ---
+const uploadToImgur = async (base64OrFile) => {
+  const clientId = 'c4bc8a1fa066f23'; // Public anonymous client ID
   try {
-    const db = await initDB();
-    const tx = db.transaction("images", "readwrite");
-    const store = tx.objectStore("images");
-    store.put({ id: `${projectId}_${date}`, images: base64Array });
-  } catch (err) {
-    console.error("DB Save Error:", err);
-  }
-};
-
-const getImagesDB = async (projectId, date) => {
-  try {
-    const db = await initDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("images", "readonly");
-      const store = tx.objectStore("images");
-      const request = store.get(`${projectId}_${date}`);
-      request.onsuccess = () => resolve(request.result ? request.result.images : []);
-      request.onerror = () => reject(request.error);
+    const formData = new FormData();
+    let base64Data = base64OrFile;
+    if (typeof base64OrFile === 'string' && base64OrFile.includes('base64,')) {
+      base64Data = base64OrFile.split('base64,')[1];
+    }
+    
+    formData.append('image', base64Data);
+    
+    const response = await fetch('https://api.imgur.com/3/image', {
+      method: 'POST',
+      headers: {
+        Authorization: `Client-ID ${clientId}`
+      },
+      body: formData
     });
-  } catch (err) {
-    console.error("DB Get Error:", err);
-    return [];
+    
+    const result = await response.json();
+    if (result.success) {
+      return result.data.link;
+    }
+    throw new Error(result.data.error || 'Upload failed');
+  } catch (error) {
+    console.error("Imgur upload error:", error);
+    throw error;
   }
 };
 
@@ -118,7 +107,8 @@ const parseDailyNote = (noteText) => {
     progressActual: '',
     progressPlanned: '',
     dayStatus: 'Bình thường',
-    dayStatusSubtext: ''
+    dayStatusSubtext: '',
+    images: ''
   };
 
   if (!noteText) return defaults;
@@ -139,6 +129,7 @@ const parseDailyNote = (noteText) => {
   const progressPlanned = extractSection(noteText, 'TIẾN ĐỘ KẾ HOẠCH');
   const dayStatus = extractSection(noteText, 'TRẠNG THÁI NGÀY');
   const dayStatusSubtext = extractSection(noteText, 'ẢNH HƯỞNG');
+  const images = extractSection(noteText, 'HÌNH ẢNH');
 
   if (ghiChu !== null) result.ghiChu = ghiChu;
   if (congViecChinh !== null) result.congViecChinh = congViecChinh;
@@ -148,6 +139,7 @@ const parseDailyNote = (noteText) => {
   if (progressPlanned !== null) result.progressPlanned = progressPlanned;
   if (dayStatus !== null) result.dayStatus = dayStatus;
   if (dayStatusSubtext !== null) result.dayStatusSubtext = dayStatusSubtext;
+  if (images !== null) result.images = images;
 
   // Fallback if legacy notes
   if (ghiChu === null && congViecChinh === null && congViecNgayMai === null && vanDeRuiRo === null) {
@@ -158,7 +150,7 @@ const parseDailyNote = (noteText) => {
 };
 
 const serializeDailyNote = (sections) => {
-  return `### GHI CHÚ HIỆN TRƯỜNG\n${sections.ghiChu}\n\n### CÔNG VIỆC CHÍNH\n${sections.congViecChinh}\n\n### CÔNG VIỆC NGÀY MAI\n${sections.congViecNgayMai}\n\n### VẤN ĐỀ / RỦI RO\n${sections.vanDeRuiRo}\n\n### TIẾN ĐỘ THỰC TẾ\n${sections.progressActual}\n\n### TIẾN ĐỘ KẾ HOẠCH\n${sections.progressPlanned}\n\n### TRẠNG THÁI NGÀY\n${sections.dayStatus}\n\n### ẢNH HƯỞNG\n${sections.dayStatusSubtext}`;
+  return `### GHI CHÚ HIỆN TRƯỜNG\n${sections.ghiChu}\n\n### CÔNG VIỆC CHÍNH\n${sections.congViecChinh}\n\n### CÔNG VIỆC NGÀY MAI\n${sections.congViecNgayMai}\n\n### VẤN ĐỀ / RỦI RO\n${sections.vanDeRuiRo}\n\n### TIẾN ĐỘ THỰC TẾ\n${sections.progressActual}\n\n### TIẾN ĐỘ KẾ HOẠCH\n${sections.progressPlanned}\n\n### TRẠNG THÁI NGÀY\n${sections.dayStatus}\n\n### ẢNH HƯỞNG\n${sections.dayStatusSubtext}\n\n### HÌNH ẢNH\n${sections.images || ''}`;
 };
 
 const parseWeather = (weatherText) => {
@@ -307,12 +299,12 @@ export default function SiteLogPanel({
 
   // Load images from DB when date changes
   useEffect(() => {
-    if (project?.id && selectedDate) {
-      getImagesDB(project.id, selectedDate).then(imgs => {
-        setImagesByDate(prev => ({ ...prev, [selectedDate]: imgs }));
-      });
+    if (activeLog) {
+      const parsedNote = parseDailyNote(activeLog.DAILY_NOTE || activeLog.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+      const imageUrls = parsedNote.images ? parsedNote.images.split('\n').map(l => l.trim()).filter(l => l) : [];
+      setImagesByDate(prev => ({ ...prev, [selectedDate]: imageUrls }));
     }
-  }, [project?.id, selectedDate]);
+  }, [activeLog, selectedDate]);
 
   const handleFileSelect = async (e) => {
     const files = Array.from(e.target.files);
@@ -320,26 +312,44 @@ export default function SiteLogPanel({
     // Compress and convert to base64
     const compressedPromises = files.map(f => compressImage(f));
     const base64Images = await Promise.all(compressedPromises);
-
-    setImagesByDate(prev => {
-      const existing = prev[selectedDate] || [];
-      const combined = [...existing, ...base64Images].slice(0, 4);
+    
+    // Upload to Imgur
+    setSaveStatus('Saving...');
+    try {
+      const uploadPromises = base64Images.map(b64 => uploadToImgur(b64));
+      const imageUrls = await Promise.all(uploadPromises);
       
-      // Save to IndexedDB immediately
-      if (project?.id) {
-        saveImagesDB(project.id, selectedDate, combined);
-      }
-      
-      return { ...prev, [selectedDate]: combined };
-    });
+      setImagesByDate(prev => {
+        const existing = prev[selectedDate] || [];
+        const combined = [...existing, ...imageUrls].slice(0, 4);
+        
+        // Immediately save the updated URLs to the Google Sheet log
+        const parsedNote = parseDailyNote(activeLog?.DAILY_NOTE || activeLog?.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+        parsedNote.images = combined.join('\n');
+        
+        const serializedNote = serializeDailyNote(parsedNote);
+        onUpdateLog({
+          GHI_CHÚ_HIỆN_TRƯỜNG: serializedNote
+        });
+        
+        return { ...prev, [selectedDate]: combined };
+      });
+      setSaveStatus('Saved');
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('Error');
+    }
   };
 
   const removeImage = (indexToRemove) => {
     setImagesByDate(prev => {
       const updated = prev[selectedDate].filter((_, idx) => idx !== indexToRemove);
-      if (project?.id) {
-        saveImagesDB(project.id, selectedDate, updated);
-      }
+      const parsedNote = parseDailyNote(activeLog?.DAILY_NOTE || activeLog?.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+      parsedNote.images = updated.join('\n');
+      const serializedNote = serializeDailyNote(parsedNote);
+      onUpdateLog({
+        GHI_CHÚ_HIỆN_TRƯỜNG: serializedNote
+      });
       return { ...prev, [selectedDate]: updated };
     });
   };
@@ -389,7 +399,8 @@ export default function SiteLogPanel({
       progressActual: parsedNote.progressActual,
       progressPlanned: parsedNote.progressPlanned,
       dayStatus: parsedNote.dayStatus,
-      dayStatusSubtext: parsedNote.dayStatusSubtext
+      dayStatusSubtext: parsedNote.dayStatusSubtext,
+      images: parsedNote.images
     });
     setIsEditing(true);
   };
@@ -403,7 +414,8 @@ export default function SiteLogPanel({
       progressActual: editData.progressActual,
       progressPlanned: editData.progressPlanned,
       dayStatus: editData.dayStatus,
-      dayStatusSubtext: editData.dayStatusSubtext
+      dayStatusSubtext: editData.dayStatusSubtext,
+      images: editData.images || (imagesByDate[selectedDate] ? imagesByDate[selectedDate].join('\n') : '')
     });
 
     const serializedW = serializeWeather({
