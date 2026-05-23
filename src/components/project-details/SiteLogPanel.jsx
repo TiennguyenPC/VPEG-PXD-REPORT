@@ -584,23 +584,29 @@ export default function SiteLogPanel({
   const isNextDisabled = () => false;
 
   return (
-    <div className="glass-panel p-5 rounded-xl shadow-lg border border-[var(--border-main)]">
+    <div className="glass-panel p-4 md:p-5 rounded-xl shadow-[0_18px_60px_rgba(0,0,0,0.28)] border border-[#22304a] bg-[#080d18]/85">
       
       {/* Header and Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+        <div className="flex items-start gap-3">
+          <div className="w-1 h-10 rounded-full bg-gradient-to-b from-[#5252ff] via-cyan-400 to-emerald-400 shadow-[0_0_18px_rgba(82,82,255,0.45)]"></div>
+          <div>
+          <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
             NHẬT KÝ & VẬN HÀNH
           </h3>
-          <div className="mt-1">{getStatusBadge()}</div>
+          <div className="mt-1.5 flex items-center gap-2">
+            {getStatusBadge()}
+            <span className="hidden sm:inline text-[10px] font-semibold text-slate-500">Theo dõi nhân lực, công việc, sự cố và hình ảnh site</span>
+          </div>
+          </div>
         </div>
         
         {/* Day/Week Tabs */}
-        <div className="flex rounded-lg bg-[var(--bg-panel)] p-0.5 border border-[var(--border-main)] self-start sm:self-auto">
+        <div className="flex rounded-lg bg-[#0b1221] p-0.5 border border-[#22304a] self-start sm:self-auto shadow-inner">
           <button
             onClick={() => setSelectedView('day')}
             className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
-              selectedView === 'day' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+              selectedView === 'day' ? 'bg-[#5252ff] text-white shadow-[0_0_16px_rgba(82,82,255,0.28)]' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             Ngày
@@ -608,7 +614,7 @@ export default function SiteLogPanel({
           <button
             onClick={() => setSelectedView('week')}
             className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
-              selectedView === 'week' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-slate-200'
+              selectedView === 'week' ? 'bg-[#5252ff] text-white shadow-[0_0_16px_rgba(82,82,255,0.28)]' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             Tuần
@@ -617,11 +623,11 @@ export default function SiteLogPanel({
       </div>
 
       {/* Traversal Navigation Bar */}
-      <div className="flex items-center gap-2 bg-[var(--bg-panel)] border border-[var(--border-main)] p-2 rounded-lg mb-4 justify-between">
+      <div className="flex items-center gap-2 bg-[#0a1020] border border-[#22304a] p-2 rounded-lg mb-3 justify-between shadow-inner">
         <button
           onClick={handlePrev}
           disabled={isPrevDisabled()}
-          className="p-1.5 rounded-md hover:bg-[var(--border-main)] text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+          className="p-1.5 rounded-md hover:bg-[#18233a] text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
@@ -629,14 +635,14 @@ export default function SiteLogPanel({
         {/* Day view: clickable date text → opens calendar picker */}
         {selectedView === 'day' && (
           <div 
-            className="flex-1 flex items-center justify-center cursor-pointer hover:bg-[var(--border-main)]/50 rounded-md py-1 transition-all relative"
+            className="flex-1 flex items-center justify-center cursor-pointer hover:bg-[#18233a]/70 rounded-md py-1.5 transition-all relative"
             onClick={() => {
               if (datePickerRef.current) {
                 try { datePickerRef.current.showPicker(); } catch(e) { datePickerRef.current.click(); }
               }
             }}
           >
-            <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5 select-none">
+            <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5 select-none">
               {selectedDate} ({getVietnameseDayOfWeek(selectedDate)})
               <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
             </span>
@@ -680,7 +686,7 @@ export default function SiteLogPanel({
         <button
           onClick={handleNext}
           disabled={isNextDisabled()}
-          className="p-1.5 rounded-md hover:bg-[var(--border-main)] text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+          className="p-1.5 rounded-md hover:bg-[#18233a] text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
@@ -911,29 +917,29 @@ export default function SiteLogPanel({
             return (
               <>
                 {/* Top Row: 4 Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                   {/* NHÂN LỰC SITE */}
-                  <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-xl p-4 flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-full bg-[#5252ff]/10 text-[#7373ff] flex items-center justify-center shrink-0">
+                  <div className="bg-[#0b1221] border border-[#22304a] border-l-[#5252ff] border-l-2 rounded-lg p-3.5 flex items-center gap-3.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] hover:border-[#33466d] transition-colors">
+                    <div className="w-10 h-10 rounded-lg bg-[#5252ff]/12 text-[#8585ff] flex items-center justify-center shrink-0">
                       <Users className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-0.5">Nhân lực Site</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Nhân lực Site</p>
                       <div className="flex items-baseline gap-1">
                         <span className="text-xl font-bold text-white">{manpower}</span>
                         <span className="text-[10px] text-slate-500">người</span>
                       </div>
-                      <p className="text-[9px] text-slate-400 mt-0.5">Kỹ sư / GS: {engineers}</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">Kỹ sư / GS: <span className="text-slate-200 font-semibold">{engineers}</span></p>
                     </div>
                   </div>
 
                   {/* THỜI TIẾT */}
-                  <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-xl p-4 flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0">
+                  <div className="bg-[#0b1221] border border-[#22304a] border-l-cyan-400/80 border-l-2 rounded-lg p-3.5 flex items-center gap-3.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] hover:border-[#33466d] transition-colors">
+                    <div className="w-10 h-10 rounded-lg bg-cyan-500/10 text-cyan-300 flex items-center justify-center shrink-0">
                       {getWeatherIcon(activeLog?.WEATHER || activeLog?.THỜI_TIẾT)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-0.5">Thời tiết</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Thời tiết</p>
                       <p className="text-xs font-bold text-white leading-tight">{weatherCond}</p>
                       <p className="text-[9px] text-[#3b82f6] mt-0.5 font-medium">{weatherTemp}</p>
                       <p className="text-[9px] text-slate-400 mt-0.5 leading-tight truncate" title={weatherDetail}>{weatherDetail}</p>
@@ -941,12 +947,12 @@ export default function SiteLogPanel({
                   </div>
 
                   {/* CÔNG VIỆC CHÍNH */}
-                  <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-xl p-4 flex items-center gap-3.5">
-                    <div className="w-10 h-10 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
+                  <div className="bg-[#0b1221] border border-[#22304a] border-l-emerald-400/80 border-l-2 rounded-lg p-3.5 flex items-center gap-3.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] hover:border-[#33466d] transition-colors">
+                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
                       <Wrench className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-0.5">Công việc chính</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Công việc chính</p>
                       <div className="flex items-baseline gap-1">
                         <span className="text-xl font-bold text-white">{listChinh.length}</span>
                         <span className="text-[10px] text-slate-500">hạng mục</span>
@@ -955,24 +961,24 @@ export default function SiteLogPanel({
                         {listChinh.slice(0, 3).map((item, idx) => (
                           <li key={idx} className="truncate" title={item}>{item}</li>
                         ))}
-                        {listChinh.length === 0 && <li className="italic text-slate-600">Không ghi nhận</li>}
+                        {listChinh.length === 0 && <li className="italic text-slate-500">Không ghi nhận</li>}
                       </ul>
                     </div>
                   </div>
 
                   {/* SỰ CỐ */}
-                  <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-xl p-4 flex items-center gap-3.5">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${incidents > 0 ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
+                  <div className={`bg-[#0b1221] border border-[#22304a] ${incidents > 0 ? 'border-l-red-400/80' : 'border-l-emerald-400/80'} border-l-2 rounded-lg p-3.5 flex items-center gap-3.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] hover:border-[#33466d] transition-colors`}>
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${incidents > 0 ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
                       <ShieldAlert className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-0.5">Sự cố</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Sự cố</p>
                       <div className="flex items-baseline gap-1">
                         <span className="text-xl font-bold text-white">{incidents}</span>
                         <span className="text-[10px] text-slate-500">sự cố</span>
                       </div>
                       <div className="mt-1">
-                        <span className={`inline-block text-[8px] font-bold px-1.5 py-0.5 rounded-full ${incidents > 0 ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
+                        <span className={`inline-block text-[8px] font-bold px-2 py-1 rounded-full border ${incidents > 0 ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
                           {incidents > 0 ? 'Đang theo dõi' : 'Bình thường'}
                         </span>
                       </div>
@@ -981,40 +987,40 @@ export default function SiteLogPanel({
                 </div>
 
                 {/* GHI CHÚ HIỆN TRƯỜNG */}
-                <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-xl p-4 mb-4 relative group">
+                <div className="bg-[#0b1221] border border-[#22304a] rounded-lg p-4 mb-3 relative group shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
-                      <CalendarClock className="w-3.5 h-3.5 text-[var(--text-muted)]" /> Ghi chú hiện trường
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> Ghi chú hiện trường
                     </p>
                     <button 
                       onClick={handleStartEdit}
-                      className="w-6 h-6 rounded bg-[var(--border-main)] border border-[#1e2a45] text-slate-400 hover:text-white flex items-center justify-center hover:bg-[#202c46] transition-all"
+                      className="w-7 h-7 rounded-md bg-[#18233a] border border-[#2b3a5c] text-slate-300 hover:text-white flex items-center justify-center hover:bg-[#243250] transition-all"
                       title="Chỉnh sửa nhật ký"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4 leading-relaxed">
+                  <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4 leading-relaxed min-h-[38px]">
                     {listGhiChu.map((item, idx) => (
                       <li key={idx}>{item}</li>
                     ))}
-                    {listGhiChu.length === 0 && <li className="italic text-slate-500 list-none pl-0">Không có ghi chú.</li>}
+                    {listGhiChu.length === 0 && <li className="italic text-slate-400 list-none pl-0">Không có ghi chú. Nhấn biểu tượng bút để cập nhật nhanh nhật ký hiện trường.</li>}
                   </ul>
                 </div>
 
                 {/* Columns: TÓM TẮT NGÀY & CÔNG VIỆC NGÀY MAI */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                   {/* TÓM TẮT NGÀY */}
-                  <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-xl p-4 flex flex-col justify-between">
+                  <div className="bg-[#0b1221] border border-[#22304a] rounded-lg p-4 flex flex-col justify-between shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                     <div>
-                      <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                         <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" /> Tóm tắt ngày
                       </p>
                       
                       <div className="grid grid-cols-3 gap-2 text-center mb-3">
                         <div>
                           <p className="text-[9px] text-slate-500">Tiến độ thực tế</p>
-                          <p className="text-sm font-bold text-white mt-0.5">{parsedNote.progressActual}</p>
+                          <p className="text-sm font-bold text-white mt-0.5">{parsedNote.progressActual || '-'}</p>
                         </div>
                         <div>
                           <p className="text-[9px] text-slate-500">Chênh lệch</p>
@@ -1034,7 +1040,7 @@ export default function SiteLogPanel({
                           <p className="text-[9px] text-slate-500">Trạng thái ngày</p>
                           <div className="flex items-center justify-center gap-1 mt-0.5">
                             <span className={`w-2 h-2 rounded-full ${parsedNote.dayStatus === 'Bình thường' ? 'bg-green-500' : 'bg-amber-500'}`} />
-                            <span className="text-[10px] font-semibold text-white">{parsedNote.dayStatus}</span>
+                            <span className="text-[10px] font-semibold text-white">{parsedNote.dayStatus || 'Bình thường'}</span>
                           </div>
                         </div>
                       </div>
@@ -1042,23 +1048,23 @@ export default function SiteLogPanel({
                     
                     <div>
                       {/* Progress bar */}
-                      <div className="w-full bg-[#141d30] rounded-full h-1.5 mb-1.5 border border-[var(--border-main)]">
+                      <div className="w-full bg-[#141d30] rounded-full h-2 mb-1.5 border border-[#22304a] overflow-hidden">
                         <div 
-                          className="bg-emerald-500 h-1.5 rounded-full" 
+                          className="bg-gradient-to-r from-emerald-500 to-cyan-400 h-2 rounded-full" 
                           style={{ width: `${Math.min(100, Math.max(0, ((parseFloat(parsedNote.progressActual) || 0) / (parseFloat(parsedNote.progressPlanned) || 1)) * 100))}%` }}
                         />
                       </div>
-                      <div className="flex justify-between text-[9px] text-slate-500">
-                        <span>Kế hoạch: {parsedNote.progressPlanned}</span>
-                        <span>Chênh lệch tác động: {parsedNote.dayStatusSubtext}</span>
+                      <div className="flex justify-between text-[9px] text-slate-500 gap-3">
+                        <span>Kế hoạch: {parsedNote.progressPlanned || '-'}</span>
+                        <span className="truncate">Chênh lệch tác động: {parsedNote.dayStatusSubtext || '-'}</span>
                       </div>
                     </div>
                   </div>
 
                   {/* CÔNG VIỆC NGÀY MAI */}
-                  <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-xl p-4">
+                  <div className="bg-[#0b1221] border border-[#22304a] rounded-lg p-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                     <div className="flex items-center justify-between mb-3">
-                      <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                         <CalendarClock className="w-3.5 h-3.5 text-indigo-400" /> Công việc ngày mai
                       </p>
                       <span className="text-[8px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded">
@@ -1066,11 +1072,11 @@ export default function SiteLogPanel({
                       </span>
                     </div>
                     
-                    <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4">
+                    <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4 min-h-[58px]">
                       {listNgayMai.map((item, idx) => (
                         <li key={idx}>{item}</li>
                       ))}
-                      {listNgayMai.length === 0 && <li className="italic text-slate-500 list-none pl-0">Chưa ghi nhận công việc ngày mai.</li>}
+                      {listNgayMai.length === 0 && <li className="italic text-slate-400 list-none pl-0">Chưa ghi nhận công việc ngày mai. Có thể thêm checklist trong phần chỉnh sửa.</li>}
                     </ul>
                   </div>
                 </div>
@@ -1097,19 +1103,19 @@ export default function SiteLogPanel({
           })()}
 
           {/* Ảnh hiện trường */}
-          <div className="mt-3 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg overflow-hidden">
+          <div className="mt-3 bg-[#0b1221] border border-[#22304a] rounded-lg overflow-hidden shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
             {/* Header */}
-            <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--border-main)] bg-[var(--bg-hover)]">
-              <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
+            <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#22304a] bg-[#10182a]">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                 📷 Ảnh hiện trường
-                <span className="ml-1 text-[8px] font-normal bg-[#5252ff]/10 text-[#7373ff] border border-[#5252ff]/20 px-1.5 py-0.5 rounded-full">{currentImages.length}/4 ảnh</span>
+                <span className="ml-1 text-[8px] font-bold bg-[#5252ff]/10 text-[#8585ff] border border-[#5252ff]/20 px-1.5 py-0.5 rounded-full">{currentImages.length}/4 ảnh</span>
               </p>
               <input type="file" multiple accept="image/*" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
               <button 
                 onClick={() => fileInputRef.current?.click()}
                 disabled={currentImages.length >= 4}
                 className={`flex items-center gap-1 text-[9px] font-semibold px-2 py-1 rounded-md transition-all ${
-                  currentImages.length >= 4 ? 'opacity-50 cursor-not-allowed text-slate-500 bg-slate-800' : 'text-[#7373ff] hover:text-white bg-[#5252ff]/10 hover:bg-[#5252ff]/20 border border-[#5252ff]/20 cursor-pointer'
+                  currentImages.length >= 4 ? 'opacity-50 cursor-not-allowed text-slate-500 bg-slate-800' : 'text-[#8585ff] hover:text-white bg-[#5252ff]/10 hover:bg-[#5252ff]/20 border border-[#5252ff]/20 cursor-pointer'
                 }`}
               >
                 + Thêm ảnh
@@ -1117,19 +1123,21 @@ export default function SiteLogPanel({
             </div>
 
             {/* Photo Grid */}
-            <div className="p-4 border-b border-[var(--border-main)]">
+            <div className="p-3 border-b border-[#22304a]">
               {currentImages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center text-center py-8">
-                  <div className="w-12 h-12 rounded-full bg-[var(--border-main)] flex items-center justify-center mb-3 text-slate-500">
+                <div className="flex flex-col sm:flex-row items-center justify-center text-center sm:text-left gap-3 py-5 border border-dashed border-[#2b3a5c] rounded-lg bg-[#080d18]/70">
+                  <div className="w-12 h-12 rounded-lg bg-[#18233a] flex items-center justify-center text-slate-400 shrink-0">
                     📷
                   </div>
-                  <p className="text-sm font-semibold text-slate-300">Chưa có ảnh tải lên</p>
-                  <p className="text-xs text-slate-500 mt-1 max-w-[200px]">Hãy thêm ảnh hiện trường để báo cáo trực quan hơn. Tối đa 4 ảnh.</p>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-200">Chưa có ảnh tải lên</p>
+                    <p className="text-xs text-slate-500 mt-1 max-w-[320px]">Thêm ảnh hiện trường để báo cáo trực quan hơn. Tối đa 4 ảnh cho mỗi ngày.</p>
+                  </div>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                   {currentImages.map((src, i) => (
-                    <div key={i} className="relative aspect-[16/9] rounded-lg overflow-hidden border border-[#263554] group">
+                    <div key={i} className="relative aspect-[16/9] rounded-lg overflow-hidden border border-[#2b3a5c] group">
                       <img src={src} alt="site" className="w-full h-full object-cover" />
                       <button 
                         onClick={() => removeImage(i)}
@@ -1144,7 +1152,7 @@ export default function SiteLogPanel({
             </div>
 
             {/* Footer hint */}
-            <div className="px-3 py-2 bg-[var(--bg-hover)]/30 flex items-center justify-end">
+            <div className="px-3 py-2 bg-[#10182a]/50 flex items-center justify-end">
               <p className="text-[9px] text-slate-600">{new Date().toLocaleDateString('vi-VN')} · {activeLog.UPDATED_BY || 'Giám sát viên'}</p>
             </div>
           </div>
