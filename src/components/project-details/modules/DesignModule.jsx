@@ -68,6 +68,14 @@ export default function DesignModule({ project, initialData, onProgressChange })
     } catch (_) {}
     return mergeDesignData([]);
   });
+  const [rawData, setRawData] = useState(() => {
+    if (Array.isArray(initialData)) return initialData;
+    try {
+      const cached = localStorage.getItem(`designs_${project?.PROJECT_ID || project?.id}`);
+      if (cached) return JSON.parse(cached);
+    } catch (_) {}
+    return [];
+  });
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
@@ -77,6 +85,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
     if (Array.isArray(initialData)) {
       const merged = mergeDesignData(initialData);
       setDesigns(merged);
+      setRawData(initialData);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
       setIsLoading(false);
       return;
@@ -87,6 +96,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
         const data = await api.getDesigns(project?.PROJECT_ID || project?.id);
         const fetchedData = Array.isArray(data) ? data : [];
         setDesigns(mergeDesignData(fetchedData));
+        setRawData(fetchedData);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedData));
         setSyncError(false);
       } catch (error) {
@@ -94,7 +104,11 @@ export default function DesignModule({ project, initialData, onProgressChange })
         setSyncError(true); setSyncStatus("error"); setTimeout(() => setSyncStatus(null), 3000);
         try {
           const cached = localStorage.getItem(STORAGE_KEY);
-          if (cached) setDesigns(mergeDesignData(JSON.parse(cached)));
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            setDesigns(mergeDesignData(parsed));
+            setRawData(parsed);
+          }
         } catch (_) {}
       } finally {
         setIsLoading(false);
@@ -239,7 +253,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
         </div>
         
         <div className="flex items-center gap-4">
-          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="design" syncStatus={syncStatus}  />
+          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="design" syncStatus={syncStatus} initialData={rawData} />
           <div className="hidden sm:flex items-center justify-end w-[200px] gap-3 text-xs font-semibold">
             {isLoading ? (
               <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">

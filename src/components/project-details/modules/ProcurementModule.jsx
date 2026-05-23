@@ -168,6 +168,14 @@ export default function ProcurementModule({ project, initialData, onProgressChan
     } catch (_) {}
     return mergeProcurementData([]);
   });
+  const [rawData, setRawData] = useState(() => {
+    if (Array.isArray(initialData)) return initialData;
+    try {
+      const cached = localStorage.getItem(`procurements_${project?.PROJECT_ID || project?.id}`);
+      if (cached) return JSON.parse(cached);
+    } catch (_) {}
+    return [];
+  });
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
@@ -176,6 +184,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
   useEffect(() => {
     if (Array.isArray(initialData)) {
       setItems(mergeProcurementData(initialData));
+      setRawData(initialData);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(initialData));
       setIsLoading(false);
       return;
@@ -186,6 +195,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
         const data = await api.getProcurements(project?.PROJECT_ID || project?.id);
         const fetchedData = Array.isArray(data) ? data : [];
         setItems(mergeProcurementData(fetchedData));
+        setRawData(fetchedData);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(fetchedData));
         setSyncError(false);
       } catch (error) {
@@ -193,7 +203,11 @@ export default function ProcurementModule({ project, initialData, onProgressChan
         setSyncError(true); setSyncStatus("error"); setTimeout(() => setSyncStatus(null), 3000);
         try {
           const cached = localStorage.getItem(STORAGE_KEY);
-          if (cached) setItems(mergeProcurementData(JSON.parse(cached)));
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            setItems(mergeProcurementData(parsed));
+            setRawData(parsed);
+          }
         } catch (_) {}
       } finally {
         setIsLoading(false);
@@ -326,7 +340,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
         </div>
         
         <div className="flex items-center gap-4">
-          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="procurement" syncStatus={syncStatus}  />
+          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="procurement" syncStatus={syncStatus} initialData={rawData} />
           <div className="hidden sm:flex items-center justify-end w-[200px] gap-3 text-xs font-semibold">
             {isLoading ? (
               <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">

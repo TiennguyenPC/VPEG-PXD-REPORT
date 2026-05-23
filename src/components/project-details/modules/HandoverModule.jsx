@@ -60,6 +60,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
   };
 
   const [handovers, setHandovers] = useState(() => mergeHandoverData(initialData));
+  const [rawData, setRawData] = useState(() => initialData || []);
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
@@ -68,6 +69,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
     if (initialData) {
       const merged = mergeHandoverData(initialData);
       setHandovers(merged);
+      setRawData(initialData);
       setIsLoading(false);
       
       const compCount = merged.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
@@ -81,6 +83,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
         const data = await api.getHandovers(project?.PROJECT_ID || project?.id);
         const merged = mergeHandoverData(data);
         setHandovers(merged);
+        setRawData(data);
         
         const compCount = merged.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
         const prog = merged.length > 0 ? Math.round((compCount / merged.length) * 100) : 0;
@@ -214,7 +217,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
         </div>
         
         <div className="flex items-center gap-4">
-          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="handover" syncStatus={syncStatus}  />
+          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="handover" syncStatus={syncStatus} initialData={rawData} />
           <div className="hidden sm:flex items-center justify-end w-[200px] gap-3 text-xs font-semibold">
             {isLoading ? (
               <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">

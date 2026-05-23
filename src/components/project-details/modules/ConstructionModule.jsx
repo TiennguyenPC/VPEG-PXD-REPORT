@@ -112,6 +112,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   };
 
   const [groups, setGroups] = useState(() => mergeConstructionData(initialData));
+  const [rawData, setRawData] = useState(() => initialData || []);
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
@@ -119,6 +120,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   useEffect(() => {
     if (initialData) {
       setGroups(mergeConstructionData(initialData));
+      setRawData(initialData);
       setIsLoading(false);
       return;
     }
@@ -128,6 +130,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
         const data = await api.getConstructions(project?.PROJECT_ID || project?.id);
         if (data && data.length > 0) {
           setGroups(mergeConstructionData(data));
+          setRawData(data);
         }
       } catch (error) {
         console.error("Fetch construction error:", error);
@@ -222,7 +225,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
         </div>
 
         <div className="flex items-center gap-4">
-          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="construction" syncStatus={syncStatus} />
+          <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="construction" syncStatus={syncStatus} initialData={rawData} />
           <div className="hidden sm:flex items-center justify-end w-[200px] gap-3 text-xs font-semibold">
             {isLoading ? (
               <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">

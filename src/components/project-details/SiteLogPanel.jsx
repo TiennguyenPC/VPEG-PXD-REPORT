@@ -1007,8 +1007,8 @@ export default function SiteLogPanel({
                         <div>
                           <p className="text-[9px] text-slate-500">Chênh lệch</p>
                           {(() => {
-                            const actual = parseFloat(parsedNote.progressActual);
-                            const planned = parseFloat(parsedNote.progressPlanned);
+                            const actual = parseFloat(parsedNote.progressActual) || 0;
+                            const planned = parseFloat(parsedNote.progressPlanned) || 0;
                             const diff = Math.round(actual - planned);
                             const isNeg = diff < 0;
                             return (
@@ -1033,7 +1033,7 @@ export default function SiteLogPanel({
                       <div className="w-full bg-[#141d30] rounded-full h-1.5 mb-1.5 border border-[var(--border-main)]">
                         <div 
                           className="bg-emerald-500 h-1.5 rounded-full" 
-                          style={{ width: `${Math.min(100, Math.max(0, (parseFloat(parsedNote.progressActual) / parseFloat(parsedNote.progressPlanned)) * 100))}%` }}
+                          style={{ width: `${Math.min(100, Math.max(0, ((parseFloat(parsedNote.progressActual) || 0) / (parseFloat(parsedNote.progressPlanned) || 1)) * 100))}%` }}
                         />
                       </div>
                       <div className="flex justify-between text-[9px] text-slate-500">
