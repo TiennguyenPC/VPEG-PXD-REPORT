@@ -15,17 +15,18 @@ export default function ProjectHeader({ project, onBack }) {
   };
 
   return (
-    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#0b0f19] p-6 rounded-xl border border-[#182135] shadow-lg relative overflow-hidden group">
+    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-[#0b0f19] p-6 rounded-xl border border-[#182135] shadow-lg relative overflow-hidden group print:break-inside-avoid">
       {/* Background glow */}
-      <div className="absolute top-0 right-0 w-64 h-64 bg-[#5252ff]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-[#5252ff]/10 transition-all duration-500 pointer-events-none"></div>
+      <div className="absolute top-0 right-0 w-64 h-64 bg-[#5252ff]/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-[#5252ff]/10 transition-all duration-500 pointer-events-none print:hidden"></div>
       
       <div className="flex flex-col gap-3 relative z-10">
         <button 
           onClick={onBack}
-          className="flex items-center gap-1.5 text-xs text-[#6b7d9b] hover:text-[#5252ff] transition-colors w-fit"
+          className="flex items-center gap-1.5 text-xs text-[#6b7d9b] hover:text-[#5252ff] transition-colors w-fit print:pointer-events-none print:text-[#7373ff]"
         >
-          <ChevronLeft className="w-3.5 h-3.5" />
-          <span className="font-semibold uppercase tracking-wider">Quay lại tổng quan</span>
+          <ChevronLeft className="w-3.5 h-3.5 print:hidden" />
+          <span className="font-semibold uppercase tracking-wider print:hidden">Quay lại tổng quan</span>
+          <span className="font-bold uppercase tracking-widest hidden print:block text-sm">BÁO CÁO DỰ ÁN</span>
         </button>
         
         <div>
@@ -50,7 +51,7 @@ export default function ProjectHeader({ project, onBack }) {
       </div>
 
       <div className="flex flex-col items-end gap-4 relative z-10 w-full md:w-auto mt-4 md:mt-0">
-        <div className="flex items-center gap-2 w-full md:w-auto justify-end">
+        <div className="flex items-center gap-2 w-full md:w-auto justify-end print:hidden">
           <button 
             onClick={handleShare}
             className={`flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] px-4 py-2 rounded-lg text-xs font-semibold transition-all ${copied ? 'text-[#10b981] border-[#10b981]/50' : 'text-slate-200'}`}

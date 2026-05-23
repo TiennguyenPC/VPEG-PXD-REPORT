@@ -73,18 +73,18 @@ const addDaysToDateStr = (dateStr, days) => {
   if (!dateStr || dateStr === '-') return '-';
   const cleanDays = parseInt(days, 10);
   if (isNaN(cleanDays) || cleanDays <= 0) return dateStr;
-  
+
   const parts = dateStr.split('/');
   if (parts.length !== 3) return dateStr;
   const day = parseInt(parts[0], 10);
   const month = parseInt(parts[1], 10) - 1;
   const year = parseInt(parts[2], 10);
-  
+
   const date = new Date(year, month, day);
   if (isNaN(date.getTime())) return dateStr;
-  
+
   date.setDate(date.getDate() + cleanDays);
-  
+
   const d = String(date.getDate()).padStart(2, '0');
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const y = date.getFullYear();
@@ -94,7 +94,7 @@ const addDaysToDateStr = (dateStr, days) => {
 export default function ConstructionModule({ project, initialData, onProgressChange }) {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({ 'A': true, 'B': true, 'C': true, 'D': true });
-  
+
   const mergeConstructionData = (data) => {
     if (!data || data.length === 0) return initialGroups.map(g => ({
       ...g,
@@ -111,8 +111,8 @@ export default function ConstructionModule({ project, initialData, onProgressCha
       tasks: g.tasks.map(t => {
         const row = data.find(r => r.MÃ_CV === t.code || r.HẠNG_MỤC_CÔNG_VIỆC === t.item || r.id === t.id);
         if (row) {
-          return { 
-            ...t, 
+          return {
+            ...t,
             _rowIndex: row._rowIndex,
             NGÀY_BẮT_ĐẦU: row.NGÀY_BẮT_ĐẦU !== undefined ? row.NGÀY_BẮT_ĐẦU : t.start,
             SỐ_NGÀY: row.SỐ_NGÀY !== undefined ? row.SỐ_NGÀY : '',
@@ -178,7 +178,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   const handleUpdate = async (groupId, taskId, field, value) => {
     try {
       setIsUpdating(true); setSyncStatus("saving");
-      
+
       let updatedTask = null;
       const nextGroups = groups.map(g => {
         if (g.id !== groupId) return g;
@@ -236,7 +236,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
-      <button 
+      <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-4 bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors"
       >
@@ -246,7 +246,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
           </div>
           <h3 className="text-sm font-bold text-white uppercase tracking-wider">THI CÔNG HIỆN TRƯỜNG / LẮP ĐẶT DỰ ÁN</h3>
         </div>
-        
+
         <div className="flex items-center gap-4">
           <ModuleDateHeader projectId={project?.PROJECT_ID || project?.id} moduleKey="construction" syncStatus={syncStatus} />
           <div className="hidden sm:flex items-center justify-end w-[200px] gap-3 text-xs font-semibold">
@@ -275,14 +275,14 @@ export default function ConstructionModule({ project, initialData, onProgressCha
             transition={{ duration: 0.3 }}
           >
             <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)] space-y-4">
-              
+
               {groups.map(group => {
                 const groupProg = calculateGroupProgress(group.tasks);
                 const isGroupOpen = expandedGroups[group.id];
 
                 return (
                   <div key={group.id} className="border border-[var(--border-main)] rounded-lg overflow-hidden bg-[var(--bg-panel)]">
-                    <button 
+                    <button
                       onClick={() => toggleGroup(group.id)}
                       className="w-full flex items-center justify-between p-3 bg-[var(--bg-hover)] hover:bg-[#141c2f] transition-colors border-b border-[var(--border-main)]"
                     >
@@ -330,8 +330,8 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                     <td className="p-3 font-semibold text-[var(--text-muted)]">{task.code}</td>
                                     <td className="p-3 font-semibold text-slate-200">{task.item}</td>
                                     <td className="p-3">
-                                      <input 
-                                        type="text" 
+                                      <input
+                                        type="text"
                                         className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_BẮT_ĐẦU || ''}
                                         placeholder="-"
@@ -345,8 +345,8 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                       />
                                     </td>
                                     <td className="p-3">
-                                      <input 
-                                        type="text" 
+                                      <input
+                                        type="text"
                                         className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.SỐ_NGÀY || ''}
                                         placeholder="0"
@@ -361,8 +361,8 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                     </td>
                                     <td className="p-3 text-slate-400 font-semibold">{task.NGÀY_KẾT_THÚC || '-'}</td>
                                     <td className="p-3">
-                                      <input 
-                                        type="text" 
+                                      <input
+                                        type="text"
                                         className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${task.NGÀY_HT_THỰC_TẾ && task.NGÀY_HT_THỰC_TẾ !== '-' ? 'text-emerald-400' : 'text-slate-400'} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_HT_THỰC_TẾ || ''}
                                         placeholder="-"
@@ -377,7 +377,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                     </td>
                                     <td className="p-3 text-right pr-6">
                                       <div className="flex items-center justify-end gap-3">
-                                        <input 
+                                        <input
                                           type="text"
                                           className={`bg-transparent font-bold focus:outline-none w-12 text-right border-b border-transparent focus:border-[#5252ff] ${task.TIẾN_ĐỘ_THỰC_TẾ === 100 ? 'text-emerald-400' : 'text-slate-300'} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
                                           value={task.TIẾN_ĐỘ_THỰC_TẾ !== undefined ? `${task.TIẾN_ĐỘ_THỰC_TẾ}%` : '0%'}

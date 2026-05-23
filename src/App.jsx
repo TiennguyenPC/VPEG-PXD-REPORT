@@ -324,8 +324,35 @@ export default function App() {
 
   // Apply search, filters and sort
   const processedProjects = useMemo(() => {
-    let result = [...projects];
+    // 0. Sync with locally calculated dynamic progress from Project Detail pages
+    const enrichedProjects = projects.map(p => {
+      const pId = p.id || p.PROJECT_ID;
+      const localActual = localStorage.getItem(`actualProgress_${pId}`);
+      const localPlan = localStorage.getItem(`planProgress_${pId}`);
+      
+      let overrideActual = p.actualProgress;
+      let overrideDelay = p.delay;
+      let overridePlan = p.planProgress;
+      
+      if (localActual !== null) {
+        overrideActual = Number(localActual);
+      }
+      if (localPlan !== null) {
+        overridePlan = Number(localPlan);
+      }
+      if (localActual !== null && localPlan !== null) {
+        overrideDelay = Number(localActual) - Number(localPlan);
+      }
+      
+      return {
+        ...p,
+        actualProgress: overrideActual,
+        planProgress: overridePlan,
+        delay: overrideDelay
+      };
+    });
 
+    let result = [...enrichedProjects];
     // 1. Search filter
     if (searchTerm.trim() !== "") {
       const term = searchTerm.toLowerCase();

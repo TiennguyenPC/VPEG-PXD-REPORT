@@ -35,7 +35,7 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-export default function SCurveChart({ project, milestonesData = [] }) {
+export default function SCurveChart({ project, milestonesData = [], onPlanCalculated }) {
   const [chartData, setChartData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -143,6 +143,24 @@ export default function SCurveChart({ project, milestonesData = [] }) {
       const today = new Date();
       today.setHours(0,0,0,0);
 
+      // Calculate EXACT plan progress for TODAY
+      let todayPlanPercent = 0;
+      modules.forEach(m => {
+        if (today >= m.endDate) {
+          todayPlanPercent += m.weight * 100;
+        } else if (today > m.startDate) {
+          const duration = m.endDate.getTime() - m.startDate.getTime();
+          const elapsed = today.getTime() - m.startDate.getTime();
+          todayPlanPercent += (elapsed / duration) * m.weight * 100;
+        }
+      });
+      if (todayPlanPercent < 0) todayPlanPercent = 0;
+      if (todayPlanPercent > 100) todayPlanPercent = 100;
+      
+      if (typeof onPlanCalculated === 'function') {
+        onPlanCalculated(Math.round(todayPlanPercent));
+      }
+
       const totalTime = globalEnd.getTime() - globalStart.getTime();
       if (totalTime <= 0) return;
 
@@ -199,7 +217,7 @@ export default function SCurveChart({ project, milestonesData = [] }) {
   const latestActualPoint = [...chartData].reverse().find(p => p.actual !== null && p.actual !== undefined);
 
   return (
-    <div className="glass-panel p-6 rounded-xl shadow-lg border border-[var(--border-main)] h-[360px] flex flex-col">
+    <div className="glass-panel p-6 rounded-xl shadow-lg border border-[var(--border-main)] h-[360px] flex flex-col print:break-inside-avoid">
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           ĐƯỜNG ĐỒ THỊ TIẾN ĐỘ (S-CURVE)
@@ -272,6 +290,7 @@ export default function SCurveChart({ project, milestonesData = [] }) {
               strokeWidth={2}
               strokeDasharray="5 5" 
               dot={false}
+              isAnimationActive={false}
               activeDot={{ r: 4, fill: '#4d5e7a', stroke: 'var(--bg-panel)', strokeWidth: 2 }}
             />
             
@@ -283,6 +302,7 @@ export default function SCurveChart({ project, milestonesData = [] }) {
               strokeWidth={3}
               fillOpacity={1} 
               fill="url(#colorActual)" 
+              isAnimationActive={false}
               activeDot={{ r: 6, fill: '#10b981', stroke: 'var(--bg-panel)', strokeWidth: 2, className: 'animate-pulse' }}
             />
             

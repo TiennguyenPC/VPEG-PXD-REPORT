@@ -124,7 +124,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
       const rawData = nextItems.map(d => ({
         _rowIndex: d._rowIndex,
         PROJECT_ID: project?.PROJECT_ID || project?.id,
-        HẠNG_MỤC_BẢN_VẼ: d.HẠNG_MỤC_BẢN_VẼ,
+        HẠNG_MỤC: d.HẠNG_MỤC,
         TÌNH_TRẠNG: d.TÌNH_TRẠNG,
         PHÊ_DUYỆT: d.PHÊ_DUYỆT,
         BƯỚC_TIẾP_THEO: d.BƯỚC_TIẾP_THEO,
@@ -141,7 +141,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
           NGÀY_BẮT_ĐẦU_MODULE: JSON.parse(localStorage.getItem(`dates_design_${project?.PROJECT_ID || project?.id}`) || '{}').start || '',
           SỐ_NGÀY_MODULE: JSON.parse(localStorage.getItem(`dates_design_${project?.PROJECT_ID || project?.id}`) || '{}').days || '',
           TÊN_DỰ_ÁN: project?.name || project?.TÊN_DỰ_ÁN || '-',
-          HẠNG_MỤC_BẢN_VẼ: updatedItem.HẠNG_MỤC_BẢN_VẼ,
+          HẠNG_MỤC_BẢN_VẼ: updatedItem.HẠNG_MỤC,
           
           TÌNH_TRẠNG: updatedItem.TÌNH_TRẠNG,
           tinhtrang: updatedItem.TÌNH_TRẠNG,
@@ -292,7 +292,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
                       <tr key={d.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
                         <td className="p-3 font-semibold text-slate-200 flex items-center gap-2">
                           <Compass className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{d.HẠNG_MỤC_BẢN_VẼ}</span>
+                          <span>{d.HẠNG_MỤC}</span>
                         </td>
                         <td className="p-3">
                           <select 

@@ -22,7 +22,7 @@ export default function KPIOverview({ project }) {
   const codDays = parsedCodDate ? Math.ceil((parsedCodDate - today) / (1000 * 60 * 60 * 24)) : 0;
   
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 print:break-inside-avoid">
       {/* 1. Tiến độ kế hoạch */}
       <div className="glass-panel p-4 rounded-xl shadow-md border border-[var(--border-main)] hover:border-[#263554] transition-all relative overflow-hidden group">
         <div className="flex items-center gap-3">

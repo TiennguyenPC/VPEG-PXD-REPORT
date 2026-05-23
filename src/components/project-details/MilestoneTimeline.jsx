@@ -140,7 +140,7 @@ export default function MilestoneTimeline({ project, moduleProgress = {}, milest
   const percentWidth = `${(activeIndex / (milestones.length - 1)) * 100}%`;
   
   return (
-    <div className="glass-panel p-6 rounded-xl shadow-lg border border-[var(--border-main)]">
+    <div className="glass-panel p-6 rounded-xl shadow-lg border border-[var(--border-main)] print:break-inside-avoid">
       <div className="flex justify-between items-center mb-8">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           TRỤC MILESTONE KIỂM SOÁT TIẾN ĐỘ

@@ -80,6 +80,8 @@ export default function ProjectDetailPage() {
     construction: 0,
     handover: 0
   });
+  
+  const [dynamicPlanPercent, setDynamicPlanPercent] = useState(null);
 
   const handleModuleProgressChange = (moduleKey, percent) => {
     setModuleProgress(prev => {
@@ -255,11 +257,13 @@ export default function ProjectDetailPage() {
   // Use live module-calculated overall when modules have reported any progress
   const hasModuleData = Object.values(moduleProgress).some(v => v > 0);
   
-  const basePlan = project ? (
-    project.planProgress !== undefined && project.planProgress !== null 
-      ? Number(project.planProgress) 
-      : (latestActualPoint ? latestActualPoint.plan : 0)
-  ) : 0;
+  const basePlan = dynamicPlanPercent !== null 
+    ? dynamicPlanPercent 
+    : (project ? (
+        project.planProgress !== undefined && project.planProgress !== null 
+          ? Number(project.planProgress) 
+          : (latestActualPoint ? latestActualPoint.plan : 0)
+      ) : 0);
   
   const baseActual = hasModuleData 
     ? liveOverall 
@@ -276,6 +280,17 @@ export default function ProjectDetailPage() {
     planProgress: basePlan,
     delay: baseActual - basePlan
   } : null;
+
+  // Persist the calculated progress back to localStorage so the main Dashboard can read it
+  useEffect(() => {
+    if (project && (project.PROJECT_ID || project.id)) {
+      const pId = project.PROJECT_ID || project.id;
+      if (hasModuleData) {
+        localStorage.setItem(`actualProgress_${pId}`, baseActual);
+        localStorage.setItem(`planProgress_${pId}`, basePlan);
+      }
+    }
+  }, [baseActual, basePlan, project, hasModuleData]);
 
   // Compute active log
   let activeLog = null;
@@ -464,7 +479,7 @@ export default function ProjectDetailPage() {
         GHI_CHÚ_HIỆN_TRƯỜNG: toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || ''),
         WEEKLY_ASSESSMENT: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
         ĐÁNH_GIÁ_TUẦN: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
-        MONTHLY_REPORT: toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || ''),
+        MONTHLY_REPORT: toSave.MONTHLY_REPORT !== undefined ? toSave.MONTHLY_REPORT : '',
         STATUS: 'Saved',
         UPDATED_BY: 'NV - GIÁM SÁT',
         UPDATED_AT: new Date().toISOString(),
@@ -518,7 +533,7 @@ export default function ProjectDetailPage() {
     <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans">
 
       {/* LEFT SIDEBAR (Duplicated from App.jsx as requested) */}
-      <aside className="w-64 border-r border-[var(--border-main)] bg-[#070b14] flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-y-auto hidden md:flex">
+      <aside className="w-64 border-r border-[var(--border-main)] bg-[#070b14] flex flex-col justify-between shrink-0 h-screen sticky top-0 overflow-y-auto hidden md:flex print:hidden">
         <div>
           {/* Logo Brand */}
           <div className="p-6 flex items-center gap-3 border-b border-[var(--border-main)]/40 cursor-pointer" onClick={() => navigate('/')}>
@@ -567,8 +582,8 @@ export default function ProjectDetailPage() {
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
-        <div className="max-w-7xl mx-auto w-full p-6 space-y-6">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto print:overflow-visible">
+        <div className="max-w-7xl mx-auto w-full p-6 print:p-0 print:max-w-none space-y-6">
 
           {/* SECTION 1 - HEADER */}
           <ProjectHeader project={enrichedProject} milestones={bundleData?.milestones || []} onBack={() => navigate('/')} />
@@ -580,11 +595,11 @@ export default function ProjectDetailPage() {
           <MilestoneTimeline project={enrichedProject} moduleProgress={moduleProgress} milestonesData={bundleData?.milestones || []} />
 
           {/* SECTION 4 - S-CURVE CHART (FULL WIDTH) */}
-          <SCurveChart project={enrichedProject} milestonesData={bundleData?.milestones || []} />
+          <SCurveChart project={enrichedProject} milestonesData={bundleData?.milestones || []} onPlanCalculated={setDynamicPlanPercent} />
 
           {/* SECTION 5 - SITE LOGS & OPERATIONS */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className={selectedView === 'day' ? 'lg:col-span-3' : 'lg:col-span-2'}>
+          <div className="grid grid-cols-1 lg:grid-cols-3 print:grid-cols-3 gap-6">
+            <div className={selectedView === 'day' ? 'lg:col-span-3 print:col-span-3' : 'lg:col-span-2 print:col-span-2'}>
               <SiteLogPanel
                 project={enrichedProject}
                 logs={logs}
@@ -604,7 +619,7 @@ export default function ProjectDetailPage() {
               />
             </div>
             {selectedView !== 'day' && (
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 print:col-span-1">
                 <WeeklyKPI
                   project={enrichedProject}
                   logs={logs}

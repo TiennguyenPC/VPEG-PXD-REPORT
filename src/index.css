@@ -97,3 +97,33 @@
 .animate-soft-pulse {
   animation: soft-pulse 2s infinite ease-in-out;
 }
+
+/* Print optimization to avoid splitting charts across pages */
+@media print {
+  body {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  tr, img, svg, canvas, .chart-container {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  
+  h1, h2, h3, button, .break-after-avoid {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+  
+  /* Fix Recharts SVG bleeding outside containers during print */
+  .recharts-wrapper, .recharts-surface {
+    overflow: hidden !important;
+    clip-path: inset(0);
+  }
+  
+  @page {
+    margin: 10mm; /* Small margin to look clean, often hides default headers */
+    size: A4 landscape;
+  }
+}
+

@@ -1,6 +1,6 @@
 import React, { useRef, useEffect } from 'react';
 import { Users, HardHat, CloudRain, ShieldAlert, Sun, Cloud, CloudLightning, Activity, AlertTriangle } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const parseDateStr = (dateStr) => {
   if (!dateStr) return null;
@@ -361,7 +361,7 @@ export default function WeeklyKPI({
         </p>
         <div className="h-[120px] w-full mt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartPoints} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+            <BarChart data={chartPoints} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border-main)" vertical={false} />
               <XAxis dataKey="name" stroke="#4d5e7a" tick={{ fill: 'var(--text-muted)', fontSize: 8 }} />
               <YAxis stroke="#4d5e7a" tick={{ fill: 'var(--text-muted)', fontSize: 8 }} />
@@ -369,9 +369,10 @@ export default function WeeklyKPI({
                 contentStyle={{ backgroundColor: 'var(--bg-panel)', borderColor: 'var(--border-main)', borderRadius: '6px' }}
                 labelStyle={{ fontSize: '10px', color: 'var(--text-muted)', fontWeight: 'bold' }}
                 itemStyle={{ fontSize: '10px', color: '#fff' }}
+                cursor={{ fill: 'rgba(82, 82, 255, 0.1)' }}
               />
-              <Line type="monotone" dataKey="manpower" name="Tổng nhân sự" stroke="#5252ff" strokeWidth={2} dot={{ r: 3, fill: '#5252ff' }} />
-            </LineChart>
+              <Bar dataKey="manpower" name="Tổng nhân sự" fill="#5252ff" radius={[4, 4, 0, 0]} barSize={20} isAnimationActive={false} />
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
