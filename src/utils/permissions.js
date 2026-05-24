@@ -80,6 +80,15 @@ export function isAdmin(user) {
   return String(user?.role || '').toLowerCase() === 'admin';
 }
 
+/** Chỉ admin chủ (tien.nguyen) được bật/copy link chia sẻ khách */
+const PROJECT_SHARE_ADMIN_USERNAMES = ['tien.nguyen'];
+
+export function canShareProjectWithClient(user) {
+  if (!isAdmin(user)) return false;
+  const username = String(user?.username || '').trim().toLowerCase();
+  return PROJECT_SHARE_ADMIN_USERNAMES.includes(username);
+}
+
 export function isProjectEditorRole(role) {
   return PROJECT_EDITOR_ROLES.includes(String(role || '').toLowerCase());
 }

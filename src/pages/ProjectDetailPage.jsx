@@ -23,7 +23,7 @@ import { api } from "../services/api";
 import { updateDashboardContext } from "../utils/dashboardContext";
 import { syncProgressToProjectsCache } from "../utils/projectProgress";
 import { useAuth } from "../context/AuthContext";
-import { canEditProject, isAdmin } from "../utils/permissions";
+import { canEditProject, canShareProjectWithClient } from "../utils/permissions";
 import { ProjectEditProvider } from "../context/ProjectEditContext";
 import {
   parseFlexibleDate as parseDateStr,
@@ -649,7 +649,7 @@ export default function ProjectDetailPage() {
             onBack={() => navigate('/')} 
             onToggleSidebar={toggleSidebar}
             isSidebarCollapsed={isCollapsed}
-            shareMode={isAdmin(user) ? 'public' : 'internal'}
+            shareMode={canShareProjectWithClient(user) ? 'public' : 'internal'}
           />
 
           <ProjectSectionNav />

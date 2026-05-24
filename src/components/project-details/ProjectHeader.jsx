@@ -46,9 +46,6 @@ export default function ProjectHeader({ project, onBack, onToggleSidebar, isSide
       }
       return;
     }
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDisableShare = async () => {
@@ -67,11 +64,10 @@ export default function ProjectHeader({ project, onBack, onToggleSidebar, isSide
   const shareButtonLabel = () => {
     if (sharing) return 'Đang xử lý...';
     if (copied) return 'Đã copy link!';
-    if (shareMode === 'public') {
-      return shareStatus?.enabled ? 'Copy link khách' : 'Bật & copy link';
-    }
-    return 'Chia sẻ';
+    return shareStatus?.enabled ? 'Copy link khách' : 'Bật & copy link';
   };
+
+  const showClientShare = shareMode === 'public';
 
   const handleExport = () => {
     window.print();
@@ -122,7 +118,7 @@ export default function ProjectHeader({ project, onBack, onToggleSidebar, isSide
 
       <div className="flex flex-col items-end gap-4 relative z-10 w-full md:w-auto mt-4 md:mt-0">
         <div className="flex items-center gap-2 w-full md:w-auto justify-end print:hidden">
-          {shareMode === 'public' && shareStatus !== null && (
+          {showClientShare && shareStatus !== null && (
             <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border ${
               shareStatus.enabled
                 ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
@@ -131,26 +127,30 @@ export default function ProjectHeader({ project, onBack, onToggleSidebar, isSide
               {shareStatus.enabled ? 'Link khách: đang bật' : 'Link khách: đã tắt'}
             </span>
           )}
-          <button 
-            type="button"
-            onClick={handleShare}
-            disabled={sharing}
-            className={`flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-60 ${copied ? 'text-[#10b981] border-[#10b981]/50' : 'text-slate-200'}`}
-          >
-            <Share2 className={`w-3.5 h-3.5 ${copied ? 'text-[#10b981]' : 'text-[#7373ff]'}`} />
-            {shareButtonLabel()}
-          </button>
-          {shareMode === 'public' && shareStatus?.enabled && (
-            <button
-              type="button"
-              onClick={handleDisableShare}
-              disabled={sharing}
-              className="flex items-center gap-2 bg-[#141c2f] hover:bg-red-950/40 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-60"
-              title="Tắt link chia sẻ công khai"
-            >
-              <Link2Off className="w-3.5 h-3.5" />
-              Tắt link
-            </button>
+          {showClientShare && (
+            <>
+              <button 
+                type="button"
+                onClick={handleShare}
+                disabled={sharing}
+                className={`flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-60 ${copied ? 'text-[#10b981] border-[#10b981]/50' : 'text-slate-200'}`}
+              >
+                <Share2 className={`w-3.5 h-3.5 ${copied ? 'text-[#10b981]' : 'text-[#7373ff]'}`} />
+                {shareButtonLabel()}
+              </button>
+              {shareStatus?.enabled && (
+                <button
+                  type="button"
+                  onClick={handleDisableShare}
+                  disabled={sharing}
+                  className="flex items-center gap-2 bg-[#141c2f] hover:bg-red-950/40 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-60"
+                  title="Tắt link chia sẻ công khai"
+                >
+                  <Link2Off className="w-3.5 h-3.5" />
+                  Tắt link
+                </button>
+              )}
+            </>
           )}
           <button 
             onClick={handleExport}
