@@ -227,7 +227,7 @@ function doGet(e) {
         break;
       }
       case 'project-share-status': {
-        var shareStatusAdmin = requireAdminSession_(null, e);
+        var shareStatusAdmin = requireProjectShareAdminSession_(null, e);
         if (shareStatusAdmin.error) {
           return createResponse({ status: 'error', message: shareStatusAdmin.error }, shareStatusAdmin.code || 403);
         }
@@ -2330,6 +2330,19 @@ function requireAdminSession_(payload, e) {
   return { session: session };
 }
 
+/** Chỉ admin chủ (tien.nguyen) được bật/tắt link chia sẻ khách */
+var PROJECT_SHARE_ADMIN_USERNAMES_ = ['tien.nguyen'];
+
+function requireProjectShareAdminSession_(payload, e) {
+  var adminCheck = requireAdminSession_(payload, e);
+  if (adminCheck.error) return adminCheck;
+  var username = String(adminCheck.session.username || '').trim().toLowerCase();
+  if (PROJECT_SHARE_ADMIN_USERNAMES_.indexOf(username) === -1) {
+    return { error: 'Chỉ quản trị viên chủ sở hữu mới có quyền chia sẻ link khách', code: 403 };
+  }
+  return adminCheck;
+}
+
 function validateVuphongEmail_(email) {
   var normalized = String(email || '').trim().toLowerCase();
   var domain = '@vuphong.com';
@@ -3414,7 +3427,7 @@ function setProjectShareEnabled_(ss, projectId, enabled, token) {
 }
 
 function handleEnableProjectShare_(payload) {
-  var adminCheck = requireAdminSession_(payload, null);
+  var adminCheck = requireProjectShareAdminSession_(payload, null);
   if (adminCheck.error) {
     return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
   }
@@ -3434,7 +3447,7 @@ function handleEnableProjectShare_(payload) {
 }
 
 function handleDisableProjectShare_(payload) {
-  var adminCheck = requireAdminSession_(payload, null);
+  var adminCheck = requireProjectShareAdminSession_(payload, null);
   if (adminCheck.error) {
     return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
   }
