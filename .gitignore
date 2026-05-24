@@ -28,3 +28,5 @@ dist-ssr
 
 # Backend backup / không deploy
 backend/_v67/
+
+.vercel
