@@ -69,6 +69,26 @@ const photoToPersistUrl = (item) => {
   if (!raw || raw.startsWith('blob:')) return null;
   return raw;
 };
+
+const photosFromLogs = (logsList) => {
+  const out = {};
+  for (const log of logsList || []) {
+    const dateKey = log.LOG_DATE || log.NGÀY;
+    if (!dateKey) continue;
+    const parsedNote = parseDailyNote(log.DAILY_NOTE || log.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+    const imageUrls = parsedNote.images
+      ? parsedNote.images.split('\n').map((l) => l.trim()).filter(Boolean)
+      : [];
+    if (!imageUrls.length) continue;
+    out[dateKey] = imageUrls.map((url) => ({
+      id: url,
+      preview: toDisplayableImageUrl(url),
+      remote: url,
+      status: 'ready',
+    }));
+  }
+  return out;
+};
 const getWeekNumber = (d) => {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dayNum = date.getUTCDay() || 7;
@@ -249,10 +269,7 @@ export default function SiteLogPanel({
   const projectId = project?.PROJECT_ID || project?.id;
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(null);
-  const [photosByDate, setPhotosByDate] = useState(() => {
-    if (!projectId) return {};
-    return readSitePhotosByProject(projectId);
-  });
+  const [photosByDate, setPhotosByDate] = useState({});
   const [liveWeather, setLiveWeather] = useState(null);
   const [uploadError, setUploadError] = useState('');
   const [needsDriveAuth, setNeedsDriveAuth] = useState(false);
@@ -302,6 +319,25 @@ export default function SiteLogPanel({
     if (!projectId) return;
     writeAllSitePhotos(projectId, photosByDate);
   }, [photosByDate, projectId]);
+
+  useEffect(() => {
+    if (!logs?.length) return;
+    const fromServer = photosFromLogs(logs);
+    setPhotosByDate((prev) => {
+      const next = { ...fromServer };
+      for (const [date, list] of Object.entries(prev)) {
+        const hasPending = list.some((p) => {
+          const item = normalizePhotoItem(p);
+          return item.status === 'uploading' || item.preview?.startsWith('blob:');
+        });
+        if (hasPending) {
+          next[date] = mergePhotoLists(fromServer[date] || [], list);
+        }
+      }
+      if (JSON.stringify(next) === JSON.stringify(prev)) return prev;
+      return next;
+    });
+  }, [logs]);
 
   // Load images from DB when date changes — không ghi đè ảnh đang upload / preview local
   useEffect(() => {
@@ -1258,7 +1294,7 @@ export default function SiteLogPanel({
                     return (
                       <SitePhoto
                         key={item.id || i}
-                        src={item.preview || item.remote}
+                        src={item.remote || item.preview}
                         status={item.status}
                         onRemove={canEdit ? () => removeImage(i) : undefined}
                       />

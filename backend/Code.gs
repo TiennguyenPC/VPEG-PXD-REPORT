@@ -122,6 +122,8 @@ function doGet(e) {
         var commitUrl = commitSiteImageUpload_(commitSid);
         data = { url: commitUrl };
         break;
+      case 'serve-site-image':
+        return serveSiteImage_(e.parameter.id);
       case 'test-drive':
         var readFolder = getSiteImageUploadFolder_();
         var writeFolder = getWritableSiteImageFolder_();
@@ -1743,6 +1745,24 @@ var SITE_IMAGE_CHUNK_TTL = 600;
 
 function buildDriveImageViewUrl_(fileId) {
   return 'https://drive.google.com/uc?export=view&id=' + fileId;
+}
+
+function serveSiteImage_(fileId) {
+  var id = String(fileId || '').trim();
+  if (!id) {
+    return createResponse({ status: 'error', message: 'Thiếu id ảnh' }, 400);
+  }
+  try {
+    var file = DriveApp.getFileById(id);
+    var blob = file.getBlob();
+    var mime = blob.getContentType() || 'image/jpeg';
+    if (mime.indexOf('image/') !== 0) {
+      return createResponse({ status: 'error', message: 'File không phải ảnh' }, 400);
+    }
+    return ContentService.createBlobOutput(blob).setMimeType(mime);
+  } catch (err) {
+    return createResponse({ status: 'error', message: 'Không đọc được ảnh: ' + err }, 404);
+  }
 }
 
 function storeSiteImageChunk_(payload) {

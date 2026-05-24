@@ -15,14 +15,22 @@ export function extractDriveFileId(url) {
   return null;
 }
 
-/** URL hiển thị được trong thẻ img (Drive thumbnail / lh3) */
+/** Proxy ảnh Drive qua GAS — tránh bị chặn hotlink trên Vercel/production */
+export function buildGasImageProxyUrl(fileId) {
+  if (!fileId) return '';
+  const base = import.meta.env.VITE_GAS_URL
+    || 'https://script.google.com/macros/s/AKfycbz2YizKLfy0pjrjEtJM6N4CKDUnxzXmwsF0WsNHfmpeCT0U56QwCUpgIb30XvtRb3lw/exec';
+  return `${base}?action=serve-site-image&id=${encodeURIComponent(fileId)}`;
+}
+
+/** URL hiển thị được trong thẻ img (Drive thumbnail / lh3 / GAS proxy) */
 export function toDisplayableImageUrl(url, size = 1920) {
   if (!url) return url;
   if (url.startsWith('blob:') || url.startsWith('data:')) return url;
 
   const fileId = extractDriveFileId(url);
   if (fileId) {
-    return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${size}`;
+    return buildGasImageProxyUrl(fileId);
   }
   return url;
 }
@@ -36,6 +44,7 @@ export function getImageFallbackUrls(url) {
   if (!fileId) return [url];
 
   return [
+    buildGasImageProxyUrl(fileId),
     `https://drive.google.com/thumbnail?id=${fileId}&sz=w1920`,
     `https://lh3.googleusercontent.com/d/${fileId}=w1920-h1080`,
     `https://drive.google.com/uc?export=view&id=${fileId}`,
