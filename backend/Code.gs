@@ -39,7 +39,6 @@ function doGet(e) {
         
         const actualProjectId = matchedProject ? (matchedProject.PROJECT_ID || matchedProject.id) : reqProjectId;
         
-        initializeProjectDetails(ss, actualProjectId);
         const siteLogs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => (row.PROJECT_ID == actualProjectId || row.projectId == actualProjectId));
         data = {
           project: matchedProject || null,
@@ -56,8 +55,14 @@ function doGet(e) {
           milestones: getSheetDataAsObjects(ss, 'PROJECT_MILESTONE').filter(row => (row.PROJECT_ID == actualProjectId || row.projectId == actualProjectId))
         };
         break;
+      case 'ai-context':
+        data = getAllSheetDataForAI(ss);
+        break;
       case 'projects':
         data = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
+        break;
+      case 'tasks':
+        data = getSheetDataAsObjects(ss, 'PROJECT_TASKS');
         break;
       case 'employees':
         data = getSheetDataAsObjects(ss, 'EMPLOYEE');
@@ -68,6 +73,16 @@ function doGet(e) {
         break;
       case 'risk':
         data = getSheetDataAsObjects(ss, 'PROJECT_RISK').filter(row => (row.PROJECT_ID == id || row.projectId == id));
+        break;
+      case 'risks':
+        data = getSheetDataAsObjects(ss, 'PROJECT_RISK');
+        break;
+      case 'overview':
+        data = {
+          projects: getSheetDataAsObjects(ss, 'PROJECT_MASTER'),
+          tasks: getSheetDataAsObjects(ss, 'PROJECT_TASKS'),
+          risks: getSheetDataAsObjects(ss, 'PROJECT_RISK')
+        };
         break;
       case 'permit':
         data = getSheetDataAsObjects(ss, 'PROJECT_PERMIT').filter(row => (row.PROJECT_ID == id || row.projectId == id));
@@ -99,8 +114,131 @@ function doGet(e) {
       case 'scurve':
         data = getSheetDataAsObjects(ss, 'PROJECT_S_CURVE').filter(row => (row.PROJECT_ID == id || row.projectId == id));
         break;
+      case 'upload-image-commit':
+        var commitSid = e.parameter.sessionId;
+        if (!commitSid) {
+          return createResponse({ status: 'error', message: 'Thiếu sessionId' }, 400);
+        }
+        var commitUrl = commitSiteImageUpload_(commitSid);
+        data = { url: commitUrl };
+        break;
+      case 'test-drive':
+        var readFolder = getSiteImageUploadFolder_();
+        var writeFolder = getWritableSiteImageFolder_();
+        var probe = writeFolder.createFile(Utilities.newBlob('ok', 'text/plain', 'drive-probe.txt'));
+        probe.setTrashed(true);
+        data = {
+          ok: true,
+          readFolder: readFolder.getName(),
+          readFolderId: readFolder.getId(),
+          writeFolder: writeFolder.getName(),
+          writeFolderId: writeFolder.getId(),
+          message: 'Drive ghi OK. Quay lại dashboard và thử upload ảnh lại.'
+        };
+        break;
+      case 'auth-me':
+        var authToken = e.parameter.token || '';
+        var authSession = getAuthSession_(authToken);
+        if (!authSession) {
+          return createResponse({ status: 'error', message: 'Phiên đănh nhập hết hạn hoặc không hợp lệ' }, 401);
+        }
+        data = authSession;
+        break;
+      case 'script-meta':
+        data = {
+          scriptId: ScriptApp.getScriptId(),
+          spreadsheetId: SPREADSHEET_ID,
+          timezone: Session.getScriptTimeZone()
+        };
+        break;
+      case 'users': {
+        var adminCheck = requireAdminSession_(null, e);
+        if (adminCheck.error) {
+          return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+        }
+        data = listUsersForAdmin_(ss);
+        break;
+      }
+      case 'audit-logs': {
+        var auditAdminCheck = requireAdminSession_(null, e);
+        if (auditAdminCheck.error) {
+          return createResponse({ status: 'error', message: auditAdminCheck.error }, auditAdminCheck.code || 403);
+        }
+        var logLimit = parseInt(e.parameter.limit || '150', 10);
+        var logOffset = parseInt(e.parameter.offset || '0', 10);
+        data = listAuditLogs_(ss, logLimit, logOffset, e.parameter.userId, e.parameter.actionFilter);
+        break;
+      }
+      case 'notifications': {
+        var notifToken = e.parameter.token || '';
+        var notifSession = getAuthSession_(notifToken);
+        if (!notifSession) {
+          return createResponse({ status: 'error', message: 'Vui lòng đăng nhập' }, 401);
+        }
+        var notifLimit = parseInt(e.parameter.limit || '50', 10);
+        data = listNotificationsForUser_(ss, notifSession.userId, notifLimit);
+        break;
+      }
+      case 'run-daily-notifications': {
+        var dailyAdmin = requireAdminSession_(null, e);
+        if (dailyAdmin.error) {
+          return createResponse({ status: 'error', message: dailyAdmin.error }, dailyAdmin.code || 403);
+        }
+        data = runDailyNotificationChecks_();
+        break;
+      }
+      case 'setup-notifications-trigger': {
+        var triggerAdmin = requireAdminSession_(null, e);
+        if (triggerAdmin.error) {
+          return createResponse({ status: 'error', message: triggerAdmin.error }, triggerAdmin.code || 403);
+        }
+        data = installDailyNotificationTrigger_();
+        break;
+      }
+      case 'notification-email-config': {
+        var emailCfgAdmin = requireAdminSession_(null, e);
+        if (emailCfgAdmin.error) {
+          return createResponse({ status: 'error', message: emailCfgAdmin.error }, emailCfgAdmin.code || 403);
+        }
+        data = getNotificationEmailConfig_();
+        break;
+      }
+      case 'authorize-mail-app': {
+        var mailAuthAdmin = requireAdminSession_(null, e);
+        if (mailAuthAdmin.error) {
+          return createResponse({ status: 'error', message: mailAuthAdmin.error }, mailAuthAdmin.code || 403);
+        }
+        try {
+          data = authorizeMailApp_();
+        } catch (mailErr) {
+          return createResponse({
+            status: 'error',
+            message: (mailErr && mailErr.message) || String(mailErr)
+          }, 500);
+        }
+        break;
+      }
+      case 'share-public': {
+        var shareToken = String(e.parameter.token || '').trim();
+        data = getPublicShareData_(ss, shareToken);
+        if (!data) {
+          return createResponse({ status: 'error', message: 'Link chia sẻ không hợp lệ hoặc đã tắt' }, 404);
+        }
+        break;
+      }
+      case 'project-share-status': {
+        var shareStatusAdmin = requireAdminSession_(null, e);
+        if (shareStatusAdmin.error) {
+          return createResponse({ status: 'error', message: shareStatusAdmin.error }, shareStatusAdmin.code || 403);
+        }
+        data = getProjectShareStatus_(ss, e.parameter.projectId);
+        break;
+      }
       default:
-        return createResponse({ error: 'Invalid API endpoint' }, 400);
+        return createResponse({
+          error: 'Invalid API endpoint',
+          hint: 'Thêm ?action=... vào URL. Ví dụ: ?action=projects hoặc ?action=test-drive'
+        }, 400);
     }
     
     return createResponse({ status: 'success', data: data });
@@ -116,6 +254,54 @@ function doPost(e) {
     // Note: When calling from frontend, set Content-Type to text/plain to avoid CORS preflight OPTIONS request
     const payload = JSON.parse(e.postData.getDataAsString("UTF-8"));
     const ss = getSpreadsheet();
+
+    if (action === 'login') {
+      return handleAuthLogin_(payload);
+    }
+    if (action === 'logout') {
+      return handleAuthLogout_(payload);
+    }
+    if (action === 'add-user') {
+      return handleAddUser_(payload);
+    }
+    if (action === 'update-user') {
+      return handleUpdateUser_(payload);
+    }
+    if (action === 'deactivate-user') {
+      return handleDeactivateUser_(payload);
+    }
+    if (action === 'change-password') {
+      return handleChangePassword_(payload);
+    }
+    if (action === 'mark-notification-read') {
+      return handleMarkNotificationRead_(payload);
+    }
+    if (action === 'mark-all-notifications-read') {
+      return handleMarkAllNotificationsRead_(payload);
+    }
+    if (action === 'enable-project-share') {
+      return handleEnableProjectShare_(payload);
+    }
+    if (action === 'disable-project-share') {
+      return handleDisableProjectShare_(payload);
+    }
+    if (action === 'update-notification-email-config') {
+      return handleUpdateNotificationEmailConfig_(payload);
+    }
+    if (action === 'send-test-notification-email') {
+      return handleSendTestNotificationEmail_(payload);
+    }
+
+    if (isProtectedMutation_(action)) {
+      var authReq = requireAuthForMutation_(payload);
+      if (authReq.error) {
+        return createResponse({ status: 'error', message: authReq.error }, authReq.code || 401);
+      }
+      var permErr = checkMutationPermission_(action, payload, authReq.session);
+      if (permErr) {
+        return createResponse({ status: 'error', message: permErr }, 403);
+      }
+    }
     
     let sheetName = '';
     
@@ -162,6 +348,25 @@ function doPost(e) {
       case 'add-procurement':
         sheetName = 'PROJECT_PROCUREMENT';
         break;
+      case 'update-task':
+        sheetName = 'PROJECT_TASKS';
+        break;
+      case 'add-task':
+        sheetName = 'PROJECT_TASKS';
+        break;
+      case 'delete-task':
+        sheetName = 'PROJECT_TASKS';
+        break;
+      case 'delete-project':
+        sheetName = 'PROJECT_MASTER';
+        break;
+      case 'upload-site-image':
+        const uploadedUrl = uploadSiteImageToDrive_(payload);
+        auditMutation_('upload-site-image', payload);
+        return createResponse({ status: 'success', data: { url: uploadedUrl } });
+      case 'upload-image-chunk':
+        storeSiteImageChunk_(payload);
+        return createResponse({ status: 'success', data: { ok: true } });
       default:
         return createResponse({ error: 'Invalid API endpoint for POST' }, 400);
     }
@@ -175,6 +380,35 @@ function doPost(e) {
             initializeProjectDetails(ss, projectId, payload.KICKOFF_DATE, payload.KẾ_HOẠCH_COD);
           }
         }
+        if (action === 'add-task') {
+          notifyTaskAssigned_(ss, payload, getActorFromPayload_(payload), { reassigned: false });
+        }
+      } else if (action.startsWith('delete-')) {
+        if (action === 'delete-task') {
+          const deleted = deleteTaskRow(ss, payload);
+          if (!deleted) {
+            return createResponse({ status: 'error', message: 'Không tìm thấy tác vụ để xóa' }, 404);
+          }
+        } else if (payload._rowIndex) {
+          deleteRowById(ss, sheetName, payload._rowIndex);
+        } else {
+          deleteProjectRow(ss, sheetName, payload.PROJECT_ID || payload.id);
+        }
+      } else if (action === 'update-task') {
+        var oldTaskAssignee = getTaskAssigneeBeforeUpdate_(ss, payload);
+        updateTaskRow(ss, payload);
+        var newTaskAssignee = String(payload.NHÂN_SỰ || '').trim();
+        if (newTaskAssignee && !namesMatch_(oldTaskAssignee, newTaskAssignee)) {
+          notifyTaskAssigned_(ss, payload, getActorFromPayload_(payload), { reassigned: !!oldTaskAssignee });
+        }
+      } else if (action === 'update-project') {
+        var pidForStatus = payload.PROJECT_ID || payload.id;
+        var oldProjectStatus = getProjectFieldBeforeUpdate_(ss, pidForStatus, 'TRẠNG_THÁI');
+        updateRowById(ss, sheetName, pidForStatus, payload);
+        var newProjectStatus = payload.TRẠNG_THÁI != null ? payload.TRẠNG_THÁI : oldProjectStatus;
+        if (isProjectCompleted_(newProjectStatus) && !isProjectCompleted_(oldProjectStatus)) {
+          notifyProjectCompleted_(ss, pidForStatus, getActorFromPayload_(payload));
+        }
       } else {
         // Fallback to payload.id if payload.PROJECT_ID is not provided (for older modules)
         updateRowById(ss, sheetName, payload.PROJECT_ID || payload.id, payload);
@@ -185,8 +419,18 @@ function doPost(e) {
         recalculateProjectProgress(ss, projectId);
       }
       
+      if (action === 'add-task' || action === 'update-task' || action === 'delete-task') {
+        auditMutation_(action, payload);
+        return createResponse({
+          status: 'success',
+          message: 'Data saved successfully',
+          data: getSheetDataAsObjects(ss, 'PROJECT_TASKS')
+        });
+      }
+      
       if (action !== 'update-site-log' && action !== 'update-module-dates') {
         if (projectId) {
+          auditMutation_(action, payload);
           const updatedList = getSheetDataAsObjects(ss, sheetName).filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId));
           return createResponse({
             status: 'success',
@@ -199,6 +443,7 @@ function doPost(e) {
     
     if (action === 'update-site-log') {
       const projectId = payload.PROJECT_ID || payload.id;
+      auditMutation_(action, payload);
       const dailyLogs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId));
       return createResponse({
         status: 'success',
@@ -227,9 +472,11 @@ function doPost(e) {
           }
         }
       }
+      auditMutation_(action, payload);
       return createResponse({ status: 'success', message: 'Dates updated across all rows' });
     }
     
+    auditMutation_(action, payload);
     return createResponse({ status: 'success', message: 'Data updated successfully' });
   } catch (error) {
     return createResponse({ status: 'error', message: error.toString() }, 500);
@@ -391,9 +638,23 @@ function getSheetDataAsObjects(ss, sheetName) {
   return objects;
 }
 
+function getAllSheetDataForAI(ss) {
+  const result = {};
+  const sheets = ss.getSheets();
+
+  sheets.forEach(function(sheet) {
+    const sheetName = sheet.getName();
+    result[sheetName] = getSheetDataAsObjects(ss, sheetName);
+  });
+
+  return result;
+}
+
 function updateRowById(ss, sheetName, recordId, updatedData) {
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) throw new Error("Sheet not found: " + sheetName);
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  }
   
   const data = sheet.getDataRange().getValues();
   if (data.length <= 1) {
@@ -417,6 +678,7 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     
     // Secondary key columns for sheets with multiple rows per project
     const SECONDARY_KEYS = {
+      'PROJECT_TASKS':      'TÁC_VỤ',
       'PROJECT_PERMIT':       'HẠNG_MỤC',
       'PROJECT_DESIGN':       'HẠNG_MỤC_BẢN_VẼ',
       'PROJECT_PROCUREMENT':  'HẠNG_MỤC_MUA_HÀNG',
@@ -516,6 +778,168 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
       sheet.getRange(targetRowIndex, colIndex + 1).setValue(val);
     }
   }
+}
+
+function deleteRowById(ss, sheetName, rowIndex) {
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return;
+  // rowIndex is 1-based index (e.g., header is 1).
+  if (rowIndex > 1 && rowIndex <= sheet.getLastRow()) {
+    sheet.deleteRow(rowIndex);
+  }
+}
+
+function normalizeCellValue(val) {
+  if (val instanceof Date) {
+    const d = String(val.getDate()).padStart(2, '0');
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const y = val.getFullYear();
+    return d + '/' + m + '/' + y;
+  }
+  return String(val || '').trim().replace(/^'/, '');
+}
+
+function getTaskSheetContext_(sheet) {
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return null;
+  const headers = data[0];
+  return {
+    data: data,
+    headers: headers,
+    pidCol: findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']),
+    taskCol: findColumnIndex(headers, ['TÁC_VỤ', 'TASK', 'TAC_VU']),
+    startCol: findColumnIndex(headers, ['NGÀY_BẮT_ĐẦU', 'START_DATE']),
+    endCol: findColumnIndex(headers, ['NGÀY_KẾT_THÚC', 'END_DATE', 'DUE_DATE']),
+    assigneeCol: findColumnIndex(headers, ['NHÂN_SỰ', 'ASSIGNEE'])
+  };
+}
+
+function taskRowMatches_(ctx, i, payload) {
+  const matchTask = normalizeCellValue(payload._matchTask || payload.TÁC_VỤ || payload.task || '');
+  const matchPid = normalizeCellValue(payload._matchProjectId || payload.PROJECT_ID || payload.projectId || '');
+  const matchStart = normalizeCellValue(payload._matchStart || payload.NGÀY_BẮT_ĐẦU || '');
+  const matchEnd = normalizeCellValue(payload._matchEnd || payload.NGÀY_KẾT_THÚC || '');
+  const matchAssignee = normalizeCellValue(payload._matchAssignee || payload.NHÂN_SỰ || '');
+
+  const rowPid = ctx.pidCol !== -1 ? normalizeCellValue(ctx.data[i][ctx.pidCol]) : '';
+  const rowTask = ctx.taskCol !== -1 ? normalizeCellValue(ctx.data[i][ctx.taskCol]) : '';
+  if (matchTask && rowTask !== matchTask) return false;
+  if (matchPid && rowPid !== matchPid) return false;
+  if (matchStart && ctx.startCol !== -1 && normalizeCellValue(ctx.data[i][ctx.startCol]) !== matchStart) return false;
+  if (matchEnd && ctx.endCol !== -1 && normalizeCellValue(ctx.data[i][ctx.endCol]) !== matchEnd) return false;
+  if (matchAssignee && ctx.assigneeCol !== -1 && normalizeCellValue(ctx.data[i][ctx.assigneeCol]) !== matchAssignee) return false;
+  return !!(matchTask || matchPid);
+}
+
+function findTaskRowIndex_(sheet, payload) {
+  const ctx = getTaskSheetContext_(sheet);
+  if (!ctx) return -1;
+
+  const rowIndex = Number(payload._rowIndex);
+  if (rowIndex > 1 && rowIndex <= sheet.getLastRow()) {
+    const dataIdx = rowIndex - 1;
+    if (dataIdx < ctx.data.length && taskRowMatches_(ctx, dataIdx, payload)) {
+      return rowIndex;
+    }
+  }
+
+  for (let i = ctx.data.length - 1; i >= 1; i--) {
+    if (taskRowMatches_(ctx, i, payload)) {
+      return i + 1;
+    }
+  }
+  return -1;
+}
+
+function getTaskFieldAliases_() {
+  return {
+    'TÊN_DỰ_ÁN': ['TÊN_DỰ_ÁN', 'PROJECT_NAME'],
+    'GHI_CHÚ': ['GHI_CHÚ', 'MÔ_TẢ', 'MO_TA', 'DESCRIPTION'],
+    'MÔ_TẢ': ['GHI_CHÚ', 'MÔ_TẢ', 'MO_TA', 'DESCRIPTION']
+  };
+}
+
+function applyTaskPayloadToRow_(sheet, headers, targetRowIndex, payload) {
+  const FIELD_ALIASES = getTaskFieldAliases_();
+  const skipKeys = {
+    id: true,
+    projectId: true,
+    _rowIndex: true,
+    _matchTask: true,
+    _matchProjectId: true,
+    _matchStart: true,
+    _matchEnd: true,
+    _matchAssignee: true,
+    PINNED: true,
+    computedStatus: true,
+    MÔ_TẢ: true,
+    MO_TA: true
+  };
+
+  for (const key in payload) {
+    if (skipKeys[key]) continue;
+    let colIndex = findColumnIndex(headers, key);
+    if (colIndex === -1 && FIELD_ALIASES[key]) {
+      colIndex = findColumnIndex(headers, FIELD_ALIASES[key]);
+    }
+    if (colIndex === -1) continue;
+
+    let val = payload[key];
+    const hStr = String(headers[colIndex]).trim().toUpperCase();
+    if ((hStr === 'PROJECT_ID' || hStr === 'ID') && typeof val === 'string' && val.includes('-')) {
+      val = "'" + val;
+    }
+    sheet.getRange(targetRowIndex, colIndex + 1).setValue(val);
+  }
+}
+
+function updateTaskRow(ss, payload) {
+  const sheet = ss.getSheetByName('PROJECT_TASKS');
+  if (!sheet) {
+    throw new Error('PROJECT_TASKS sheet not found');
+  }
+
+  const targetRowIndex = findTaskRowIndex_(sheet, payload);
+  if (targetRowIndex === -1) {
+    appendRow(ss, 'PROJECT_TASKS', payload);
+    return;
+  }
+
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  applyTaskPayloadToRow_(sheet, headers, targetRowIndex, payload);
+}
+
+function deleteTaskRow(ss, payload) {
+  const sheet = ss.getSheetByName('PROJECT_TASKS');
+  if (!sheet) return false;
+
+  const targetRowIndex = findTaskRowIndex_(sheet, payload);
+  if (targetRowIndex === -1) return false;
+
+  sheet.deleteRow(targetRowIndex);
+  return true;
+}
+
+function deleteProjectRow(ss, sheetName, projectId) {
+  if (!projectId) return false;
+  const sheet = ss.getSheetByName(sheetName);
+  if (!sheet) return false;
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return false;
+
+  const headers = data[0];
+  const idCol = findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']);
+  if (idCol === -1) return false;
+
+  const targetId = normalizeCellValue(projectId);
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (normalizeCellValue(data[i][idCol]) === targetId) {
+      sheet.deleteRow(i + 1);
+      return true;
+    }
+  }
+  return false;
 }
 
 // ================= AGGREGATION UTILITIES =================
@@ -731,8 +1155,10 @@ function createResponse(data, statusCode = 200) {
 }
 
 function appendRow(ss, sheetName, payload) {
-  const sheet = ss.getSheetByName(sheetName);
-  if (!sheet) throw new Error("Sheet not found: " + sheetName);
+  let sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+  }
   
   initializeSheetIfEmpty(sheet, sheetName);
   
@@ -831,6 +1257,16 @@ function getDefaultHeaders(sheetName) {
       return ['PROJECT_ID', 'MILESTONE', 'NGÀY_KẾ_HOẠCH', 'NGÀY_THỰC_TẾ', 'STATUS'];
     case 'DAILY_SITE_LOG':
       return ['PROJECT_ID', 'LOG_DATE', 'NGÀY', 'MANPOWER', 'NHÂN_LỰC_SITE', 'ENGINEERS', 'KỸ_SƯ_GS', 'WEATHER', 'THỜI_TIẾT', 'INCIDENT_COUNT', 'SỰ_CỐ', 'DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG', 'WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN', 'MONTHLY_REPORT', 'STATUS', 'UPDATED_BY', 'UPDATED_AT'];
+    case 'PROJECT_TASKS':
+      return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'TÁC_VỤ', 'NHÂN_SỰ', 'NGÀY_BẮT_ĐẦU', 'NGÀY_KẾT_THÚC', 'BỘ_CHỨA', 'TRẠNG_THÁI', 'ƯU_TIÊN', 'GHI_CHÚ'];
+    case 'USERS':
+      return ['USER_ID', 'USERNAME', 'PASSWORD_HASH', 'SALT', 'EMAIL', 'EMPLOYEE_ID', 'DISPLAY_NAME', 'ROLE', 'ASSIGNED_PROJECTS', 'ACTIVE', 'LAST_LOGIN', 'CREATED_AT'];
+    case 'AUDIT_LOG':
+      return ['LOG_ID', 'TIMESTAMP', 'USER_ID', 'USERNAME', 'DISPLAY_NAME', 'ACTION', 'RESOURCE_TYPE', 'PROJECT_ID', 'SUMMARY', 'DETAILS'];
+    case 'NOTIFICATIONS':
+      return ['NOTIF_ID', 'USER_ID', 'TYPE', 'TITLE', 'BODY', 'LINK', 'READ', 'CREATED_AT'];
+    case 'PROJECT_SHARE':
+      return ['PROJECT_ID', 'SHARE_TOKEN', 'ENABLED', 'CREATED_AT', 'UPDATED_AT'];
     default:
       return [];
   }
@@ -927,7 +1363,7 @@ function recalculateProjectProgress(ss, projectId) {
   const handoverProg = handovers.length > 0 ? (handoversComp / handovers.length) * 100 : 0;
   
   // 6. Overall calculation
-  const overall = (permitProg * 0.10) + (designProg * 0.15) + (procurementProg * 0.20) + (constructionProg * 0.45) + (handoverProg * 0.10);
+  const overall = (permitProg * 0.10) + (designProg * 0.15) + (procurementProg * 0.25) + (constructionProg * 0.40) + (handoverProg * 0.10);
   const roundedOverall = Math.round(overall * 100) / 100;
   
   // 7. Update PROJECT_MASTER sheet
@@ -1299,4 +1735,2033 @@ function cleanupOrphanedProjects(ss) {
       }
     }
   });
+}
+
+var SITE_IMAGE_FOLDER_ID_PREF = '1iUk7SQ8iqsjTkjGwtI0fVJuaoxQeLRo_';
+var SITE_IMAGE_FOLDER_NAME = 'VPEG-PXD-BAO-CAO-HINH-ANH';
+var SITE_IMAGE_CHUNK_TTL = 600;
+
+function buildDriveImageViewUrl_(fileId) {
+  return 'https://drive.google.com/uc?export=view&id=' + fileId;
+}
+
+function storeSiteImageChunk_(payload) {
+  payload = payload || {};
+  var sid = String(payload.sessionId || '');
+  var idx = Number(payload.index);
+  var total = Number(payload.total);
+  var chunk = String(payload.chunk || '');
+  if (!sid || !chunk || !Number.isFinite(idx) || !Number.isFinite(total)) {
+    throw new Error('Thiếu dữ liệu chunk upload');
+  }
+  var cache = CacheService.getScriptCache();
+  cache.put('img_' + sid + '_' + idx, chunk, SITE_IMAGE_CHUNK_TTL);
+  cache.put('img_' + sid + '_meta', JSON.stringify({
+    total: total,
+    projectId: payload.projectId || 'project'
+  }), SITE_IMAGE_CHUNK_TTL);
+}
+
+function uploadBlobToDriveViaApi_(blob, fileName, folderId) {
+  var token = ScriptApp.getOAuthToken();
+  var createResp = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + token },
+    payload: JSON.stringify({ name: fileName, parents: [folderId] }),
+    muteHttpExceptions: true
+  });
+  var createJson = JSON.parse(createResp.getContentText());
+  if (!createJson.id) {
+    var apiErr = (createJson.error && createJson.error.message) ? createJson.error.message : createResp.getContentText();
+    throw new Error('Drive API: ' + apiErr);
+  }
+  var fileId = createJson.id;
+
+  var uploadResp = UrlFetchApp.fetch(
+    'https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=media',
+    {
+      method: 'patch',
+      contentType: blob.getContentType() || 'image/jpeg',
+      headers: { Authorization: 'Bearer ' + token },
+      payload: blob.getBytes(),
+      muteHttpExceptions: true
+    }
+  );
+  if (uploadResp.getResponseCode() >= 400) {
+    throw new Error('Drive API upload: ' + uploadResp.getContentText());
+  }
+
+  UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '/permissions', {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + token },
+    payload: JSON.stringify({ role: 'reader', type: 'anyone' }),
+    muteHttpExceptions: true
+  });
+
+  return buildDriveImageViewUrl_(fileId);
+}
+
+function commitSiteImageUpload_(sessionId) {
+  var cache = CacheService.getScriptCache();
+  var metaRaw = cache.get('img_' + sessionId + '_meta');
+  if (!metaRaw) {
+    throw new Error('Phiên upload hết hạn. Chọn ảnh và thử lại.');
+  }
+  var meta = JSON.parse(metaRaw);
+  var parts = [];
+  for (var i = 0; i < meta.total; i++) {
+    var part = cache.get('img_' + sessionId + '_' + i);
+    if (!part) {
+      throw new Error('Thiếu dữ liệu chunk ' + i);
+    }
+    parts.push(part);
+  }
+
+  var base64 = parts.join('');
+  if (base64.indexOf('base64,') >= 0) {
+    base64 = base64.split('base64,')[1];
+  }
+
+  var projectId = String(meta.projectId || 'project').replace(/[^\w\-]/g, '_');
+  var fileName = projectId + '-' + Date.now() + '.jpg';
+  var bytes = Utilities.base64Decode(base64);
+  var blob = Utilities.newBlob(bytes, 'image/jpeg', fileName);
+
+  var folder = getWritableSiteImageFolder_();
+  var url = saveSiteImageBlobToFolder_(folder, blob, folder.getId());
+
+  for (var j = 0; j < meta.total; j++) {
+    cache.remove('img_' + sessionId + '_' + j);
+  }
+  cache.remove('img_' + sessionId + '_meta');
+  return url;
+}
+
+/** Ghi blob lên folder — chỉ dùng DriveApp, không fallback UrlFetchApp */
+function saveSiteImageBlobToFolder_(folder, blob, folderId) {
+  try {
+    var file = folder.createFile(blob);
+    var fileId = file.getId();
+    try {
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (shareErr) {}
+    return buildDriveImageViewUrl_(fileId);
+  } catch (driveAppErr) {
+    throw new Error('Không ghi được ảnh lên Drive: ' + driveAppErr);
+  }
+}
+
+/** Folder script chắc chắn ghi được — thử folder chỉ định trước, không ghi được thì fallback cạnh Sheet */
+function folderIsWritable_(folder) {
+  try {
+    var probe = folder.createFile(Utilities.newBlob('1', 'text/plain', '.epc-write-test.txt'));
+    probe.setTrashed(true);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+function getWritableSiteImageFolder_() {
+  var candidates = [];
+
+  try {
+    candidates.push(DriveApp.getFolderById(SITE_IMAGE_FOLDER_ID_PREF));
+  } catch (e) {}
+
+  try {
+    var ssFile = DriveApp.getFileById(SPREADSHEET_ID);
+    var parents = ssFile.getParents();
+    if (parents.hasNext()) {
+      var parent = parents.next();
+      var subs = parent.getFoldersByName(SITE_IMAGE_FOLDER_NAME);
+      if (subs.hasNext()) {
+        candidates.push(subs.next());
+      } else {
+        var created = parent.createFolder(SITE_IMAGE_FOLDER_NAME);
+        return created;
+      }
+    }
+  } catch (e) {}
+
+  var roots = DriveApp.getFoldersByName(SITE_IMAGE_FOLDER_NAME);
+  while (roots.hasNext()) {
+    candidates.push(roots.next());
+  }
+
+  for (var i = 0; i < candidates.length; i++) {
+    if (folderIsWritable_(candidates[i])) return candidates[i];
+  }
+
+  return DriveApp.createFolder(SITE_IMAGE_FOLDER_NAME);
+}
+
+/** Kiểm tra / hiển thị folder (có thể chỉ đọc được folder chia sẻ) */
+function getSiteImageUploadFolder_() {
+  try {
+    return DriveApp.getFolderById(SITE_IMAGE_FOLDER_ID_PREF);
+  } catch (e) {}
+  return getWritableSiteImageFolder_();
+}
+
+/**
+ * Upload ảnh hiện trường lên Google Drive, trả về link xem công khai.
+ * payload: { base64, projectId?, fileName? }
+ */
+function uploadSiteImageToDrive_(payload) {
+  payload = payload || {};
+  var base64 = String(payload.base64 || '');
+  if (!base64) {
+    throw new Error('Thiếu dữ liệu ảnh (base64)');
+  }
+  if (base64.indexOf('base64,') >= 0) {
+    base64 = base64.split('base64,')[1];
+  }
+
+  var projectId = String(payload.projectId || 'project').replace(/[^\w\-]/g, '_');
+  var fileName = projectId + '-' + Date.now() + '.jpg';
+  var bytes = Utilities.base64Decode(base64);
+  var blob = Utilities.newBlob(bytes, 'image/jpeg', fileName);
+  var folder = getWritableSiteImageFolder_();
+  return saveSiteImageBlobToFolder_(folder, blob, folder.getId());
+}
+
+/**
+ * Chạy 1 lần từ trình soạn Apps Script (Run → authorizeDriveForUpload)
+ * để cấp quyền Google Drive. KHÔNG tạo file .gs riêng cho scope.
+ */
+function authorizeDriveForUpload() {
+  var folder = getWritableSiteImageFolder_();
+  var test = folder.createFile(Utilities.newBlob('ok', 'text/plain', 'drive-test.txt'));
+  test.setTrashed(true);
+  Logger.log('OK – folder ghi được: ' + folder.getName() + ' (id=' + folder.getId() + ')');
+}
+
+/**
+ * Chạy 1 lần từ Apps Script (Run → authorizeMailApp) để cấp quyền gửi email.
+ * Hiện trong dropdown Run cạnh authorizeDriveForUpload.
+ */
+function authorizeMailApp() {
+  var quota = MailApp.getRemainingDailyQuota();
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('NOTIF_EMAIL_ENABLED', 'true');
+  if (!props.getProperty('DASHBOARD_APP_URL')) {
+    props.setProperty('DASHBOARD_APP_URL', 'http://localhost:5181');
+  }
+  var ss = getSpreadsheet();
+  ensureUsersSheet_(ss);
+  var users = getSheetDataAsObjects(ss, 'USERS');
+  var adminUser = null;
+  for (var i = 0; i < users.length; i++) {
+    if (String(users[i].ROLE || '').toLowerCase() === 'admin' && isUserActive_(users[i])) {
+      adminUser = users[i];
+      break;
+    }
+  }
+  var to = adminUser ? String(adminUser.EMAIL || '').trim().toLowerCase() : Session.getActiveUser().getEmail();
+  if (!to) throw new Error('Không tìm thấy email admin');
+  try {
+    MailApp.sendEmail({
+      to: to,
+      subject: '[EPC Solar] Email authorize test',
+      body: 'MailApp OK. Quota còn hôm nay: ' + quota + '\n\nEPC Solar Dashboard',
+      name: 'EPC Solar Dashboard'
+    });
+  } catch (mailErr) {
+    GmailApp.sendEmail(to, '[EPC Solar] Email authorize test', 'GmailApp OK. Quota MailApp: ' + quota);
+  }
+  Logger.log('OK – email thử gửi tới: ' + to + ', quota còn lại hôm nay=' + quota);
+  return { ok: true, to: to, quota: quota };
+}
+
+function authorizeMailApp_() {
+  return authorizeMailApp();
+}
+
+// ================= AUTH / USERS =================
+
+var AUTH_SESSION_TTL_SEC = 8 * 60 * 60;
+
+function ensureUsersSheet_(ss) {
+  ss = ss || getSpreadsheet();
+  var sheet = ss.getSheetByName('USERS');
+  if (!sheet) {
+    sheet = ss.insertSheet('USERS');
+  }
+  initializeSheetIfEmpty(sheet, 'USERS');
+  seedAdminIfNeeded_(ss, sheet);
+  return sheet;
+}
+
+function seedAdminIfNeeded_(ss, sheet) {
+  var rows = sheet.getDataRange().getValues();
+  if (rows.length > 1) return;
+
+  var salt = generateAuthSalt_();
+  var hash = hashPassword_('tien@123', salt);
+  var now = new Date().toISOString();
+  var employeeId = findEmployeeIdByName_(ss, 'Nguyễn Đức Tiến');
+
+  appendRow(ss, 'USERS', {
+    USER_ID: 'U001',
+    USERNAME: 'tien.nguyen',
+    PASSWORD_HASH: hash,
+    SALT: salt,
+    EMAIL: 'tien.nguyen@vuphong.com',
+    EMPLOYEE_ID: employeeId || '',
+    DISPLAY_NAME: 'Nguyễn Đức Tiến',
+    ROLE: 'admin',
+    ASSIGNED_PROJECTS: '',
+    ACTIVE: 'TRUE',
+    LAST_LOGIN: '',
+    CREATED_AT: now
+  });
+}
+
+function findEmployeeIdByName_(ss, displayName) {
+  var employees = getSheetDataAsObjects(ss, 'EMPLOYEE');
+  var target = normalizeAuthName_(displayName);
+  for (var i = 0; i < employees.length; i++) {
+    var emp = employees[i];
+    var name = String(emp.NAME || emp.name || emp['HỌ TÊN'] || emp['Họ tên'] || '').trim();
+    if (normalizeAuthName_(name) === target) {
+      return String(emp.EMPLOYEE_ID || emp.ID || emp.id || emp._rowIndex || '');
+    }
+  }
+  return '';
+}
+
+function generateAuthSalt_() {
+  return Utilities.getUuid().replace(/-/g, '');
+}
+
+function hashPassword_(password, salt) {
+  var raw = String(salt || '') + String(password || '');
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, raw, Utilities.Charset.UTF_8);
+  return digest.map(function(b) {
+    var v = (b < 0 ? b + 256 : b).toString(16);
+    return v.length === 1 ? '0' + v : v;
+  }).join('');
+}
+
+function normalizeAuthName_(name) {
+  return String(name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function namesMatch_(a, b) {
+  var na = normalizeAuthName_(a);
+  var nb = normalizeAuthName_(b);
+  if (!na || !nb) return false;
+  return na === nb;
+}
+
+function isProjectEditorRole_(role) {
+  var r = String(role || '').toLowerCase();
+  return r === 'pm' || r === 'sm';
+}
+
+function isAssignedToProject_(session, projectId) {
+  if (!session || !projectId) return false;
+  var pid = String(projectId).trim();
+  var assigned = session.assignedProjects || [];
+  for (var i = 0; i < assigned.length; i++) {
+    if (String(assigned[i]).trim() === pid) return true;
+  }
+  return false;
+}
+
+function canEditProject_(session, projectId) {
+  if (!session) return false;
+  if (String(session.role || '').toLowerCase() === 'admin') return true;
+  return isAssignedToProject_(session, projectId);
+}
+
+function canEditTask_(session, payload) {
+  if (!session) return false;
+  if (String(session.role || '').toLowerCase() === 'admin') return true;
+  payload = payload || {};
+  var assignee = resolveTaskAssigneeForPermission_(payload);
+  return namesMatch_(session.displayName, assignee);
+}
+
+function resolveTaskAssigneeForPermission_(payload) {
+  payload = payload || {};
+  try {
+    var ss = getSpreadsheet();
+    var sheet = ss.getSheetByName('PROJECT_TASKS');
+    if (sheet) {
+      var rowIndex = findTaskRowIndex_(sheet, payload);
+      var ctx = getTaskSheetContext_(sheet);
+      if (rowIndex > 0 && ctx && ctx.assigneeCol !== -1) {
+        var fromSheet = String(ctx.data[rowIndex - 1][ctx.assigneeCol] || '').trim();
+        if (fromSheet) return fromSheet;
+      }
+    }
+  } catch (e) {
+    Logger.log('resolveTaskAssigneeForPermission_: ' + e);
+  }
+  return payload._matchAssignee || payload.NHÂN_SỰ || '';
+}
+
+function canCreateTask_(session, payload) {
+  if (!session) return false;
+  if (String(session.role || '').toLowerCase() === 'admin') return true;
+  if (isProjectEditorRole_(session.role)) return true;
+  payload = payload || {};
+  return namesMatch_(session.displayName, payload.NHÂN_SỰ || '');
+}
+
+function requireAuthForMutation_(payload) {
+  var session = getActorFromPayload_(payload);
+  if (!session || !session.username || session.username === 'unknown') {
+    return { error: 'Vui lòng đăng nhập để thực hiện thao tác này', code: 401 };
+  }
+  return { session: session };
+}
+
+function checkMutationPermission_(action, payload, session) {
+  if (String(session.role || '').toLowerCase() === 'admin') return null;
+
+  payload = payload || {};
+  var pid = String(payload.PROJECT_ID || payload.id || payload.projectId || '').trim();
+
+  if (action === 'update-task' || action === 'delete-task') {
+    if (!canEditTask_(session, payload)) {
+      return 'Bạn chỉ được sửa công việc được phân công cho mình';
+    }
+    return null;
+  }
+
+  if (action === 'add-task') {
+    if (!canCreateTask_(session, payload)) {
+      return 'Bạn không có quyền tạo công việc này';
+    }
+    return null;
+  }
+
+  var projectMutations = [
+    'update-project', 'delete-project', 'add-project',
+    'update-risk', 'add-risk',
+    'update-permit', 'add-permit',
+    'update-design', 'add-design',
+    'update-procurement', 'add-procurement',
+    'update-construction', 'update-handover',
+    'update-site-log', 'update-module-dates', 'upload-site-image'
+  ];
+
+  if (projectMutations.indexOf(action) >= 0) {
+    if (!pid || !isAssignedToProject_(session, pid)) {
+      return 'Bạn chưa được gán dự án này (Cài đặt → Tài khoản → Sửa → Gán dự án)';
+    }
+    return null;
+  }
+
+  return 'Không có quyền thực hiện thao tác này';
+}
+
+function isProtectedMutation_(action) {
+  if (!action) return false;
+  if (action === 'login' || action === 'logout') return false;
+  if (action === 'add-user' || action === 'update-user' || action === 'deactivate-user') return false;
+  if (action === 'upload-image-chunk') return false;
+  return true;
+}
+
+function parseAssignedProjects_(value) {
+  if (!value) return [];
+  return String(value)
+    .split(',')
+    .map(function(id) { return String(id).trim(); })
+    .filter(function(id) { return id.length > 0; });
+}
+
+function sanitizeUserForClient_(user) {
+  return {
+    userId: String(user.USER_ID || ''),
+    username: String(user.USERNAME || ''),
+    displayName: String(user.DISPLAY_NAME || user.USERNAME || ''),
+    email: String(user.EMAIL || ''),
+    role: String(user.ROLE || 'employee').toLowerCase(),
+    employeeId: String(user.EMPLOYEE_ID || ''),
+    assignedProjects: parseAssignedProjects_(user.ASSIGNED_PROJECTS)
+  };
+}
+
+function findUserByUsername_(ss, username) {
+  ensureUsersSheet_(ss);
+  var users = getSheetDataAsObjects(ss, 'USERS');
+  var target = String(username || '').trim().toLowerCase();
+  for (var i = 0; i < users.length; i++) {
+    var u = users[i];
+    if (String(u.USERNAME || '').trim().toLowerCase() === target) {
+      return u;
+    }
+  }
+  return null;
+}
+
+function isUserActive_(user) {
+  var active = String(user.ACTIVE || 'TRUE').trim().toUpperCase();
+  return active === 'TRUE' || active === '1' || active === 'YES';
+}
+
+function createAuthSession_(user) {
+  var token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
+  var session = sanitizeUserForClient_(user);
+  CacheService.getScriptCache().put('auth_' + token, JSON.stringify(session), AUTH_SESSION_TTL_SEC);
+  return { token: token, user: session };
+}
+
+function getAuthSession_(token) {
+  if (!token) return null;
+  var raw = CacheService.getScriptCache().get('auth_' + String(token));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    return null;
+  }
+}
+
+function destroyAuthSession_(token) {
+  if (!token) return;
+  CacheService.getScriptCache().remove('auth_' + String(token));
+}
+
+function updateUserLastLogin_(ss, user) {
+  if (!user || user._rowIndex == null) return;
+  var sheet = ss.getSheetByName('USERS');
+  if (!sheet) return;
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var col = findColumnIndex(headers, ['LAST_LOGIN']);
+  if (col === -1) return;
+  sheet.getRange(user._rowIndex, col + 1).setValue(new Date().toISOString());
+}
+
+function handleAuthLogin_(payload) {
+  payload = payload || {};
+  var username = String(payload.username || '').trim();
+  var password = String(payload.password || '');
+
+  if (!username || !password) {
+    return createResponse({ status: 'error', message: 'Vui lòng nhập username và mật khẩu' }, 400);
+  }
+
+  var ss = getSpreadsheet();
+  ensureUsersSheet_(ss);
+  var user = findUserByUsername_(ss, username);
+
+  if (!user) {
+    return createResponse({ status: 'error', message: 'Tên đăng nhập hoặc mật khẩu không đúng' }, 401);
+  }
+  if (!isUserActive_(user)) {
+    return createResponse({ status: 'error', message: 'Tài khoản đã bị vô hiệu hóa' }, 403);
+  }
+
+  var hash = hashPassword_(password, user.SALT || '');
+  if (hash !== String(user.PASSWORD_HASH || '')) {
+    return createResponse({ status: 'error', message: 'Tên đăng nhập hoặc mật khẩu không đúng' }, 401);
+  }
+
+  updateUserLastLogin_(ss, user);
+  var session = createAuthSession_(user);
+  writeAuditLog_(session.user, 'login', { username: username });
+  return createResponse({
+    status: 'success',
+    data: session
+  });
+}
+
+function handleAuthLogout_(payload) {
+  payload = payload || {};
+  var token = payload.token || payload._token || '';
+  var session = getAuthSession_(token);
+  if (session) {
+    writeAuditLog_(session, 'logout', {});
+  }
+  destroyAuthSession_(token);
+  return createResponse({ status: 'success', message: 'Đã đăng xuất' });
+}
+
+/**
+ * Chạy 1 lần từ Apps Script (Run → setupInitialAdmin) nếu cần tạo lại admin.
+ */
+function setupInitialAdmin() {
+  var ss = getSpreadsheet();
+  var sheet = ss.getSheetByName('USERS');
+  if (sheet && sheet.getLastRow() > 1) {
+    Logger.log('USERS đã có dữ liệu — bỏ qua seed.');
+    return;
+  }
+  if (sheet) sheet.clear();
+  ensureUsersSheet_(ss);
+  Logger.log('Đã tạo admin: tien.nguyen / (mật khẩu đã cấu hình trong seedAdminIfNeeded_)');
+}
+
+// --- User management (Admin only) ---
+
+var VALID_USER_ROLES_ = ['admin', 'pm', 'sm', 'gs', 'sa', 'tk', 'psc', 'employee'];
+var CREATABLE_USER_ROLES_ = ['pm', 'sm', 'gs', 'sa', 'tk', 'psc', 'employee'];
+var PROJECT_EDITOR_ROLES_ = ['pm', 'sm'];
+
+function getAuthTokenFromRequest_(payload, e) {
+  var fromPayload = payload && (payload._token || payload.token);
+  var fromQuery = e && e.parameter && e.parameter.token;
+  return String(fromPayload || fromQuery || '').trim();
+}
+
+function requireAdminSession_(payload, e) {
+  var token = getAuthTokenFromRequest_(payload, e);
+  var session = getAuthSession_(token);
+  if (!session) {
+    return { error: 'Phiên đăng nhập hết hạn hoặc không hợp lệ', code: 401 };
+  }
+  if (String(session.role || '').toLowerCase() !== 'admin') {
+    return { error: 'Chỉ Admin mới có quyền thao tác này', code: 403 };
+  }
+  return { session: session };
+}
+
+function validateVuphongEmail_(email) {
+  var normalized = String(email || '').trim().toLowerCase();
+  var domain = '@vuphong.com';
+  if (!normalized || normalized.indexOf('@') <= 0 || normalized.slice(-domain.length) !== domain) {
+    throw new Error('Email phải thuộc domain @vuphong.com');
+  }
+  return normalized;
+}
+
+/** Nhận phần tên hoặc email đầy đủ — luôn trả về email @vuphong.com hợp lệ */
+function normalizeEmailInput_(input) {
+  var raw = String(input || '').trim().toLowerCase();
+  if (!raw) {
+    throw new Error('Vui lòng nhập email');
+  }
+  if (raw.indexOf('@') === -1) {
+    return validateVuphongEmail_(raw + '@vuphong.com');
+  }
+  return validateVuphongEmail_(raw);
+}
+
+function normalizeUserRole_(role) {
+  var r = String(role || '').trim().toLowerCase().replace(/\./g, '');
+  if (r === 'nhanvien' || r === 'nv') return 'employee';
+  return r;
+}
+
+function sanitizeUserForAdminList_(user) {
+  var base = sanitizeUserForClient_(user);
+  base.active = isUserActive_(user);
+  base.lastLogin = String(user.LAST_LOGIN || '');
+  base.createdAt = String(user.CREATED_AT || '');
+  base._rowIndex = user._rowIndex;
+  return base;
+}
+
+function listUsersForAdmin_(ss) {
+  ensureUsersSheet_(ss);
+  return getSheetDataAsObjects(ss, 'USERS').map(sanitizeUserForAdminList_);
+}
+
+function findUserByUserId_(ss, userId) {
+  ensureUsersSheet_(ss);
+  var target = String(userId || '').trim();
+  var users = getSheetDataAsObjects(ss, 'USERS');
+  for (var i = 0; i < users.length; i++) {
+    if (String(users[i].USER_ID || '') === target) return users[i];
+  }
+  return null;
+}
+
+function generateNextUserId_(ss) {
+  var users = getSheetDataAsObjects(ss, 'USERS');
+  var maxNum = 0;
+  for (var i = 0; i < users.length; i++) {
+    var match = String(users[i].USER_ID || '').match(/^U(\d+)$/i);
+    if (match) maxNum = Math.max(maxNum, parseInt(match[1], 10));
+  }
+  return 'U' + String(maxNum + 1).padStart(3, '0');
+}
+
+function formatAssignedProjects_(projects) {
+  if (!projects) return '';
+  if (Array.isArray(projects)) {
+    return projects.map(function(id) { return String(id).trim(); }).filter(Boolean).join(',');
+  }
+  return String(projects).trim();
+}
+
+function getEmployeeDisplayName_(emp) {
+  if (!emp) return '';
+  return String(emp.NAME || emp.name || emp['HỌ TÊN'] || emp['Họ tên'] || '').trim();
+}
+
+function findEmployeeById_(ss, employeeId) {
+  var employees = getSheetDataAsObjects(ss, 'EMPLOYEE');
+  var target = String(employeeId || '').trim();
+  for (var i = 0; i < employees.length; i++) {
+    var emp = employees[i];
+    var id = String(emp.EMPLOYEE_ID || emp.ID || emp.id || emp._rowIndex || '');
+    if (id === target) return emp;
+  }
+  return null;
+}
+
+function updateUserSheetRow_(ss, userRow, updates) {
+  var sheet = ss.getSheetByName('USERS');
+  if (!sheet || !userRow || userRow._rowIndex == null) {
+    throw new Error('Không tìm thấy user để cập nhật');
+  }
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  for (var key in updates) {
+    if (!updates.hasOwnProperty(key)) continue;
+    var col = findColumnIndex(headers, key);
+    if (col !== -1) {
+      sheet.getRange(userRow._rowIndex, col + 1).setValue(updates[key]);
+    }
+  }
+}
+
+function handleAddUser_(payload) {
+  var adminCheck = requireAdminSession_(payload, null);
+  if (adminCheck.error) {
+    return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+  }
+
+  payload = payload || {};
+  var ss = getSpreadsheet();
+  ensureUsersSheet_(ss);
+
+  var username = String(payload.username || '').trim().toLowerCase();
+  var password = String(payload.password || '');
+  var email = normalizeEmailInput_(payload.email);
+  var role = normalizeUserRole_(payload.role);
+  var employeeId = String(payload.employeeId || '').trim();
+  var displayName = String(payload.displayName || '').trim();
+  var assignedProjects = formatAssignedProjects_(payload.assignedProjects);
+
+  if (!username || username.length < 3) {
+    return createResponse({ status: 'error', message: 'Username phải có ít nhất 3 ký tự' }, 400);
+  }
+  if (!password || password.length < 6) {
+    return createResponse({ status: 'error', message: 'Mật khẩu phải có ít nhất 6 ký tự' }, 400);
+  }
+  if (CREATABLE_USER_ROLES_.indexOf(role) === -1) {
+    return createResponse({ status: 'error', message: 'Role không hợp lệ' }, 400);
+  }
+  if (!employeeId) {
+    return createResponse({ status: 'error', message: 'Vui lòng chọn nhân viên từ danh sách EMPLOYEE' }, 400);
+  }
+
+  var emp = findEmployeeById_(ss, employeeId);
+  if (!emp) {
+    return createResponse({ status: 'error', message: 'Không tìm thấy nhân viên đã chọn' }, 400);
+  }
+  if (!displayName) displayName = getEmployeeDisplayName_(emp);
+
+  if (findUserByUsername_(ss, username)) {
+    return createResponse({ status: 'error', message: 'Username đã tồn tại' }, 409);
+  }
+
+  var salt = generateAuthSalt_();
+  var hash = hashPassword_(password, salt);
+  var now = new Date().toISOString();
+
+  var newUserId = generateNextUserId_(ss);
+  appendRow(ss, 'USERS', {
+    USER_ID: newUserId,
+    USERNAME: username,
+    PASSWORD_HASH: hash,
+    SALT: salt,
+    EMAIL: email,
+    EMPLOYEE_ID: employeeId,
+    DISPLAY_NAME: displayName,
+    ROLE: role,
+    ASSIGNED_PROJECTS: assignedProjects,
+    ACTIVE: 'TRUE',
+    LAST_LOGIN: '',
+    CREATED_AT: now
+  });
+
+  if (assignedProjects) {
+    notifyProjectAssignmentChanges_(ss, { USER_ID: newUserId }, '', assignedProjects, adminCheck.session);
+  }
+
+  auditMutation_('add-user', payload, adminCheck.session);
+
+  return createResponse({
+    status: 'success',
+    message: 'Đã tạo tài khoản',
+    data: listUsersForAdmin_(ss)
+  });
+}
+
+function handleUpdateUser_(payload) {
+  var adminCheck = requireAdminSession_(payload, null);
+  if (adminCheck.error) {
+    return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+  }
+
+  payload = payload || {};
+  var ss = getSpreadsheet();
+  ensureUsersSheet_(ss);
+
+  var userId = String(payload.userId || '').trim();
+  var user = findUserByUserId_(ss, userId);
+  if (!user) {
+    return createResponse({ status: 'error', message: 'Không tìm thấy user' }, 404);
+  }
+
+  var oldAssignedProjects = String(user.ASSIGNED_PROJECTS || '');
+
+  var updates = {};
+  var role = payload.role != null ? normalizeUserRole_(payload.role) : null;
+
+  if (payload.email != null) {
+    updates.EMAIL = normalizeEmailInput_(payload.email);
+  }
+  if (payload.displayName != null) {
+    updates.DISPLAY_NAME = String(payload.displayName || '').trim();
+  }
+  if (payload.employeeId != null) {
+    var employeeId = String(payload.employeeId || '').trim();
+    if (!employeeId) {
+      return createResponse({ status: 'error', message: 'Vui lòng chọn nhân viên' }, 400);
+    }
+    var emp = findEmployeeById_(ss, employeeId);
+    if (!emp) {
+      return createResponse({ status: 'error', message: 'Không tìm thấy nhân viên' }, 400);
+    }
+    updates.EMPLOYEE_ID = employeeId;
+    if (!payload.displayName) {
+      updates.DISPLAY_NAME = getEmployeeDisplayName_(emp);
+    }
+  }
+  if (role != null) {
+    if (String(user.USER_ID) === String(adminCheck.session.userId) && role !== 'admin') {
+      return createResponse({ status: 'error', message: 'Không thể đổi role của chính mình' }, 400);
+    }
+    if (String(user.ROLE || '').toLowerCase() === 'admin') {
+      return createResponse({ status: 'error', message: 'Không thể sửa tài khoản Admin qua UI' }, 400);
+    }
+    if (CREATABLE_USER_ROLES_.indexOf(role) === -1 && role !== 'admin') {
+      return createResponse({ status: 'error', message: 'Role không hợp lệ' }, 400);
+    }
+    updates.ROLE = role;
+  }
+  if (payload.assignedProjects != null) {
+    updates.ASSIGNED_PROJECTS = formatAssignedProjects_(payload.assignedProjects);
+  }
+  if (payload.active != null) {
+    var willActive = payload.active === true || String(payload.active).toUpperCase() === 'TRUE';
+    if (String(user.USER_ID) === String(adminCheck.session.userId) && !willActive) {
+      return createResponse({ status: 'error', message: 'Không thể vô hiệu hóa tài khoản của chính mình' }, 400);
+    }
+    if (String(user.ROLE || '').toLowerCase() === 'admin' && !willActive) {
+      return createResponse({ status: 'error', message: 'Không thể vô hiệu hóa tài khoản Admin' }, 400);
+    }
+    updates.ACTIVE = willActive ? 'TRUE' : 'FALSE';
+  }
+  if (payload.password) {
+    var newPass = String(payload.password);
+    if (newPass.length < 6) {
+      return createResponse({ status: 'error', message: 'Mật khẩu phải có ít nhất 6 ký tự' }, 400);
+    }
+    var newSalt = generateAuthSalt_();
+    updates.SALT = newSalt;
+    updates.PASSWORD_HASH = hashPassword_(newPass, newSalt);
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return createResponse({ status: 'error', message: 'Không có dữ liệu để cập nhật' }, 400);
+  }
+
+  updateUserSheetRow_(ss, user, updates);
+
+  if (payload.assignedProjects != null) {
+    notifyProjectAssignmentChanges_(
+      ss,
+      user,
+      oldAssignedProjects,
+      formatAssignedProjects_(payload.assignedProjects),
+      adminCheck.session
+    );
+  }
+
+  auditMutation_('update-user', payload, adminCheck.session);
+
+  return createResponse({
+    status: 'success',
+    message: 'Đã cập nhật tài khoản',
+    data: listUsersForAdmin_(ss)
+  });
+}
+
+function handleDeactivateUser_(payload) {
+  payload = payload || {};
+  payload.active = false;
+  return handleUpdateUser_(payload);
+}
+
+function handleChangePassword_(payload) {
+  var authReq = requireAuthForMutation_(payload);
+  if (authReq.error) {
+    return createResponse({ status: 'error', message: authReq.error }, authReq.code || 401);
+  }
+
+  payload = payload || {};
+  var currentPassword = String(payload.currentPassword || '');
+  var newPassword = String(payload.newPassword || '');
+
+  if (!currentPassword || !newPassword) {
+    return createResponse({ status: 'error', message: 'Vui lòng nhập mật khẩu hiện tại và mật khẩu mới' }, 400);
+  }
+  if (newPassword.length < 6) {
+    return createResponse({ status: 'error', message: 'Mật khẩu mới phải có ít nhất 6 ký tự' }, 400);
+  }
+  if (currentPassword === newPassword) {
+    return createResponse({ status: 'error', message: 'Mật khẩu mới phải khác mật khẩu hiện tại' }, 400);
+  }
+
+  var ss = getSpreadsheet();
+  ensureUsersSheet_(ss);
+  var user = findUserByUserId_(ss, authReq.session.userId);
+  if (!user) {
+    return createResponse({ status: 'error', message: 'Không tìm thấy tài khoản' }, 404);
+  }
+
+  var hash = hashPassword_(currentPassword, user.SALT || '');
+  if (hash !== String(user.PASSWORD_HASH || '')) {
+    return createResponse({ status: 'error', message: 'Mật khẩu hiện tại không đúng' }, 401);
+  }
+
+  var newSalt = generateAuthSalt_();
+  updateUserSheetRow_(ss, user, {
+    SALT: newSalt,
+    PASSWORD_HASH: hashPassword_(newPassword, newSalt)
+  });
+
+  auditMutation_('change-password', { userId: authReq.session.userId }, authReq.session);
+
+  return createResponse({ status: 'success', message: 'Đã đổi mật khẩu thành công' });
+}
+
+// ================= NOTIFICATIONS =================
+
+var NOTIFICATIONS_MAX_ROWS_ = 2000;
+
+function ensureNotificationsSheet_(ss) {
+  ss = ss || getSpreadsheet();
+  var sheet = ss.getSheetByName('NOTIFICATIONS');
+  if (!sheet) {
+    sheet = ss.insertSheet('NOTIFICATIONS');
+  }
+  initializeSheetIfEmpty(sheet, 'NOTIFICATIONS');
+  return sheet;
+}
+
+function trimNotificationsIfNeeded_(ss) {
+  var sheet = ss.getSheetByName('NOTIFICATIONS');
+  if (!sheet) return;
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= NOTIFICATIONS_MAX_ROWS_ + 1) return;
+  sheet.deleteRows(2, lastRow - NOTIFICATIONS_MAX_ROWS_ - 1);
+}
+
+function createNotification_(userId, type, title, body, link) {
+  if (!userId) return;
+  try {
+    var ss = getSpreadsheet();
+    ensureNotificationsSheet_(ss);
+    appendRow(ss, 'NOTIFICATIONS', {
+      NOTIF_ID: 'N' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+      USER_ID: String(userId),
+      TYPE: String(type || 'info'),
+      TITLE: String(title || '').slice(0, 200),
+      BODY: String(body || '').slice(0, 500),
+      LINK: String(link || ''),
+      READ: 'FALSE',
+      CREATED_AT: new Date().toISOString()
+    });
+    trimNotificationsIfNeeded_(ss);
+    sendNotificationEmail_(userId, type, title, body, link);
+  } catch (err) {
+    Logger.log('createNotification_ error: ' + err);
+  }
+}
+
+function getNotificationEmailConfig_() {
+  var props = PropertiesService.getScriptProperties();
+  return {
+    appUrl: String(props.getProperty('DASHBOARD_APP_URL') || '').trim().replace(/\/$/, ''),
+    enabled: props.getProperty('NOTIF_EMAIL_ENABLED') === 'true'
+  };
+}
+
+function escapeHtmlForEmail_(text) {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function getUserEmailForNotification_(ss, userId) {
+  var user = findUserByUserId_(ss, userId);
+  if (!user || !isUserActive_(user)) return '';
+  var email = String(user.EMAIL || '').trim().toLowerCase();
+  if (!email || email.indexOf('@vuphong.com') === -1) return '';
+  return email;
+}
+
+function buildAbsoluteNotificationLink_(link) {
+  var base = getNotificationEmailConfig_().appUrl;
+  var path = String(link || '').split('#')[0];
+  if (!path) return base || '';
+  if (/^https?:\/\//i.test(path)) return path;
+  if (!base) return '';
+  return base + (path.charAt(0) === '/' ? path : '/' + path);
+}
+
+function buildNotificationEmailHtml_(title, body, link) {
+  var absLink = buildAbsoluteNotificationLink_(link);
+  var linkHtml = absLink
+    ? '<p style="margin:20px 0 0"><a href="' + escapeHtmlForEmail_(absLink) + '" style="background:#5252ff;color:#fff;padding:10px 18px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Mở dashboard</a></p>'
+    : '';
+  return '<div style="font-family:Segoe UI,Arial,sans-serif;line-height:1.5;color:#1e293b;max-width:520px">' +
+    '<p style="margin:0 0 8px;font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:0.05em">EPC Solar Dashboard</p>' +
+    '<h2 style="margin:0 0 12px;font-size:18px;color:#0f172a">' + escapeHtmlForEmail_(title) + '</h2>' +
+    '<p style="margin:0;font-size:14px;color:#334155">' + escapeHtmlForEmail_(body) + '</p>' +
+    linkHtml +
+    '<hr style="margin:24px 0;border:none;border-top:1px solid #e2e8f0">' +
+    '<p style="margin:0;font-size:11px;color:#94a3b8">Email tự động — vui lòng không trả lời.</p></div>';
+}
+
+function sendNotificationEmail_(userId, type, title, body, link) {
+  var config = getNotificationEmailConfig_();
+  if (!config.enabled || !config.appUrl) {
+    return { ok: false, error: 'Email chưa bật hoặc thiếu URL dashboard' };
+  }
+  try {
+    var ss = getSpreadsheet();
+    var to = getUserEmailForNotification_(ss, userId);
+    if (!to) return { ok: false, error: 'User không có email @vuphong.com hợp lệ' };
+    var subject = '[EPC Solar] ' + String(title || 'Thông báo');
+    var plain = String(title || '') + '\n\n' + String(body || '');
+    var absLink = buildAbsoluteNotificationLink_(link);
+    if (absLink) plain += '\n\nMở: ' + absLink;
+    var htmlBody = buildNotificationEmailHtml_(title, body, link);
+    try {
+      MailApp.sendEmail({
+        to: to,
+        subject: subject,
+        body: plain,
+        htmlBody: htmlBody,
+        name: 'EPC Solar Dashboard'
+      });
+      return { ok: true, to: to, via: 'mailapp' };
+    } catch (mailErr) {
+      var mailMsg = mailErr && mailErr.message ? String(mailErr.message) : String(mailErr);
+      try {
+        GmailApp.sendEmail(to, subject, plain, { htmlBody: htmlBody, name: 'EPC Solar Dashboard' });
+        return { ok: true, to: to, via: 'gmail' };
+      } catch (gmailErr) {
+        var gmailMsg = gmailErr && gmailErr.message ? String(gmailErr.message) : String(gmailErr);
+        return { ok: false, error: mailMsg + ' | GmailApp: ' + gmailMsg };
+      }
+    }
+  } catch (err) {
+    var msg = err && err.message ? String(err.message) : String(err);
+    Logger.log('sendNotificationEmail_ error: ' + msg);
+    return { ok: false, error: msg };
+  }
+}
+
+function handleUpdateNotificationEmailConfig_(payload) {
+  var adminCheck = requireAdminSession_(payload, null);
+  if (adminCheck.error) {
+    return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+  }
+  var appUrl = String(payload.appUrl || '').trim().replace(/\/$/, '');
+  var enabled = payload.enabled === true || String(payload.enabled || '').toLowerCase() === 'true';
+  if (enabled && !appUrl) {
+    return createResponse({ status: 'error', message: 'Cần URL dashboard khi bật gửi email' }, 400);
+  }
+  var props = PropertiesService.getScriptProperties();
+  props.setProperty('DASHBOARD_APP_URL', appUrl);
+  props.setProperty('NOTIF_EMAIL_ENABLED', enabled ? 'true' : 'false');
+  auditMutation_('update-notification-email-config', { appUrl: appUrl, enabled: enabled });
+  return createResponse({
+    status: 'success',
+    message: enabled ? 'Đã bật email thông báo' : 'Đã tắt email thông báo',
+    data: getNotificationEmailConfig_()
+  });
+}
+
+function handleSendTestNotificationEmail_(payload) {
+  var adminCheck = requireAdminSession_(payload, null);
+  if (adminCheck.error) {
+    return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+  }
+  var config = getNotificationEmailConfig_();
+  if (!config.enabled || !config.appUrl) {
+    return createResponse({ status: 'error', message: 'Bật email và nhập URL dashboard trước khi gửi thử' }, 400);
+  }
+  var ss = getSpreadsheet();
+  var userId = adminCheck.session.userId;
+  var result = sendNotificationEmail_(
+    userId,
+    'info',
+    'Email thử nghiệm',
+    'Hệ thống EPC Solar Dashboard gửi email thử. Nếu bạn nhận được, cấu hình email đang hoạt động.',
+    '/'
+  );
+  if (!result.ok) {
+    var email = getUserEmailForNotification_(ss, userId);
+    if (!email) {
+      return createResponse({ status: 'error', message: 'Tài khoản admin chưa có email @vuphong.com hợp lệ' }, 400);
+    }
+    var errMsg = result.error || 'Không gửi được email';
+    if (/authorization|permission|quyền|scope|auth/i.test(errMsg)) {
+      errMsg += ' — mở script.google.com → chọn project → Run hàm authorizeMailApp_ → Allow quyền gửi mail';
+    }
+    return createResponse({ status: 'error', message: errMsg }, 500);
+  }
+  return createResponse({ status: 'success', message: 'Đã gửi email thử tới ' + result.to });
+}
+
+function getActorUserId_(actor) {
+  return actor && actor.userId ? String(actor.userId) : '';
+}
+
+function shouldNotifyUser_(actorUserId, targetUserId) {
+  if (!targetUserId) return false;
+  if (actorUserId && actorUserId === targetUserId) return false;
+  return true;
+}
+
+function findUserIdsByDisplayName_(ss, displayName) {
+  if (!displayName) return [];
+  ensureUsersSheet_(ss);
+  var users = getSheetDataAsObjects(ss, 'USERS');
+  var ids = [];
+  for (var i = 0; i < users.length; i++) {
+    if (!isUserActive_(users[i])) continue;
+    if (namesMatch_(users[i].DISPLAY_NAME, displayName)) {
+      ids.push(String(users[i].USER_ID || ''));
+    }
+  }
+  return ids;
+}
+
+function getProjectDisplayName_(ss, projectId) {
+  var pid = String(projectId || '').trim();
+  if (!pid) return '';
+  var projects = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
+  for (var i = 0; i < projects.length; i++) {
+    if (String(projects[i].PROJECT_ID || '') === pid) {
+      return String(projects[i].TÊN_DỰ_ÁN || pid);
+    }
+  }
+  return pid;
+}
+
+function buildProjectLink_(ss, projectId, projectName) {
+  var pid = String(projectId || '').trim();
+  if (pid) return '/projects/' + encodeURIComponent(pid);
+  var label = String(projectName || '').trim() || getProjectDisplayName_(ss, projectId);
+  if (!label) return '/projects';
+  return '/projects/' + encodeURIComponent(label);
+}
+
+function buildTaskLink_(projectId, taskName) {
+  var q = encodeURIComponent(String(taskName || '').trim());
+  var link = '/tasks?q=' + q;
+  var pid = String(projectId || '').trim();
+  if (pid) link += '&project=' + encodeURIComponent(pid);
+  return link;
+}
+
+function notifyTaskAssigned_(ss, payload, actor, opts) {
+  opts = opts || {};
+  payload = payload || {};
+  var assignee = String(payload.NHÂN_SỰ || '').trim();
+  if (!assignee) return;
+
+  var taskName = String(payload.TÁC_VỤ || payload._matchTask || 'Tác vụ').trim();
+  var projectName = String(payload.TÊN_DỰ_ÁN || '').trim();
+  var projectId = String(payload.PROJECT_ID || payload.projectId || '').trim();
+  if (!projectName && projectId) {
+    projectName = getProjectDisplayName_(ss, projectId);
+  }
+
+  var actorName = String((actor && actor.displayName) || 'Hệ thống');
+  var actorUserId = getActorUserId_(actor);
+  var userIds = findUserIdsByDisplayName_(ss, assignee);
+  var title = opts.reassigned ? 'Task được chuyển giao' : 'Task mới được giao';
+  var body = actorName + (opts.reassigned ? ' chuyển cho bạn task "' : ' giao cho bạn task "') + taskName + '"';
+  if (projectName) body += ' (' + projectName + ')';
+  var taskLink = buildTaskLink_(projectId, taskName);
+
+  for (var i = 0; i < userIds.length; i++) {
+    if (shouldNotifyUser_(actorUserId, userIds[i])) {
+      createNotification_(userIds[i], 'task_assigned', title, body, taskLink);
+    }
+  }
+}
+
+function getTaskAssigneeBeforeUpdate_(ss, payload) {
+  var sheet = ss.getSheetByName('PROJECT_TASKS');
+  if (!sheet) return '';
+  var ctx = getTaskSheetContext_(sheet);
+  if (!ctx || ctx.assigneeCol === -1) return '';
+  var rowIndex = findTaskRowIndex_(sheet, payload);
+  if (rowIndex <= 1) return '';
+  var dataIdx = rowIndex - 1;
+  if (dataIdx >= ctx.data.length) return '';
+  return normalizeCellValue(ctx.data[dataIdx][ctx.assigneeCol]);
+}
+
+function notifyProjectAssignmentChanges_(ss, user, oldProjectsStr, newProjectsStr, actor) {
+  var oldList = parseAssignedProjects_(oldProjectsStr);
+  var newList = parseAssignedProjects_(newProjectsStr);
+  var userId = String(user.USER_ID || '');
+  var actorUserId = getActorUserId_(actor);
+  if (!shouldNotifyUser_(actorUserId, userId)) return;
+
+  var oldSet = {};
+  for (var o = 0; o < oldList.length; o++) oldSet[oldList[o]] = true;
+  var newSet = {};
+  for (var n = 0; n < newList.length; n++) newSet[newList[n]] = true;
+
+  for (var a = 0; a < newList.length; a++) {
+    var pidAdded = newList[a];
+    if (!oldSet[pidAdded]) {
+      var nameAdded = getProjectDisplayName_(ss, pidAdded);
+      createNotification_(
+        userId,
+        'project_assigned',
+        'Dự án mới được gán',
+        'Bạn được gán dự án ' + nameAdded,
+        buildProjectLink_(ss, pidAdded, nameAdded)
+      );
+    }
+  }
+
+  for (var r = 0; r < oldList.length; r++) {
+    var pidRemoved = oldList[r];
+    if (!newSet[pidRemoved]) {
+      var nameRemoved = getProjectDisplayName_(ss, pidRemoved);
+      createNotification_(
+        userId,
+        'project_unassigned',
+        'Dự án bị gỡ gán',
+        'Bạn không còn được gán dự án ' + nameRemoved,
+        '/projects'
+      );
+    }
+  }
+}
+
+function sanitizeNotificationForClient_(row) {
+  var link = String(row.LINK || '');
+  var hashIdx = link.indexOf('#n:');
+  if (hashIdx >= 0) link = link.slice(0, hashIdx);
+  return {
+    notifId: String(row.NOTIF_ID || ''),
+    type: String(row.TYPE || ''),
+    title: String(row.TITLE || ''),
+    body: String(row.BODY || ''),
+    link: link,
+    read: String(row.READ || '').toUpperCase() === 'TRUE',
+    createdAt: String(row.CREATED_AT || '')
+  };
+}
+
+function listNotificationsForUser_(ss, userId, limit) {
+  ensureNotificationsSheet_(ss);
+  var uid = String(userId || '');
+  var rows = getSheetDataAsObjects(ss, 'NOTIFICATIONS').filter(function(r) {
+    return String(r.USER_ID || '') === uid;
+  });
+  rows.sort(function(a, b) {
+    return String(b.CREATED_AT || '').localeCompare(String(a.CREATED_AT || ''));
+  });
+  limit = limit || 50;
+  var slice = rows.slice(0, limit);
+  var unreadCount = 0;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].READ || '').toUpperCase() !== 'TRUE') unreadCount++;
+  }
+  return {
+    items: slice.map(sanitizeNotificationForClient_),
+    unreadCount: unreadCount
+  };
+}
+
+function setNotificationRead_(ss, userId, notifId, readValue) {
+  ensureNotificationsSheet_(ss);
+  var sheet = ss.getSheetByName('NOTIFICATIONS');
+  var rows = getSheetDataAsObjects(ss, 'NOTIFICATIONS');
+  var uid = String(userId || '');
+  var nid = String(notifId || '');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].USER_ID || '') === uid && String(rows[i].NOTIF_ID || '') === nid) {
+      var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      var readCol = findColumnIndex(headers, ['READ']);
+      if (readCol !== -1 && rows[i]._rowIndex) {
+        sheet.getRange(rows[i]._rowIndex, readCol + 1).setValue(readValue ? 'TRUE' : 'FALSE');
+      }
+      return true;
+    }
+  }
+  return false;
+}
+
+function markAllNotificationsReadForUser_(ss, userId) {
+  ensureNotificationsSheet_(ss);
+  var sheet = ss.getSheetByName('NOTIFICATIONS');
+  var rows = getSheetDataAsObjects(ss, 'NOTIFICATIONS');
+  var uid = String(userId || '');
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var readCol = findColumnIndex(headers, ['READ']);
+  if (readCol === -1) return 0;
+  var count = 0;
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].USER_ID || '') !== uid) continue;
+    if (String(rows[i].READ || '').toUpperCase() === 'TRUE') continue;
+    if (rows[i]._rowIndex) {
+      sheet.getRange(rows[i]._rowIndex, readCol + 1).setValue('TRUE');
+      count++;
+    }
+  }
+  return count;
+}
+
+function handleMarkNotificationRead_(payload) {
+  var authReq = requireAuthForMutation_(payload);
+  if (authReq.error) {
+    return createResponse({ status: 'error', message: authReq.error }, authReq.code || 401);
+  }
+  var notifId = String(payload.notifId || '').trim();
+  if (!notifId) {
+    return createResponse({ status: 'error', message: 'Thiếu notifId' }, 400);
+  }
+  var ss = getSpreadsheet();
+  setNotificationRead_(ss, authReq.session.userId, notifId, true);
+  return createResponse({
+    status: 'success',
+    message: 'Đã đánh dấu đã đọc',
+    data: listNotificationsForUser_(ss, authReq.session.userId, 50)
+  });
+}
+
+function handleMarkAllNotificationsRead_(payload) {
+  var authReq = requireAuthForMutation_(payload);
+  if (authReq.error) {
+    return createResponse({ status: 'error', message: authReq.error }, authReq.code || 401);
+  }
+  var ss = getSpreadsheet();
+  markAllNotificationsReadForUser_(ss, authReq.session.userId);
+  return createResponse({
+    status: 'success',
+    message: 'Đã đánh dấu tất cả đã đọc',
+    data: listNotificationsForUser_(ss, authReq.session.userId, 50)
+  });
+}
+
+function startOfDayLocal_(date) {
+  var d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function todayFingerprint_() {
+  var d = new Date();
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+
+function isTaskCompleted_(status) {
+  var s = String(status || '').toLowerCase();
+  return s.indexOf('hoàn thành') >= 0 || s.indexOf('hoan thanh') >= 0 || s.indexOf('completed') >= 0 || s === 'done';
+}
+
+function isProjectCompleted_(status) {
+  var s = String(status || '').toUpperCase();
+  return s === 'ĐÃ HOÀN THÀNH' || s === 'HOÀN THÀNH' || s === 'COMPLETED';
+}
+
+function hasRecentNotificationFingerprint_(ss, userId, type, fingerprint) {
+  var rows = getSheetDataAsObjects(ss, 'NOTIFICATIONS');
+  var fp = String(fingerprint || '');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].USER_ID || '') !== String(userId)) continue;
+    if (String(rows[i].TYPE || '') !== String(type)) continue;
+    if (String(rows[i].LINK || '').indexOf(fp) >= 0) return true;
+  }
+  return false;
+}
+
+function createNotificationIfNew_(userId, type, title, body, link, fingerprint) {
+  if (!userId) return;
+  var ss = getSpreadsheet();
+  if (hasRecentNotificationFingerprint_(ss, userId, type, fingerprint)) return;
+  var linkWithFp = String(link || '') + (fingerprint ? '#n:' + fingerprint : '');
+  createNotification_(userId, type, title, body, linkWithFp);
+}
+
+function findUserIdsAssignedToProject_(ss, projectId) {
+  ensureUsersSheet_(ss);
+  var pid = String(projectId || '').trim();
+  if (!pid) return [];
+  var users = getSheetDataAsObjects(ss, 'USERS');
+  var ids = [];
+  var seen = {};
+  for (var i = 0; i < users.length; i++) {
+    if (!isUserActive_(users[i])) continue;
+    var list = parseAssignedProjects_(users[i].ASSIGNED_PROJECTS);
+    var matched = false;
+    for (var j = 0; j < list.length; j++) {
+      if (String(list[j]) === pid) { matched = true; break; }
+    }
+    if (!matched) continue;
+    var uid = String(users[i].USER_ID || '');
+    if (uid && !seen[uid]) {
+      seen[uid] = true;
+      ids.push(uid);
+    }
+  }
+  return ids;
+}
+
+function findProjectStakeholderUserIds_(ss, project) {
+  project = project || {};
+  var seen = {};
+  var ids = [];
+  function addIds(fromList) {
+    for (var i = 0; i < fromList.length; i++) {
+      if (fromList[i] && !seen[fromList[i]]) {
+        seen[fromList[i]] = true;
+        ids.push(fromList[i]);
+      }
+    }
+  }
+  addIds(findUserIdsByDisplayName_(ss, project.PM));
+  addIds(findUserIdsByDisplayName_(ss, project.SM));
+  addIds(findUserIdsAssignedToProject_(ss, project.PROJECT_ID || project.id));
+  return ids;
+}
+
+function wasProjectCompletedNotified_(projectId) {
+  return PropertiesService.getScriptProperties().getProperty('notif_completed_' + String(projectId)) === '1';
+}
+
+function markProjectCompletedNotified_(projectId) {
+  PropertiesService.getScriptProperties().setProperty('notif_completed_' + String(projectId), '1');
+}
+
+function getProjectById_(ss, projectId) {
+  var pid = String(projectId || '').trim();
+  if (!pid) return null;
+  var projects = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
+  for (var i = 0; i < projects.length; i++) {
+    if (String(projects[i].PROJECT_ID || projects[i].id || '') === pid) return projects[i];
+  }
+  return null;
+}
+
+function getProjectFieldBeforeUpdate_(ss, projectId, fieldName) {
+  var project = getProjectById_(ss, projectId);
+  return project ? project[fieldName] : '';
+}
+
+function notifyProjectCompleted_(ss, projectId, actor) {
+  var project = getProjectById_(ss, projectId);
+  if (!project || !isProjectCompleted_(project.TRẠNG_THÁI || project.STATUS)) return;
+  if (wasProjectCompletedNotified_(projectId)) return;
+
+  var projectName = String(project.TÊN_DỰ_ÁN || project.PROJECT_NAME || projectId);
+  var link = buildProjectLink_(ss, projectId, projectName);
+  var actorUserId = getActorUserId_(actor);
+  var userIds = findProjectStakeholderUserIds_(ss, project);
+  var title = 'Dự án hoàn thành';
+  var body = 'Dự án ' + projectName + ' đã hoàn thành (COD).';
+  var fp = 'project_completed_' + projectId;
+
+  for (var i = 0; i < userIds.length; i++) {
+    if (shouldNotifyUser_(actorUserId, userIds[i])) {
+      createNotificationIfNew_(userIds[i], 'project_completed', title, body, link, fp);
+    }
+  }
+  markProjectCompletedNotified_(projectId);
+}
+
+function runTaskDeadlineNotifications_(ss) {
+  var tasks = getSheetDataAsObjects(ss, 'PROJECT_TASKS');
+  var today = startOfDayLocal_(new Date());
+  var tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  var fpDay = todayFingerprint_();
+
+  for (var i = 0; i < tasks.length; i++) {
+    var task = tasks[i];
+    if (isTaskCompleted_(task.TRẠNG_THÁI || task.STATUS)) continue;
+
+    var endDate = parseDateString(task.NGÀY_KẾT_THÚC || task.endDate);
+    if (!endDate) continue;
+    endDate = startOfDayLocal_(endDate);
+
+    var taskName = String(task.TÁC_VỤ || task.task || 'Tác vụ').trim();
+    var projectName = String(task.TÊN_DỰ_ÁN || '').trim();
+    var projectId = String(task.PROJECT_ID || task.projectId || '').trim();
+    var taskKey = projectId + '|' + taskName;
+    var assignee = String(task.NHÂN_SỰ || '').trim();
+    var suffix = projectName ? ' (' + projectName + ')' : '';
+    var taskLink = buildTaskLink_(projectId, taskName);
+
+    if (endDate.getTime() === tomorrow.getTime()) {
+      var assigneeIds = findUserIdsByDisplayName_(ss, assignee);
+      for (var a = 0; a < assigneeIds.length; a++) {
+        createNotificationIfNew_(
+          assigneeIds[a],
+          'task_due_soon',
+          'Task sắp đến hạn',
+          'Task "' + taskName + '"' + suffix + ' đến hạn ngày mai',
+          taskLink,
+          taskKey + '_due_soon_' + fpDay
+        );
+      }
+    }
+
+    if (endDate.getTime() < today.getTime()) {
+      var daysLate = Math.max(1, Math.floor((today.getTime() - endDate.getTime()) / 86400000));
+      var overdueBody = 'Task "' + taskName + '"' + suffix + ' đã trễ ' + daysLate + ' ngày';
+      var overdueFp = taskKey + '_overdue_' + fpDay;
+
+      var assigneeIdsOverdue = findUserIdsByDisplayName_(ss, assignee);
+      for (var b = 0; b < assigneeIdsOverdue.length; b++) {
+        createNotificationIfNew_(
+          assigneeIdsOverdue[b],
+          'task_overdue',
+          'Task quá hạn',
+          overdueBody,
+          taskLink,
+          overdueFp
+        );
+      }
+
+      if (projectId) {
+        var project = getProjectById_(ss, projectId);
+        if (project) {
+          var pmIds = findUserIdsByDisplayName_(ss, project.PM);
+          var smIds = findUserIdsByDisplayName_(ss, project.SM);
+          var leaderIds = pmIds.concat(smIds);
+          var seenLeader = {};
+          for (var c = 0; c < leaderIds.length; c++) {
+            var lid = leaderIds[c];
+            if (!lid || seenLeader[lid]) continue;
+            seenLeader[lid] = true;
+            createNotificationIfNew_(
+              lid,
+              'task_overdue',
+              'Task quá hạn (dự án)',
+              overdueBody,
+              taskLink,
+              taskKey + '_overdue_pm_' + fpDay
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
+function runProjectCompletedScan_(ss) {
+  var projects = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
+  for (var i = 0; i < projects.length; i++) {
+    var pid = projects[i].PROJECT_ID || projects[i].id;
+    if (!pid) continue;
+    if (isProjectCompleted_(projects[i].TRẠNG_THÁI || projects[i].STATUS)) {
+      notifyProjectCompleted_(ss, pid, null);
+    }
+  }
+}
+
+function runDailyNotificationChecks_() {
+  var ss = getSpreadsheet();
+  ensureNotificationsSheet_(ss);
+  runTaskDeadlineNotifications_(ss);
+  runProjectCompletedScan_(ss);
+  return { ok: true, ranAt: new Date().toISOString() };
+}
+
+/** Time-based trigger — chạy mỗi sáng 8h (Asia/Ho_Chi_Minh) */
+function dailyNotificationTrigger() {
+  runDailyNotificationChecks_();
+}
+
+function installDailyNotificationTrigger_() {
+  var triggers = ScriptApp.getProjectTriggers();
+  for (var i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'dailyNotificationTrigger') {
+      ScriptApp.deleteTrigger(triggers[i]);
+    }
+  }
+  ScriptApp.newTrigger('dailyNotificationTrigger')
+    .timeBased()
+    .atHour(8)
+    .everyDays(1)
+    .inTimezone('Asia/Ho_Chi_Minh')
+    .create();
+  return { ok: true, message: 'Đã cài trigger thông báo hàng ngày (8:00 ICT)' };
+}
+
+// ================= PUBLIC SHARE =================
+
+function ensureProjectShareSheet_(ss) {
+  ss = ss || getSpreadsheet();
+  var sheet = ss.getSheetByName('PROJECT_SHARE');
+  if (!sheet) sheet = ss.insertSheet('PROJECT_SHARE');
+  initializeSheetIfEmpty(sheet, 'PROJECT_SHARE');
+  return sheet;
+}
+
+function generateShareToken_() {
+  return 'sh_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+function findShareRowByProjectId_(ss, projectId) {
+  ensureProjectShareSheet_(ss);
+  var pid = String(projectId || '').trim();
+  var rows = getSheetDataAsObjects(ss, 'PROJECT_SHARE');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].PROJECT_ID || '') === pid) return rows[i];
+  }
+  return null;
+}
+
+function findShareRowByToken_(ss, token) {
+  ensureProjectShareSheet_(ss);
+  var tok = String(token || '').trim();
+  if (!tok) return null;
+  var rows = getSheetDataAsObjects(ss, 'PROJECT_SHARE');
+  for (var i = 0; i < rows.length; i++) {
+    if (String(rows[i].SHARE_TOKEN || '') === tok) return rows[i];
+  }
+  return null;
+}
+
+function resolveProjectIdFlexible_(ss, projectIdOrName) {
+  var key = String(projectIdOrName || '').trim();
+  if (!key) return '';
+  var projects = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
+  for (var i = 0; i < projects.length; i++) {
+    var p = projects[i];
+    if (String(p.PROJECT_ID || p.id || '') === key) return String(p.PROJECT_ID || p.id);
+    var name = String(p.TÊN_DỰ_ÁN || p.name || '');
+    if (name && name.toUpperCase() === key.toUpperCase()) return String(p.PROJECT_ID || p.id || '');
+  }
+  return key;
+}
+
+function getProjectShareStatus_(ss, projectIdOrName) {
+  var projectId = resolveProjectIdFlexible_(ss, projectIdOrName);
+  var row = findShareRowByProjectId_(ss, projectId);
+  return {
+    projectId: projectId,
+    enabled: row ? String(row.ENABLED || '').toUpperCase() === 'TRUE' : false,
+    token: row ? String(row.SHARE_TOKEN || '') : ''
+  };
+}
+
+function setProjectShareEnabled_(ss, projectId, enabled, token) {
+  ensureProjectShareSheet_(ss);
+  var sheet = ss.getSheetByName('PROJECT_SHARE');
+  var row = findShareRowByProjectId_(ss, projectId);
+  var now = new Date().toISOString();
+  if (!row) {
+    appendRow(ss, 'PROJECT_SHARE', {
+      PROJECT_ID: String(projectId),
+      SHARE_TOKEN: token || generateShareToken_(),
+      ENABLED: enabled ? 'TRUE' : 'FALSE',
+      CREATED_AT: now,
+      UPDATED_AT: now
+    });
+    return findShareRowByProjectId_(ss, projectId);
+  }
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var enabledCol = findColumnIndex(headers, ['ENABLED']);
+  var tokenCol = findColumnIndex(headers, ['SHARE_TOKEN']);
+  var updatedCol = findColumnIndex(headers, ['UPDATED_AT']);
+  if (enabledCol !== -1 && row._rowIndex) {
+    sheet.getRange(row._rowIndex, enabledCol + 1).setValue(enabled ? 'TRUE' : 'FALSE');
+  }
+  if (token && tokenCol !== -1 && row._rowIndex) {
+    sheet.getRange(row._rowIndex, tokenCol + 1).setValue(token);
+  }
+  if (updatedCol !== -1 && row._rowIndex) {
+    sheet.getRange(row._rowIndex, updatedCol + 1).setValue(now);
+  }
+  return findShareRowByProjectId_(ss, projectId);
+}
+
+function handleEnableProjectShare_(payload) {
+  var adminCheck = requireAdminSession_(payload, null);
+  if (adminCheck.error) {
+    return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+  }
+  var ss = getSpreadsheet();
+  var projectId = resolveProjectIdFlexible_(ss, payload.projectId || payload.id);
+  if (!projectId || !getProjectById_(ss, projectId)) {
+    return createResponse({ status: 'error', message: 'Không tìm thấy dự án' }, 404);
+  }
+  var existing = findShareRowByProjectId_(ss, projectId);
+  var token = existing && existing.SHARE_TOKEN ? String(existing.SHARE_TOKEN) : generateShareToken_();
+  setProjectShareEnabled_(ss, projectId, true, token);
+  auditMutation_('enable-project-share', { projectId: projectId }, adminCheck.session);
+  return createResponse({
+    status: 'success',
+    data: { projectId: projectId, token: token, enabled: true }
+  });
+}
+
+function handleDisableProjectShare_(payload) {
+  var adminCheck = requireAdminSession_(payload, null);
+  if (adminCheck.error) {
+    return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+  }
+  var ss = getSpreadsheet();
+  var projectId = resolveProjectIdFlexible_(ss, payload.projectId || payload.id);
+  if (!projectId) {
+    return createResponse({ status: 'error', message: 'Thiếu projectId' }, 400);
+  }
+  setProjectShareEnabled_(ss, projectId, false);
+  auditMutation_('disable-project-share', { projectId: projectId }, adminCheck.session);
+  return createResponse({
+    status: 'success',
+    data: { projectId: projectId, enabled: false }
+  });
+}
+
+function getModuleProgressSnapshot_(ss, projectId) {
+  var permits = getSheetDataAsObjects(ss, 'PROJECT_PERMIT').filter(function(r) { return r.PROJECT_ID == projectId; });
+  var permitsComp = permits.filter(function(p) {
+    return p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && String(p.KẾT_QUẢ_CUỐI).trim() !== '';
+  }).length;
+  var permitProg = permits.length > 0 ? (permitsComp / permits.length) * 100 : 0;
+
+  var designs = getSheetDataAsObjects(ss, 'PROJECT_DESIGN').filter(function(r) { return r.PROJECT_ID == projectId; });
+  var designsComp = designs.filter(function(d) {
+    return d.KẾT_QUẢ_CUỐI && d.KẾT_QUẢ_CUỐI !== '-' && d.KẾT_QUẢ_CUỐI !== '---' && d.KẾT_QUẢ_CUỐI !== 'N/A' && String(d.KẾT_QUẢ_CUỐI).trim() !== '';
+  }).length;
+  var designProg = designs.length > 0 ? (designsComp / designs.length) * 100 : 0;
+
+  var procurements = getSheetDataAsObjects(ss, 'PROJECT_PROCUREMENT').filter(function(r) { return r.PROJECT_ID == projectId; });
+  var procurementsComp = procurements.filter(function(p) { return p.TÌNH_TRẠNG_VẬT_TƯ === 'Đã tới site'; }).length;
+  var procurementProg = procurements.length > 0 ? (procurementsComp / procurements.length) * 100 : 0;
+
+  var constructions = getSheetDataAsObjects(ss, 'PROJECT_CONSTRUCTION').filter(function(r) { return r.PROJECT_ID == projectId; });
+  var groupWeights = { 'A': 15, 'B': 40, 'C': 30, 'D': 15 };
+  var groupTasks = { 'A': [], 'B': [], 'C': [], 'D': [] };
+  var getGroupKeyFromRow = function(r) {
+    var g = r.NHÓM_THI_CÔNG || '';
+    if (g.indexOf('[A]') >= 0) return 'A';
+    if (g.indexOf('[B]') >= 0) return 'B';
+    if (g.indexOf('[C]') >= 0) return 'C';
+    if (g.indexOf('[D]') >= 0) return 'D';
+    var code = String(r.MÃ_CV || '').charAt(0);
+    if (code === '1') return 'A';
+    if (code === '2') return 'B';
+    if (code === '3') return 'C';
+    if (code === '4') return 'D';
+    return null;
+  };
+  constructions.forEach(function(task) {
+    var key = getGroupKeyFromRow(task);
+    if (key) groupTasks[key].push(Number(task.TIẾN_ĐỘ_THỰC_TẾ || 0));
+  });
+  var constructionProg = 0;
+  for (var k in groupWeights) {
+    var tasks = groupTasks[k];
+    var avg = tasks.length > 0 ? (tasks.reduce(function(s, v) { return s + v; }, 0) / tasks.length) : 0;
+    constructionProg += avg * (groupWeights[k] / 100);
+  }
+
+  var handovers = getSheetDataAsObjects(ss, 'PROJECT_HANDOVER').filter(function(r) { return r.PROJECT_ID == projectId; });
+  var handoversComp = handovers.filter(function(h) {
+    return h.KẾT_QUẢ_CUỐI && h.KẾT_QUẢ_CUỐI !== '-' && h.KẾT_QUẢ_CUỐI !== 'N/A' && String(h.KẾT_QUẢ_CUỐI).trim() !== '';
+  }).length;
+  var handoverProg = handovers.length > 0 ? (handoversComp / handovers.length) * 100 : 0;
+
+  return {
+    permit: Math.round(permitProg * 100) / 100,
+    design: Math.round(designProg * 100) / 100,
+    procurement: Math.round(procurementProg * 100) / 100,
+    construction: Math.round(constructionProg * 100) / 100,
+    handover: Math.round(handoverProg * 100) / 100
+  };
+}
+
+function sanitizeProjectForPublic_(project) {
+  if (!project) return null;
+  return {
+    id: String(project.PROJECT_ID || project.id || ''),
+    name: String(project.TÊN_DỰ_ÁN || project.name || '-'),
+    client: String(project.KHÁCH_HÀNG || project.client || '-'),
+    capacity: Number(project.CÔNG_SUẤT_KWP || project.capacity || 0),
+    cod: String(project.KẾ_HOẠCH_COD || project.cod || '-'),
+    kickoffDate: String(project.KICKOFF_DATE || project.kickoffDate || '-'),
+    planProgress: Number(project.TIẾN_ĐỘ_KẾ_HOẠCH || project.planProgress || 0),
+    actualProgress: Number(project.TIẾN_ĐỘ_THỰC_TẾ || project.actualProgress || 0),
+    delay: Number(project.DELAY || project.delay || 0),
+    status: String(project.TRẠNG_THÁI || project.status || '-')
+  };
+}
+
+function getPublicShareData_(ss, token) {
+  var shareRow = findShareRowByToken_(ss, token);
+  if (!shareRow || String(shareRow.ENABLED || '').toUpperCase() !== 'TRUE') return null;
+  var projectId = String(shareRow.PROJECT_ID || '');
+  var project = getProjectById_(ss, projectId);
+  if (!project) return null;
+
+  recalculateProjectProgress(ss, projectId);
+  project = getProjectById_(ss, projectId);
+
+  var moduleProgress = getModuleProgressSnapshot_(ss, projectId);
+  var actualFromModules = Math.round(
+    (moduleProgress.permit * 0.10) +
+    (moduleProgress.design * 0.15) +
+    (moduleProgress.procurement * 0.25) +
+    (moduleProgress.construction * 0.40) +
+    (moduleProgress.handover * 0.10)
+  );
+  var sanitized = sanitizeProjectForPublic_(project);
+  if (actualFromModules > 0) sanitized.actualProgress = actualFromModules;
+
+  var siteLogs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(function(row) {
+    return String(row.PROJECT_ID || row.projectId) === String(projectId);
+  });
+  var filterByProject = function(row) {
+    return String(row.PROJECT_ID || row.projectId) === String(projectId);
+  };
+
+  return {
+    project: sanitized,
+    milestones: getSheetDataAsObjects(ss, 'PROJECT_MILESTONE').filter(filterByProject),
+    scurve: getSheetDataAsObjects(ss, 'PROJECT_S_CURVE').filter(filterByProject),
+    moduleProgress: moduleProgress,
+    siteLogs: siteLogs,
+    weeklyLogs: getWeeklyAggregates(ss, projectId, siteLogs),
+    monthlyLogs: getMonthlyAggregates(ss, projectId, siteLogs),
+    risks: getSheetDataAsObjects(ss, 'PROJECT_RISK').filter(filterByProject),
+    permits: getSheetDataAsObjects(ss, 'PROJECT_PERMIT').filter(filterByProject),
+    designs: getSheetDataAsObjects(ss, 'PROJECT_DESIGN').filter(filterByProject),
+    procurements: getSheetDataAsObjects(ss, 'PROJECT_PROCUREMENT').filter(filterByProject),
+    constructions: getSheetDataAsObjects(ss, 'PROJECT_CONSTRUCTION').filter(filterByProject),
+    handovers: getSheetDataAsObjects(ss, 'PROJECT_HANDOVER').filter(filterByProject)
+  };
+}
+
+// ================= AUDIT LOG =================
+
+var AUDIT_LOG_MAX_ROWS_ = 3000;
+
+function ensureAuditLogSheet_(ss) {
+  ss = ss || getSpreadsheet();
+  var sheet = ss.getSheetByName('AUDIT_LOG');
+  if (!sheet) {
+    sheet = ss.insertSheet('AUDIT_LOG');
+  }
+  initializeSheetIfEmpty(sheet, 'AUDIT_LOG');
+  return sheet;
+}
+
+function getActorFromPayload_(payload) {
+  var token = getAuthTokenFromRequest_(payload, null);
+  var session = getAuthSession_(token);
+  if (session) return session;
+  return {
+    userId: '',
+    username: 'unknown',
+    displayName: 'Không xác định',
+    role: ''
+  };
+}
+
+function auditMutation_(action, payload, actorOverride) {
+  var actor = actorOverride || getActorFromPayload_(payload);
+  writeAuditLog_(actor, action, payload || {});
+}
+
+function getResourceTypeForAction_(action) {
+  var a = String(action || '').toLowerCase();
+  if (a.indexOf('user') >= 0 || a === 'login' || a === 'logout') return 'USER';
+  if (a.indexOf('task') >= 0) return 'TASK';
+  if (a.indexOf('project') >= 0) return 'PROJECT';
+  if (a.indexOf('site') >= 0 || a.indexOf('upload') >= 0) return 'SITE';
+  if (a.indexOf('risk') >= 0) return 'RISK';
+  if (a.indexOf('permit') >= 0) return 'PERMIT';
+  if (a.indexOf('design') >= 0) return 'DESIGN';
+  if (a.indexOf('procurement') >= 0) return 'PROCUREMENT';
+  if (a.indexOf('construction') >= 0) return 'CONSTRUCTION';
+  if (a.indexOf('handover') >= 0) return 'HANDOVER';
+  if (a.indexOf('module') >= 0) return 'MODULE';
+  return 'DATA';
+}
+
+function buildAuditSummary_(action, payload) {
+  payload = payload || {};
+  var pid = String(payload.PROJECT_ID || payload.id || payload.projectId || '').trim();
+  var name = String(payload.TÊN_DỰ_ÁN || payload.name || payload.TÁC_VỤ || payload._matchTask || '').trim();
+  switch (action) {
+    case 'login':
+      return 'Đăng nhập — ' + (payload.username || '');
+    case 'logout':
+      return 'Đăng xuất';
+    case 'add-user':
+      return 'Tạo tài khoản: ' + (payload.username || '');
+    case 'update-user':
+      if (payload.active === false || String(payload.active).toUpperCase() === 'FALSE') {
+        return 'Vô hiệu hóa tài khoản: ' + (payload.userId || payload.username || '');
+      }
+      return 'Cập nhật tài khoản: ' + (payload.userId || payload.username || '');
+    case 'deactivate-user':
+      return 'Vô hiệu hóa tài khoản: ' + (payload.userId || '');
+    case 'change-password':
+      return 'Đổi mật khẩu tài khoản';
+    case 'add-project':
+      return 'Tạo dự án: ' + (payload.TÊN_DỰ_ÁN || payload.name || pid);
+    case 'delete-project':
+      return 'Xóa dự án: ' + pid;
+    case 'update-project':
+      return 'Cập nhật dự án: ' + (payload.TÊN_DỰ_ÁN || payload.name || pid);
+    case 'add-task':
+      return 'Tạo task: ' + (payload.TÁC_VỤ || name) + (pid ? ' (' + pid + ')' : '');
+    case 'update-task':
+      return 'Sửa task: ' + (payload.TÁC_VỤ || payload._matchTask || name) + (pid ? ' (' + pid + ')' : '');
+    case 'delete-task':
+      return 'Xóa task: ' + (payload.TÁC_VỤ || payload._matchTask || name) + (pid ? ' (' + pid + ')' : '');
+    case 'update-site-log':
+      return 'Cập nhật nhật ký hiện trường — dự án ' + pid;
+    case 'upload-site-image':
+      return 'Upload ảnh hiện trường — dự án ' + pid;
+    case 'update-module-dates':
+      return 'Cập nhật ngày module — dự án ' + pid;
+    default:
+      if (action && action.indexOf('update-') === 0) {
+        return 'Cập nhật ' + action.replace('update-', '') + (pid ? ' — dự án ' + pid : '');
+      }
+      if (action && action.indexOf('add-') === 0) {
+        return 'Thêm ' + action.replace('add-', '') + (pid ? ' — dự án ' + pid : '');
+      }
+      return String(action || 'unknown');
+  }
+}
+
+function trimAuditDetails_(payload) {
+  var copy = {};
+  var p = payload || {};
+  var skip = ['password', 'currentPassword', 'newPassword', 'passwordConfirm', 'PASSWORD_HASH', 'SALT', '_token', 'token', 'base64', 'chunk'];
+  for (var key in p) {
+    if (!p.hasOwnProperty(key)) continue;
+    if (skip.indexOf(key) >= 0) continue;
+    var val = p[key];
+    if (val == null) continue;
+    if (typeof val === 'string' && val.length > 300) {
+      val = val.slice(0, 300) + '…';
+    }
+    try {
+      copy[key] = val;
+    } catch (e) {}
+  }
+  try {
+    return JSON.stringify(copy).slice(0, 2000);
+  } catch (e2) {
+    return '';
+  }
+}
+
+function writeAuditLog_(actor, action, payload) {
+  try {
+    var ss = getSpreadsheet();
+    ensureAuditLogSheet_(ss);
+    actor = actor || {};
+    payload = payload || {};
+    var pid = String(payload.PROJECT_ID || payload.id || payload.projectId || '').trim();
+    appendRow(ss, 'AUDIT_LOG', {
+      LOG_ID: 'L' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      TIMESTAMP: new Date().toISOString(),
+      USER_ID: String(actor.userId || ''),
+      USERNAME: String(actor.username || ''),
+      DISPLAY_NAME: String(actor.displayName || actor.username || 'Không xác định'),
+      ACTION: String(action || ''),
+      RESOURCE_TYPE: getResourceTypeForAction_(action),
+      PROJECT_ID: pid,
+      SUMMARY: buildAuditSummary_(action, payload),
+      DETAILS: trimAuditDetails_(payload)
+    });
+    trimAuditLogIfNeeded_(ss);
+  } catch (err) {
+    Logger.log('Audit log error: ' + err);
+  }
+}
+
+function trimAuditLogIfNeeded_(ss) {
+  var sheet = ss.getSheetByName('AUDIT_LOG');
+  if (!sheet) return;
+  var lastRow = sheet.getLastRow();
+  if (lastRow <= AUDIT_LOG_MAX_ROWS_ + 1) return;
+  sheet.deleteRows(2, lastRow - AUDIT_LOG_MAX_ROWS_ - 1);
+}
+
+function sanitizeAuditLogForClient_(row) {
+  return {
+    logId: String(row.LOG_ID || ''),
+    timestamp: String(row.TIMESTAMP || ''),
+    userId: String(row.USER_ID || ''),
+    username: String(row.USERNAME || ''),
+    displayName: String(row.DISPLAY_NAME || ''),
+    action: String(row.ACTION || ''),
+    resourceType: String(row.RESOURCE_TYPE || ''),
+    projectId: String(row.PROJECT_ID || ''),
+    summary: String(row.SUMMARY || ''),
+    details: String(row.DETAILS || '')
+  };
+}
+
+function listAuditLogs_(ss, limit, offset, userIdFilter, actionFilter) {
+  ensureAuditLogSheet_(ss);
+  var rows = getSheetDataAsObjects(ss, 'AUDIT_LOG');
+  rows.sort(function(a, b) {
+    return String(b.TIMESTAMP || '').localeCompare(String(a.TIMESTAMP || ''));
+  });
+
+  if (userIdFilter) {
+    var uid = String(userIdFilter).trim();
+    rows = rows.filter(function(r) {
+      return String(r.USER_ID || '') === uid || String(r.USERNAME || '') === uid;
+    });
+  }
+  if (actionFilter) {
+    var act = String(actionFilter).trim().toLowerCase();
+    rows = rows.filter(function(r) {
+      return String(r.ACTION || '').toLowerCase().indexOf(act) >= 0;
+    });
+  }
+
+  var total = rows.length;
+  limit = Math.min(Math.max(limit || 150, 1), 500);
+  offset = Math.max(offset || 0, 0);
+  var slice = rows.slice(offset, offset + limit).map(sanitizeAuditLogForClient_);
+
+  return { logs: slice, total: total, limit: limit, offset: offset };
 }

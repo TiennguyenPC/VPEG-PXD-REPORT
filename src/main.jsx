@@ -1,17 +1,61 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import './index.css'
-import App from './App.jsx'
-import ProjectDetailPage from './pages/ProjectDetailPage.jsx'
+import AIAssistant from './components/AIAssistant.jsx'
+import { ErrorBoundary } from './ErrorBoundary.jsx'
+import { AuthProvider, useAuth } from './context/AuthContext.jsx'
+import ProtectedRoute from './components/ProtectedRoute.jsx'
+import AdminRoute from './components/AdminRoute.jsx'
+
+// Lazy load pages for faster initial load
+const App = lazy(() => import('./App.jsx'))
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage.jsx'))
+const TaskList = lazy(() => import('./pages/TaskList.jsx'))
+const Overview = lazy(() => import('./pages/Overview.jsx'))
+const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
+const AccountPage = lazy(() => import('./pages/AccountPage.jsx'))
+const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage.jsx'))
+const AuditLogPage = lazy(() => import('./pages/AuditLogPage.jsx'))
+const ShareProjectPage = lazy(() => import('./pages/ShareProjectPage.jsx'))
+
+function AuthenticatedAssistant() {
+  const { user } = useAuth();
+  if (!user) return null;
+  return <AIAssistant />;
+}
+
+// Loading fallback component
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-[var(--bg-main)]">
+    <div className="flex flex-col items-center gap-4">
+      <div className="w-10 h-10 border-4 border-[#5252ff]/30 border-t-[#5252ff] rounded-full animate-spin"></div>
+      <span className="text-white font-medium text-sm">Đang tải giao diện...</span>
+    </div>
+  </div>
+);
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<App />} />
-        <Route path="/projects/*" element={<ProjectDetailPage />} />
-      </Routes>
+      <AuthProvider>
+        <Suspense fallback={<PageLoader />}>
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/share/:token" element={<ShareProjectPage />} />
+              <Route path="/" element={<ProtectedRoute><Overview /></ProtectedRoute>} />
+              <Route path="/projects" element={<ProtectedRoute><App /></ProtectedRoute>} />
+              <Route path="/tasks" element={<ProtectedRoute><TaskList /></ProtectedRoute>} />
+              <Route path="/projects/:id" element={<ProtectedRoute><ProjectDetailPage /></ProtectedRoute>} />
+              <Route path="/account" element={<ProtectedRoute><AccountPage /></ProtectedRoute>} />
+              <Route path="/settings/users" element={<ProtectedRoute><AdminRoute><UserSettingsPage /></AdminRoute></ProtectedRoute>} />
+              <Route path="/settings/audit" element={<ProtectedRoute><AdminRoute><AuditLogPage /></AdminRoute></ProtectedRoute>} />
+            </Routes>
+          </ErrorBoundary>
+        </Suspense>
+        <AuthenticatedAssistant />
+      </AuthProvider>
     </BrowserRouter>
   </StrictMode>,
 )

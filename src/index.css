@@ -17,22 +17,27 @@
   }
 
   [data-theme='light'] {
-    --bg-main: #0f172a; /* slate-900 */
-    --bg-panel: #1e293b; /* slate-800 */
-    --bg-hover: #334155; /* slate-700 */
-    --border-main: #334155; /* slate-700 */
-    --border-light: #475569; /* slate-600 */
-    --text-muted: #94a3b8; /* slate-400 */
-    --text-main: #f8fafc; /* slate-50 */
-    --text-strong: #ffffff; /* white */
-    --shadow-color: rgba(0, 0, 0, 0.2);
-    --glass-bg: rgba(30, 41, 59, 0.7);
+    --bg-main: #f7f8fb;
+    --bg-panel: #ffffff;
+    --bg-hover: #f1f4f8;
+    --border-main: #e2e8f0;
+    --border-light: #d6dee9;
+    --text-muted: #667085;
+    --text-main: #273449;
+    --text-strong: #111827;
+    --shadow-color: rgba(15, 23, 42, 0.06);
+    --glass-bg: rgba(255, 255, 255, 0.9);
   }
 
   body {
     background-color: var(--bg-main);
     color: var(--text-main);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     @apply antialiased font-sans selection:bg-brand-purple/30 selection:text-white transition-colors duration-300;
+  }
+
+  h1, h2, h3, h4 {
+    color: var(--text-strong);
   }
 }
 
@@ -96,6 +101,237 @@
 
 .animate-soft-pulse {
   animation: soft-pulse 2s infinite ease-in-out;
+}
+
+/* Light mode overrides for hardcoded Tailwind text colors */
+[data-theme='light'] {
+  color-scheme: light;
+}
+
+[data-theme='light'] .text-slate-100,
+[data-theme='light'] .text-slate-200 {
+  color: #1e293b !important;
+}
+
+[data-theme='light'] .text-slate-300,
+[data-theme='light'] .text-slate-400 {
+  color: #475569 !important;
+}
+
+[data-theme='light'] .text-slate-500 {
+  color: #64748b !important;
+}
+
+[data-theme='light'] .font-black {
+  letter-spacing: -0.025em;
+}
+
+[data-theme='light'] .uppercase {
+  letter-spacing: 0.045em;
+}
+
+/*
+  Light theme cleanup:
+  A lot of older UI pieces used hardcoded dark Tailwind colors. These overrides
+  keep light mode visually consistent without touching every legacy class.
+*/
+[data-theme='light'] [class*="bg-[#0a0f1c]"],
+[data-theme='light'] [class*="bg-[#10182a]"],
+[data-theme='light'] [class*="bg-[rgba(15,23,42,0.6)]"] {
+  background-color: var(--bg-panel) !important;
+}
+
+[data-theme='light'] [class*="bg-[#060a13]"],
+[data-theme='light'] [class*="bg-[#080d17]"],
+[data-theme='light'] [class*="bg-[#080d18]"],
+[data-theme='light'] [class*="bg-[#0b0f19]"],
+[data-theme='light'] [class*="bg-[#0a1020]"],
+[data-theme='light'] [class*="bg-[#0b1120]"],
+[data-theme='light'] [class*="bg-[#0b1221]"],
+[data-theme='light'] [class*="bg-[#0c1221]"],
+[data-theme='light'] [class*="bg-[#0e1628]"],
+[data-theme='light'] [class*="bg-[#111827]"],
+[data-theme='light'] [class*="bg-[#141d30]"],
+[data-theme='light'] [class*="bg-[#141c2f]"],
+[data-theme='light'] [class*="bg-[#18183c]"],
+[data-theme='light'] [class*="bg-[#18233a]"],
+[data-theme='light'] [class*="bg-[#1e293b]"],
+[data-theme='light'] [class*="bg-[#263554]"],
+[data-theme='light'] [class*="bg-slate-800"],
+[data-theme='light'] [class*="bg-slate-900"] {
+  background-color: var(--bg-panel) !important;
+}
+
+[data-theme='light'] [class*="hover:bg-[#060a13]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#080d17]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#080d18]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#0b0f19]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#0a1020]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#0b1120]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#0b1221]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#0c1221]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#0e1628]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#111827]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#141d30]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#141c2f]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#18183c]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#18233a]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#1e293b]"]:hover,
+[data-theme='light'] [class*="hover:bg-[#263554]"]:hover,
+[data-theme='light'] [class*="hover:bg-slate-700"]:hover,
+[data-theme='light'] [class*="hover:bg-slate-800"]:hover {
+  background-color: var(--bg-hover) !important;
+}
+
+[data-theme='light'] [class*="from-[#060a13]"],
+[data-theme='light'] [class*="from-[#080d17]"],
+[data-theme='light'] [class*="from-[#080d18]"],
+[data-theme='light'] [class*="from-[#0a1020]"],
+[data-theme='light'] [class*="from-[#0b1120]"],
+[data-theme='light'] [class*="from-[#0b1221]"],
+[data-theme='light'] [class*="from-[#0c1221]"],
+[data-theme='light'] [class*="from-[#0e1628]"],
+[data-theme='light'] [class*="from-[#111827]"],
+[data-theme='light'] [class*="from-[#141d30]"],
+[data-theme='light'] [class*="from-[#141c2f]"] {
+  --tw-gradient-from: rgba(255, 255, 255, 0.96) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(255, 255, 255, 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+
+[data-theme='light'] [class*="to-[#060a13]"],
+[data-theme='light'] [class*="to-[#080d17]"],
+[data-theme='light'] [class*="to-[#080d18]"],
+[data-theme='light'] [class*="to-[#0a1020]"],
+[data-theme='light'] [class*="to-[#0b1120]"],
+[data-theme='light'] [class*="to-[#0b1221]"],
+[data-theme='light'] [class*="to-[#0c1221]"],
+[data-theme='light'] [class*="to-[#0e1628]"],
+[data-theme='light'] [class*="to-[#111827]"],
+[data-theme='light'] [class*="to-[#141d30]"],
+[data-theme='light'] [class*="to-[#141c2f]"] {
+  --tw-gradient-to: rgba(255, 255, 255, 0.88) var(--tw-gradient-to-position) !important;
+}
+
+[data-theme='light'] .text-white {
+  color: var(--text-strong) !important;
+}
+
+[data-theme='light'] [class*="bg-[#5252ff]"].text-white,
+[data-theme='light'] [class*="bg-indigo"].text-white,
+[data-theme='light'] [class*="bg-blue"].text-white,
+[data-theme='light'] [class*="bg-purple"].text-white,
+[data-theme='light'] [class*="bg-red"].text-white,
+[data-theme='light'] [class*="bg-amber"].text-white,
+[data-theme='light'] [class*="bg-green"].text-white,
+[data-theme='light'] [class*="bg-emerald"].text-white,
+[data-theme='light'] [class*="from-indigo"].text-white,
+[data-theme='light'] [class*="from-purple"].text-white,
+[data-theme='light'] [class*="from-[#5252ff]"].text-white {
+  color: #ffffff !important;
+}
+
+[data-theme='light'] [class*="border-slate-700"],
+[data-theme='light'] [class*="border-slate-800"],
+[data-theme='light'] [class*="divide-slate-700"],
+[data-theme='light'] [class*="divide-slate-800"] {
+  border-color: var(--border-main) !important;
+}
+
+[data-theme='light'] [class*="shadow-black"] {
+  --tw-shadow-color: rgba(15, 23, 42, 0.08) !important;
+  --tw-shadow: var(--tw-shadow-colored) !important;
+}
+
+[data-theme='light'] .shadow-xl,
+[data-theme='light'] .shadow-2xl,
+[data-theme='light'] .shadow-lg {
+  --tw-shadow-color: rgba(15, 23, 42, 0.07) !important;
+  box-shadow: 0 10px 28px -18px rgba(15, 23, 42, 0.35), 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+[data-theme='light'] .glass-panel,
+[data-theme='light'] [class*="backdrop-blur"] {
+  background-color: rgba(255, 255, 255, 0.88);
+}
+
+[data-theme='light'] [class*="bg-[var(--bg-main)]/75"],
+[data-theme='light'] [class*="bg-[var(--bg-main)]/80"],
+[data-theme='light'] [class*="bg-[var(--bg-main)]/95"] {
+  background-color: rgba(247, 248, 251, 0.92) !important;
+}
+
+[data-theme='light'] [class*="bg-[#022c22]"] {
+  background-color: rgba(16, 185, 129, 0.12) !important;
+}
+
+[data-theme='light'] [class*="bg-[#172554]"] {
+  background-color: rgba(59, 130, 246, 0.12) !important;
+}
+
+[data-theme='light'] [class*="bg-[#334155]"] {
+  background-color: rgba(100, 116, 139, 0.12) !important;
+}
+
+[data-theme='light'] [class*="border-[#22304a]"],
+[data-theme='light'] [class*="border-[#263554]"],
+[data-theme='light'] [class*="border-[#334155]"] {
+  border-color: var(--border-main) !important;
+}
+
+[data-theme='light'] [class*="shadow-[0_18px_60px"],
+[data-theme='light'] [class*="shadow-[0_0_"] {
+  box-shadow: 0 12px 30px -20px rgba(15, 23, 42, 0.35) !important;
+}
+
+[data-theme='light'] .recharts-cartesian-grid line {
+  stroke: #e8edf5;
+}
+
+[data-theme='light'] .recharts-text,
+[data-theme='light'] .recharts-legend-item-text {
+  fill: var(--text-muted) !important;
+  color: var(--text-muted) !important;
+}
+
+[data-theme='light'] label,
+[data-theme='light'] th {
+  color: var(--text-muted);
+}
+
+[data-theme='light'] table,
+[data-theme='light'] thead,
+[data-theme='light'] tbody,
+[data-theme='light'] tr {
+  color: var(--text-main);
+}
+
+[data-theme='light'] [class*="rounded-xl"][class*="border"],
+[data-theme='light'] [class*="rounded-2xl"][class*="border"],
+[data-theme='light'] [class*="rounded-lg"][class*="border"] {
+  border-color: var(--border-main);
+}
+
+/* Scrollbar light mode */
+[data-theme='light'] ::-webkit-scrollbar-track {
+  background: #e8edf3;
+}
+
+[data-theme='light'] ::-webkit-scrollbar-thumb {
+  background: #c2cfe0;
+}
+
+[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+[data-theme='light'] input,
+[data-theme='light'] select,
+[data-theme='light'] textarea {
+  color-scheme: light;
+  color: var(--text-main);
+  background-color: var(--bg-panel);
+  border-color: var(--border-main);
 }
 
 /* Print optimization to avoid splitting charts across pages */

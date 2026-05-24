@@ -7,6 +7,7 @@ import { useTheme } from "../hooks/useTheme";
 import { useSidebar } from "../hooks/useSidebar";
 import Sidebar from "../components/Sidebar";
 import ProjectHeader from "../components/project-details/ProjectHeader";
+import ProjectSectionNav from "../components/project-details/ProjectSectionNav";
 import KPIOverview from "../components/project-details/KPIOverview";
 import MilestoneTimeline from "../components/project-details/MilestoneTimeline";
 import SCurveChart from "../components/project-details/SCurveChart";
@@ -20,62 +21,116 @@ import ConstructionModule from "../components/project-details/modules/Constructi
 import HandoverModule from "../components/project-details/modules/HandoverModule";
 import { api } from "../services/api";
 import { updateDashboardContext } from "../utils/dashboardContext";
+import { syncProgressToProjectsCache } from "../utils/projectProgress";
+import { useAuth } from "../context/AuthContext";
+import { canEditProject, isAdmin } from "../utils/permissions";
+import { ProjectEditProvider } from "../context/ProjectEditContext";
+import {
+  parseFlexibleDate as parseDateStr,
+  formatDateStr,
+  getMondayOfDate,
+  getTodayDMY,
+} from "../utils/timelineDates";
 
-const getTodayStr = () => {
-  const today = new Date();
-  const d = String(today.getDate()).padStart(2, '0');
-  const m = String(today.getMonth() + 1).padStart(2, '0');
-  const y = today.getFullYear();
-  return `${d}/${m}/${y}`;
+const getTodayStr = getTodayDMY;
+
+const bundleCacheKey = (projectId) => `epc_bundle_${projectId}`;
+
+const readBundleCache = (projectId) => {
+  if (!projectId) return null;
+  try {
+    const raw = localStorage.getItem(bundleCacheKey(projectId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
 };
 
-const parseDateStr = (dateStr) => {
-  if (!dateStr) return null;
-  const parts = String(dateStr).split('/');
-  if (parts.length !== 3) return null;
-  return new Date(parts[2], parts[1] - 1, parts[0]);
+const writeBundleCache = (projectId, bundle) => {
+  if (!projectId || !bundle) return;
+  try {
+    localStorage.setItem(bundleCacheKey(projectId), JSON.stringify(bundle));
+  } catch { /* quota */ }
 };
 
-const formatDateStr = (date) => {
-  const d = String(date.getDate()).padStart(2, '0');
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
-};
+const pickLogSelections = (dailyRes = [], weeklyRes = [], monthlyRes = []) => {
+  let selectedDate = getTodayStr();
+  if (dailyRes.length > 0) {
+    const sorted = [...dailyRes].sort((a, b) => parseDateStr(a.LOG_DATE || a.NGÀY) - parseDateStr(b.LOG_DATE || b.NGÀY));
+    const latest = sorted[sorted.length - 1];
+    selectedDate = latest ? (latest.LOG_DATE || latest.NGÀY) : getTodayStr();
+  }
 
-const getMondayOfDate = (date) => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff));
+  let selectedWeek = formatDateStr(getMondayOfDate(new Date()));
+  if (weeklyRes.length > 0) {
+    const latestWeekly = weeklyRes[weeklyRes.length - 1];
+    if (latestWeekly?.LOG_DATE) selectedWeek = latestWeekly.LOG_DATE;
+  }
+
+  let selectedMonth = `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`;
+  if (monthlyRes.length > 0) {
+    const latestMonthly = monthlyRes[monthlyRes.length - 1];
+    const parts = latestMonthly?.LOG_DATE?.split('/');
+    if (parts?.length === 3) selectedMonth = `${parts[1]}/${parts[2]}`;
+  }
+
+  return { selectedDate, selectedWeek, selectedMonth };
 };
 
 export default function ProjectDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { isCollapsed, toggleSidebar } = useSidebar();
 
+  const cachedBundle = readBundleCache(id);
+  const cachedSelections = pickLogSelections(
+    cachedBundle?.siteLogs,
+    cachedBundle?.weeklyLogs,
+    cachedBundle?.monthlyLogs
+  );
+
   // Project & S-Curve State
-  const [project, setProject] = useState(null);
-  const [scurveData, setScurveData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [project, setProject] = useState(() => {
+    if (cachedBundle?.project) return cachedBundle.project;
+    try {
+      const cached = localStorage.getItem('epc_projects_cache');
+      if (!cached) return null;
+      const list = JSON.parse(cached);
+      return list.find((p) => String(p.id || p.PROJECT_ID) === String(id)) || null;
+    } catch {
+      return null;
+    }
+  });
+  const [scurveData, setScurveData] = useState(() => cachedBundle?.scurve || []);
+  const [isLoading, setIsLoading] = useState(() => {
+    if (cachedBundle?.project) return false;
+    try {
+      const cached = localStorage.getItem('epc_projects_cache');
+      if (!cached) return true;
+      const list = JSON.parse(cached);
+      return !list.find((p) => String(p.id || p.PROJECT_ID) === String(id));
+    } catch {
+      return true;
+    }
+  });
 
   // Centralized Operations State
-  const [logs, setLogs] = useState([]);
-  const [weeklyLogs, setWeeklyLogs] = useState([]);
-  const [monthlyLogs, setMonthlyLogs] = useState([]);
+  const [logs, setLogs] = useState(() => cachedBundle?.siteLogs || []);
+  const [weeklyLogs, setWeeklyLogs] = useState(() => cachedBundle?.weeklyLogs || []);
+  const [monthlyLogs, setMonthlyLogs] = useState(() => cachedBundle?.monthlyLogs || []);
   const [selectedView, setSelectedView] = useState('day'); // 'day' | 'week' | 'month'
-  const [selectedDate, setSelectedDate] = useState(getTodayStr());
-  const [selectedWeek, setSelectedWeek] = useState('');
-  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedDate, setSelectedDate] = useState(cachedSelections.selectedDate);
+  const [selectedWeek, setSelectedWeek] = useState(cachedSelections.selectedWeek);
+  const [selectedMonth, setSelectedMonth] = useState(cachedSelections.selectedMonth);
   const [saveStatus, setSaveStatus] = useState('Saved'); // 'Draft' | 'Saving...' | 'Saved' | 'Error'
 
   const saveTimeoutRef = useRef(null);
   const isSavingRef = useRef(false);
   const pendingSaveRef = useRef(null);
 
-  const [bundleData, setBundleData] = useState(null);
+  const [bundleData, setBundleData] = useState(cachedBundle);
 
   const [moduleProgress, setModuleProgress] = useState({
     permit: 0,
@@ -112,9 +167,30 @@ export default function ProjectDetailPage() {
   };
 
   useEffect(() => {
+    const applyBundle = (bundle) => {
+      if (!bundle) return;
+      setBundleData(bundle);
+      if (bundle.project) {
+        setProject(bundle.project);
+        setIsLoading(false);
+      }
+      if (bundle.scurve) setScurveData(bundle.scurve);
+
+      const dailyRes = bundle.siteLogs || [];
+      const weeklyRes = bundle.weeklyLogs || [];
+      const monthlyRes = bundle.monthlyLogs || [];
+      setLogs(dailyRes);
+      setWeeklyLogs(weeklyRes);
+      setMonthlyLogs(monthlyRes);
+
+      const sel = pickLogSelections(dailyRes, weeklyRes, monthlyRes);
+      setSelectedDate(sel.selectedDate);
+      setSelectedWeek(sel.selectedWeek);
+      setSelectedMonth(sel.selectedMonth);
+    };
+
     const fetchAllData = async () => {
       try {
-        setIsLoading(true);
         let bundle = null;
         try {
           bundle = await api.getDashboardBundle(id);
@@ -123,51 +199,8 @@ export default function ProjectDetailPage() {
         }
 
         if (bundle) {
-          setBundleData(bundle);
-          if (bundle.project) setProject(bundle.project);
-          if (bundle.scurve) setScurveData(bundle.scurve);
-
-          const dailyRes = bundle.siteLogs || [];
-          setLogs(dailyRes);
-          if (dailyRes.length > 0) {
-            const sorted = [...dailyRes].sort((a, b) => parseDateStr(a.LOG_DATE || a.NGÀY) - parseDateStr(b.LOG_DATE || b.NGÀY));
-            const latest = sorted[sorted.length - 1];
-            const latestDate = latest ? (latest.LOG_DATE || latest.NGÀY) : getTodayStr();
-            setSelectedDate(latestDate);
-          } else {
-            setSelectedDate(getTodayStr());
-          }
-
-          const weeklyRes = bundle.weeklyLogs || [];
-          setWeeklyLogs(weeklyRes);
-          if (weeklyRes.length > 0) {
-            const latestWeekly = weeklyRes[weeklyRes.length - 1];
-            if (latestWeekly) {
-              setSelectedWeek(latestWeekly.LOG_DATE);
-            } else {
-              setSelectedWeek(formatDateStr(getMondayOfDate(new Date())));
-            }
-          } else {
-            setSelectedWeek(formatDateStr(getMondayOfDate(new Date())));
-          }
-
-          const monthlyRes = bundle.monthlyLogs || [];
-          setMonthlyLogs(monthlyRes);
-          if (monthlyRes.length > 0) {
-            const latestMonthly = monthlyRes[monthlyRes.length - 1];
-            if (latestMonthly) {
-              const parts = latestMonthly.LOG_DATE.split('/');
-              if (parts.length === 3) setSelectedMonth(`${parts[1]}/${parts[2]}`);
-            } else {
-              const today = new Date();
-              const m = String(today.getMonth() + 1).padStart(2, '0');
-              setSelectedMonth(`${m}/${today.getFullYear()}`);
-            }
-          } else {
-            const today = new Date();
-            const m = String(today.getMonth() + 1).padStart(2, '0');
-            setSelectedMonth(`${m}/${today.getFullYear()}`);
-          }
+          applyBundle(bundle);
+          writeBundleCache(id, bundle);
         } else {
           const [projData, scurveRes, dailyRes, weeklyRes, monthlyRes] = await Promise.all([
             api.getProject(id),
@@ -176,7 +209,10 @@ export default function ProjectDetailPage() {
             api.getWeeklyLogs(id),
             api.getMonthlyLogs(id)
           ]);
-          if (projData) setProject(projData);
+          if (projData) {
+            setProject(projData);
+            setIsLoading(false);
+          }
           if (scurveRes) setScurveData(scurveRes);
           if (dailyRes) {
             setLogs(dailyRes);
@@ -296,19 +332,22 @@ export default function ProjectDetailPage() {
         delay: baseActual - basePlan,
       },
       milestones: bundleData?.milestones,
+      risks: bundleData?.risks,
+      procurements: bundleData?.procurements,
+      constructions: bundleData?.constructions,
+      siteLogs: logs,
+      permits: bundleData?.permits,
+      designs: bundleData?.designs,
     });
-  }, [id, project, baseActual, basePlan, bundleData?.milestones]);
+  }, [id, project, baseActual, basePlan, bundleData, logs]);
 
-  // Persist the calculated progress back to localStorage so the main Dashboard can read it
+  // Persist progress so Tổng quan / Danh sách dự án hiện ngay (không chờ GAS)
   useEffect(() => {
-    if (project && (project.PROJECT_ID || project.id)) {
-      const pId = project.PROJECT_ID || project.id;
-      if (hasModuleData) {
-        localStorage.setItem(`actualProgress_${pId}`, baseActual);
-        localStorage.setItem(`planProgress_${pId}`, basePlan);
-      }
-    }
-  }, [baseActual, basePlan, project, hasModuleData]);
+    if (!project) return;
+    const pId = project.PROJECT_ID || project.id;
+    if (!pId) return;
+    syncProgressToProjectsCache(pId, baseActual, basePlan);
+  }, [baseActual, basePlan, project]);
 
   // Compute active log
   let activeLog = null;
@@ -378,6 +417,8 @@ export default function ProjectDetailPage() {
   };
 
   const handleUpdateLog = (field, value) => {
+    if (!canEditProject(user, id)) return;
+
     let targetLogDate = selectedDate;
 
     // Support object of fields
@@ -453,8 +494,17 @@ export default function ProjectDetailPage() {
       }
     });
 
-    // Sync to GAS with debounce
+    // Sync to GAS with debounce (ảnh hiện trường lưu ngay, không chờ 1 giây)
+    const isPhotoSave = updates.GHI_CHÚ_HIỆN_TRƯỜNG !== undefined || updates.DAILY_NOTE !== undefined;
     triggerSave(updatedLog);
+    if (isPhotoSave) {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+      pendingSaveRef.current = updatedLog;
+      performSave();
+    }
   };
 
   const triggerSave = (payload) => {
@@ -470,6 +520,12 @@ export default function ProjectDetailPage() {
   };
 
   const performSave = async () => {
+    if (!canEditProject(user, id)) {
+      pendingSaveRef.current = null;
+      setSaveStatus('Saved');
+      return;
+    }
+
     const toSave = pendingSaveRef.current;
     if (!toSave) {
       setSaveStatus('Saved');
@@ -511,6 +567,16 @@ export default function ProjectDetailPage() {
         setLogs(res.dailyLogs);
         if (res.weeklyLogs) setWeeklyLogs(res.weeklyLogs);
         if (res.monthlyLogs) setMonthlyLogs(res.monthlyLogs);
+        setBundleData((prev) => {
+          const next = {
+            ...(prev || {}),
+            siteLogs: res.dailyLogs,
+            weeklyLogs: res.weeklyLogs || prev?.weeklyLogs,
+            monthlyLogs: res.monthlyLogs || prev?.monthlyLogs,
+          };
+          writeBundleCache(id, next);
+          return next;
+        });
       } else {
         const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
           api.getSiteLogs(id),
@@ -520,6 +586,16 @@ export default function ProjectDetailPage() {
         if (dailyRes) setLogs(dailyRes);
         if (weeklyRes) setWeeklyLogs(weeklyRes);
         if (monthlyRes) setMonthlyLogs(monthlyRes);
+        setBundleData((prev) => {
+          const next = {
+            ...(prev || {}),
+            siteLogs: dailyRes || prev?.siteLogs,
+            weeklyLogs: weeklyRes || prev?.weeklyLogs,
+            monthlyLogs: monthlyRes || prev?.monthlyLogs,
+          };
+          writeBundleCache(id, next);
+          return next;
+        });
       }
 
     } catch (error) {
@@ -534,18 +610,28 @@ export default function ProjectDetailPage() {
     }
   };
 
-  if (isLoading || !enrichedProject) {
+  if (isLoading && !project) {
     return (
-      <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans relative">
+      <div className="min-h-screen flex bg-[var(--bg-main)] text-[var(--text-main)] font-sans relative">
         <div className="absolute inset-0 z-50 bg-[var(--bg-main)]/80 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
             <div className="w-10 h-10 border-4 border-[#5252ff]/30 border-t-[#5252ff] rounded-full animate-spin"></div>
-            <span className="text-white font-medium text-sm tracking-wide">Đang tải chi tiết dự án...</span>
+            <span className="text-[var(--text-strong)] font-medium text-sm tracking-wide">Đang tải chi tiết dự án...</span>
           </div>
         </div>
       </div>
     );
   }
+
+  if (!project) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-main)] text-[var(--text-muted)]">
+        Không tìm thấy dự án.
+      </div>
+    );
+  }
+
+  const projectEditable = canEditProject(user, id);
 
   return (
     <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans">
@@ -555,25 +641,31 @@ export default function ProjectDetailPage() {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto print:overflow-visible">
+        <ProjectEditProvider canEdit={projectEditable}>
         <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
-          <ProjectHeader 
+          <ProjectHeader
             project={enrichedProject} 
             milestones={bundleData?.milestones || []} 
             onBack={() => navigate('/')} 
             onToggleSidebar={toggleSidebar}
             isSidebarCollapsed={isCollapsed}
+            shareMode={isAdmin(user) ? 'public' : 'internal'}
           />
 
+          <ProjectSectionNav />
+
           {/* SECTION 2 - KPI OVERVIEW */}
-          <KPIOverview project={enrichedProject} milestones={bundleData?.milestones || []} />
+          <section id="section-kpi" className="scroll-mt-20">
+            <KPIOverview project={enrichedProject} milestones={bundleData?.milestones || []} />
+          </section>
 
           {/* SECTION 3 - MILESTONE TIMELINE */}
-          <MilestoneTimeline project={enrichedProject} moduleProgress={moduleProgress} milestonesData={bundleData?.milestones || []} />
+          <section id="section-timeline" className="scroll-mt-20">
+            <MilestoneTimeline project={enrichedProject} moduleProgress={moduleProgress} milestonesData={bundleData?.milestones || []} />
+          </section>
 
-          {/* SECTION 4 - S-CURVE CHART (FULL WIDTH) */}
-          <SCurveChart project={enrichedProject} milestonesData={bundleData?.milestones || []} onPlanCalculated={setDynamicPlanPercent} />
-
-          {/* SECTION 5 - SITE LOGS & OPERATIONS */}
+          {/* SECTION 4 - NHẬT KÝ & VẬN HÀNH (trước S-Curve để dễ thấy) */}
+          <section id="section-site-log" className="scroll-mt-20">
           <div className="grid grid-cols-1 lg:grid-cols-3 print:grid-cols-3 gap-6">
             <div className={selectedView === 'day' ? 'lg:col-span-3 print:col-span-3' : 'lg:col-span-2 print:col-span-2'}>
               <SiteLogPanel
@@ -592,6 +684,7 @@ export default function ProjectDetailPage() {
                 activeLog={activeLog}
                 onUpdateLog={handleUpdateLog}
                 saveStatus={saveStatus}
+                onSaveStatusChange={setSaveStatus}
               />
             </div>
             {selectedView !== 'day' && (
@@ -612,18 +705,30 @@ export default function ProjectDetailPage() {
               </div>
             )}
           </div>
+          </section>
 
-          {/* SECTION 7 - MAIN ACCORDION MODULES */}
-          <div className="space-y-4 pt-4">
+          {/* SECTION 5 - S-CURVE CHART (FULL WIDTH) */}
+          <section id="section-scurve" className="scroll-mt-20">
+            <SCurveChart
+              project={enrichedProject}
+              milestonesData={bundleData?.milestones || []}
+              initialData={scurveData}
+              onPlanCalculated={setDynamicPlanPercent}
+            />
+          </section>
+
+          {/* SECTION 6 - MAIN ACCORDION MODULES */}
+          <section id="section-modules" className="scroll-mt-20 space-y-4 pt-4">
             <RiskModule project={enrichedProject} initialData={bundleData?.risks} />
             <PermitModule project={enrichedProject} initialData={bundleData?.permits} onProgressChange={(pct) => handleModuleProgressChange('permit', pct)} />
             <DesignModule project={enrichedProject} initialData={bundleData?.designs} onProgressChange={(pct) => handleModuleProgressChange('design', pct)} />
             <ProcurementModule project={enrichedProject} initialData={bundleData?.procurements} onProgressChange={(pct) => handleModuleProgressChange('procurement', pct)} />
             <ConstructionModule project={enrichedProject} initialData={bundleData?.constructions} onProgressChange={(pct) => handleModuleProgressChange('construction', pct)} />
             <HandoverModule project={enrichedProject} initialData={bundleData?.handovers} onProgressChange={(pct) => handleModuleProgressChange('handover', pct)} />
-          </div>
+          </section>
 
         </div>
+        </ProjectEditProvider>
       </main>
     </div>
   );

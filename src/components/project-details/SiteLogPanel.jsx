@@ -3,48 +3,44 @@ import {
   Users, HardHat, CloudRain, ShieldAlert, ChevronLeft, ChevronRight, ChevronDown, Loader2, 
   Sun, Cloud, CloudLightning, Wrench, Pencil, CalendarClock, AlertCircle, Check, X, CheckCircle2
 } from 'lucide-react';
-
-// --- Imgur API Upload ---
-const uploadToImgur = async (base64OrFile) => {
-  const clientId = 'c4bc8a1fa066f23'; // Public anonymous client ID
-  try {
-    const formData = new FormData();
-    let base64Data = base64OrFile;
-    if (typeof base64OrFile === 'string' && base64OrFile.includes('base64,')) {
-      base64Data = base64OrFile.split('base64,')[1];
-    }
-    
-    formData.append('image', base64Data);
-    
-    const response = await fetch('https://api.imgur.com/3/image', {
-      method: 'POST',
-      headers: {
-        Authorization: `Client-ID ${clientId}`
-      },
-      body: formData
-    });
-    
-    const result = await response.json();
-    if (result.success) {
-      return result.data.link;
-    }
-    throw new Error(result.data.error || 'Upload failed');
-  } catch (error) {
-    console.error("Imgur upload error:", error);
-    throw error;
-  }
-};
+import { api, getDriveAuthUrl } from '../../services/api';
+import { toDisplayableImageUrl } from '../../utils/siteImageUrl';
+import {
+  readSitePhotosByProject,
+  writeDateSitePhotos,
+  writeAllSitePhotos,
+  mergePhotoLists,
+} from '../../utils/sitePhotoCache';
+import SitePhoto from './SitePhoto';
+import {
+  parseFlexibleDate as parseDateStr,
+  formatDateStr,
+  getMondayOfDate,
+  getTodayDMY,
+  fromInputDateValue,
+  toInputDateValue,
+  formatDateDMY,
+} from '../../utils/timelineDates';
+import { useProjectCanEdit } from '../../context/ProjectEditContext';
+import { useI18n } from '../../context/I18nContext';
 
 const compressImage = (file) => {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
+    reader.onerror = () => reject(new Error('Không đọc được file ảnh'));
     reader.onload = (e) => {
+      const dataUrl = e.target.result;
+      if (file.size < 900_000) {
+        resolve(dataUrl);
+        return;
+      }
       const img = new Image();
-      img.src = e.target.result;
+      img.src = dataUrl;
+      img.onerror = () => reject(new Error('File không phải ảnh hợp lệ'));
       img.onload = () => {
-        const canvas = document.createElement("canvas");
-        const MAX_WIDTH = 800;
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 1280;
         let width = img.width;
         let height = img.height;
         if (width > MAX_WIDTH) {
@@ -53,35 +49,26 @@ const compressImage = (file) => {
         }
         canvas.width = width;
         canvas.height = height;
-        const ctx = canvas.getContext("2d");
+        const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL("image/jpeg", 0.7));
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
       };
     };
   });
 };
-// ----------------------------------------
-const parseDateStr = (dateStr) => {
-  if (!dateStr) return null;
-  const parts = String(dateStr).split('/');
-  if (parts.length !== 3) return null;
-  return new Date(parts[2], parts[1] - 1, parts[0]);
+
+const normalizePhotoItem = (item) => {
+  if (typeof item === 'string') {
+    return { id: item, preview: item, remote: item, status: 'ready' };
+  }
+  return item;
 };
 
-const formatDateStr = (date) => {
-  const d = String(date.getDate()).padStart(2, '0');
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
+const photoToPersistUrl = (item) => {
+  const raw = item.remote || item.preview || '';
+  if (!raw || raw.startsWith('blob:')) return null;
+  return raw;
 };
-
-const getMondayOfDate = (date) => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.setDate(diff));
-};
-
 const getWeekNumber = (d) => {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   const dayNum = date.getUTCDay() || 7;
@@ -91,11 +78,10 @@ const getWeekNumber = (d) => {
   return weekNo;
 };
 
-const getVietnameseDayOfWeek = (dateStr) => {
+const getDayOfWeek = (dateStr, weekdays) => {
   const date = parseDateStr(dateStr);
-  if (!date) return '';
-  const days = ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'];
-  return days[date.getDay()];
+  if (!date || !weekdays) return '';
+  return weekdays[date.getDay()];
 };
 
 const parseDailyNote = (noteText) => {
@@ -252,24 +238,28 @@ export default function SiteLogPanel({
   setSelectedMonth,
   activeLog,
   onUpdateLog,
-  saveStatus
+  saveStatus,
+  onSaveStatusChange
 }) {
+  const canEdit = useProjectCanEdit();
+  const { t, tf, ts } = useI18n();
+  const weekdays = t('siteLog.weekdays');
   const datePickerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const projectId = project?.PROJECT_ID || project?.id;
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(null);
-  const [imagesByDate, setImagesByDate] = useState({});
+  const [photosByDate, setPhotosByDate] = useState(() => {
+    if (!projectId) return {};
+    return readSitePhotosByProject(projectId);
+  });
   const [liveWeather, setLiveWeather] = useState(null);
+  const [uploadError, setUploadError] = useState('');
+  const [needsDriveAuth, setNeedsDriveAuth] = useState(false);
 
   useEffect(() => {
     const fetchWeather = async () => {
-      const todayStr = (() => {
-        const d = new Date();
-        const dd = String(d.getDate()).padStart(2, '0');
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const yyyy = d.getFullYear();
-        return `${dd}/${mm}/${yyyy}`;
-      })();
+      const todayStr = getTodayDMY();
       
       if (selectedDate === todayStr) {
         try {
@@ -295,61 +285,159 @@ export default function SiteLogPanel({
     fetchWeather();
   }, [selectedDate]);
 
-  const currentImages = imagesByDate[selectedDate] || [];
+  const currentPhotos = (photosByDate[selectedDate] || []).map(normalizePhotoItem);
+  const currentImages = currentPhotos;
+  const bgUploadCount = currentPhotos.filter((p) => p.status === 'uploading').length;
 
-  // Load images from DB when date changes
+  const persistPhotosToLog = (photos) => {
+    if (!canEdit) return;
+    const urls = photos.map(photoToPersistUrl).filter(Boolean);
+    const parsedNote = parseDailyNote(activeLog?.DAILY_NOTE || activeLog?.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+    parsedNote.images = urls.join('\n');
+    onUpdateLog({ GHI_CHÚ_HIỆN_TRƯỜNG: serializeDailyNote(parsedNote) });
+    if (projectId) writeDateSitePhotos(projectId, selectedDate, photos);
+  };
+
   useEffect(() => {
-    if (activeLog) {
-      const parsedNote = parseDailyNote(activeLog.DAILY_NOTE || activeLog.GHI_CHÚ_HIỆN_TRƯỜNG || '');
-      const imageUrls = parsedNote.images ? parsedNote.images.split('\n').map(l => l.trim()).filter(l => l) : [];
-      setImagesByDate(prev => ({ ...prev, [selectedDate]: imageUrls }));
-    }
+    if (!projectId) return;
+    writeAllSitePhotos(projectId, photosByDate);
+  }, [photosByDate, projectId]);
+
+  // Load images from DB when date changes — không ghi đè ảnh đang upload / preview local
+  useEffect(() => {
+    if (!activeLog) return;
+    const parsedNote = parseDailyNote(activeLog.DAILY_NOTE || activeLog.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+    const imageUrls = parsedNote.images
+      ? parsedNote.images.split('\n').map((l) => l.trim()).filter(Boolean)
+      : [];
+
+    setPhotosByDate((prev) => {
+      const local = prev[selectedDate] || [];
+      const hasPending = local.some((p) => {
+        const item = normalizePhotoItem(p);
+        return item.status === 'uploading' || item.preview?.startsWith('blob:');
+      });
+      if (hasPending) return prev;
+
+      const serverPhotos = imageUrls.map((url) => ({
+        id: url,
+        preview: toDisplayableImageUrl(url),
+        remote: url,
+        status: 'ready',
+      }));
+
+      const cachedLocal = projectId
+        ? (readSitePhotosByProject(projectId)[selectedDate] || [])
+        : local.filter((p) => photoToPersistUrl(normalizePhotoItem(p)));
+
+      const merged = mergePhotoLists(serverPhotos, cachedLocal.length ? cachedLocal : local.filter((p) => photoToPersistUrl(normalizePhotoItem(p))));
+
+      if (merged.length === 0) return prev;
+      if (JSON.stringify(merged) === JSON.stringify(local.map(normalizePhotoItem))) return prev;
+      return { ...prev, [selectedDate]: merged };
+    });
   }, [activeLog, selectedDate]);
 
-  const handleFileSelect = async (e) => {
-    const files = Array.from(e.target.files);
-    
-    // Compress and convert to base64
-    const compressedPromises = files.map(f => compressImage(f));
-    const base64Images = await Promise.all(compressedPromises);
-    
-    // Upload to Imgur
-    setSaveStatus('Saving...');
+  const uploadPhotoInBackground = async (item, dateKey) => {
     try {
-      const uploadPromises = base64Images.map(b64 => uploadToImgur(b64));
-      const imageUrls = await Promise.all(uploadPromises);
-      
-      setImagesByDate(prev => {
-        const existing = prev[selectedDate] || [];
-        const combined = [...existing, ...imageUrls].slice(0, 4);
-        
-        // Immediately save the updated URLs to the Google Sheet log
-        const parsedNote = parseDailyNote(activeLog?.DAILY_NOTE || activeLog?.GHI_CHÚ_HIỆN_TRƯỜNG || '');
-        parsedNote.images = combined.join('\n');
-        
-        const serializedNote = serializeDailyNote(parsedNote);
-        onUpdateLog({
-          GHI_CHÚ_HIỆN_TRƯỜNG: serializedNote
+      const b64 = await compressImage(item.file);
+      const rawUrl = await api.uploadSiteImage({ base64: b64, projectId });
+      const displayUrl = toDisplayableImageUrl(rawUrl);
+
+      setPhotosByDate((prev) => {
+        const list = (prev[dateKey] || []).map((p) => {
+          const norm = normalizePhotoItem(p);
+          if (norm.id !== item.id) return norm;
+          if (norm.preview?.startsWith('blob:')) {
+            URL.revokeObjectURL(norm.preview);
+          }
+          return {
+            ...norm,
+            remote: rawUrl,
+            preview: displayUrl,
+            status: 'ready',
+          };
         });
-        
-        return { ...prev, [selectedDate]: combined };
+        queueMicrotask(() => {
+          persistPhotosToLog(list);
+          onSaveStatusChange?.('Saved');
+        });
+        return { ...prev, [dateKey]: list };
       });
-      setSaveStatus('Saved');
+      setUploadError('');
+      setNeedsDriveAuth(false);
     } catch (err) {
       console.error(err);
-      setSaveStatus('Error');
+      setPhotosByDate((prev) => ({
+        ...prev,
+        [dateKey]: [...(prev[dateKey] || [])].map((p) => {
+          const norm = normalizePhotoItem(p);
+          if (norm.id !== item.id) return norm;
+          return { ...norm, status: 'error' };
+        }),
+      }));
+
+      let msg = String(err?.message || 'Tải ảnh thất bại')
+        .replace(/^Error:\s*/i, '')
+        .replace(/^Exception:\s*/i, '');
+      setNeedsDriveAuth(/Drive|DriveApp|quyền|từ chối|denied/i.test(msg));
+      if (/UrlFetchApp|external_request/i.test(msg)) {
+        msg = 'Backend chưa cập nhật. Chạy: npm run gas:sync (hoặc nhờ admin deploy Apps Script).';
+      } else if (/Invalid API endpoint|upload-image-chunk/i.test(msg)) {
+        msg = 'Backend chưa deploy bản mới. Chạy: npm run gas:sync → thử lại.';
+      } else if (/Drive|DriveApp|từ chối|denied/i.test(msg)) {
+        msg = 'Upload Drive thất bại. Chạy npm run gas:sync, mở link test-drive, rồi thử lại.';
+      } else if (msg.length > 160) {
+        msg = msg.slice(0, 160) + '…';
+      }
+      setUploadError(msg);
+      onSaveStatusChange?.('Error');
     }
   };
 
+  const handleFileSelect = (e) => {
+    if (!canEdit) return;
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+
+    const slotsLeft = 4 - currentPhotos.length;
+    if (slotsLeft <= 0) return;
+    const filesToUpload = files.slice(0, slotsLeft);
+    const dateKey = selectedDate;
+
+    setUploadError('');
+    setNeedsDriveAuth(false);
+
+    const pendingItems = filesToUpload.map((file) => ({
+      id: `pending_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+      preview: URL.createObjectURL(file),
+      remote: null,
+      status: 'uploading',
+      file,
+    }));
+
+    setPhotosByDate((prev) => ({
+      ...prev,
+      [dateKey]: [...(prev[dateKey] || []), ...pendingItems],
+    }));
+
+    pendingItems.forEach((item) => {
+      void uploadPhotoInBackground(item, dateKey);
+    });
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   const removeImage = (indexToRemove) => {
-    setImagesByDate(prev => {
-      const updated = prev[selectedDate].filter((_, idx) => idx !== indexToRemove);
-      const parsedNote = parseDailyNote(activeLog?.DAILY_NOTE || activeLog?.GHI_CHÚ_HIỆN_TRƯỜNG || '');
-      parsedNote.images = updated.join('\n');
-      const serializedNote = serializeDailyNote(parsedNote);
-      onUpdateLog({
-        GHI_CHÚ_HIỆN_TRƯỜNG: serializedNote
-      });
+    if (!canEdit) return;
+    setPhotosByDate((prev) => {
+      const list = (prev[selectedDate] || []).map(normalizePhotoItem);
+      const removed = list[indexToRemove];
+      if (removed?.preview?.startsWith('blob:')) {
+        URL.revokeObjectURL(removed.preview);
+      }
+      const updated = list.filter((_, idx) => idx !== indexToRemove);
+      persistPhotosToLog(updated);
       return { ...prev, [selectedDate]: updated };
     });
   };
@@ -382,6 +470,7 @@ export default function SiteLogPanel({
   }, [selectedDate, selectedWeek]);
 
   const handleStartEdit = () => {
+    if (!canEdit) return;
     const parsedNote = parseDailyNote(activeLog?.DAILY_NOTE || activeLog?.GHI_CHÚ_HIỆN_TRƯỜNG || '');
     const parsedW = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
     
@@ -406,6 +495,7 @@ export default function SiteLogPanel({
   };
 
   const handleSaveEdit = () => {
+    if (!canEdit) return;
     const serializedNote = serializeDailyNote({
       ghiChu: editData.ghiChu,
       congViecChinh: editData.congViecChinh,
@@ -415,7 +505,9 @@ export default function SiteLogPanel({
       progressPlanned: editData.progressPlanned,
       dayStatus: editData.dayStatus,
       dayStatusSubtext: editData.dayStatusSubtext,
-      images: editData.images || (imagesByDate[selectedDate] ? imagesByDate[selectedDate].join('\n') : '')
+      images: editData.images || (photosByDate[selectedDate]
+        ? photosByDate[selectedDate].map(photoToPersistUrl).filter(Boolean).join('\n')
+        : '')
     });
 
     const serializedW = serializeWeather({
@@ -439,8 +531,8 @@ export default function SiteLogPanel({
     const monday = parseDateStr(monDateStr);
     if (!monday) return [];
     const days = [];
-    const weekdays = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-    const weekdayFullNames = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
+    const weekdayNames = t('siteLog.weekdays');
+    const mondayFirst = [weekdayNames[1], weekdayNames[2], weekdayNames[3], weekdayNames[4], weekdayNames[5], weekdayNames[6], weekdayNames[0]];
     for (let i = 0; i < 7; i++) {
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
@@ -464,8 +556,8 @@ export default function SiteLogPanel({
       };
       
       days.push({
-        weekday: weekdays[i],
-        fullName: weekdayFullNames[i],
+        weekday: mondayFirst[i],
+        fullName: mondayFirst[i],
         dateStr,
         log
       });
@@ -543,11 +635,9 @@ export default function SiteLogPanel({
   };
 
   const handleAddNewDate = (e) => {
-    const val = e.target.value; // YYYY-MM-DD
+    const val = e.target.value;
     if (!val) return;
-    const parts = val.split('-');
-    const formatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
-    setSelectedDate(formatted);
+    setSelectedDate(fromInputDateValue(val));
   };
 
   const getStatusBadge = () => {
@@ -555,25 +645,25 @@ export default function SiteLogPanel({
       case 'Saving...':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 animate-pulse">
-            ● Đang lưu...
+            ● {t('siteLog.statusSaving')}
           </span>
         );
       case 'Saved':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-500">
-            ● Đã lưu
+            ● {t('siteLog.statusSaved')}
           </span>
         );
       case 'Error':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-500">
-            ● Lỗi kết nối
+            ● {t('siteLog.statusError')}
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-500/10 text-slate-400">
-            ● Bản nháp
+            ● {t('siteLog.statusDraft')}
           </span>
         );
     }
@@ -584,32 +674,32 @@ export default function SiteLogPanel({
   const isNextDisabled = () => false;
 
   return (
-    <div className="glass-panel p-4 md:p-5 rounded-xl shadow-[0_18px_60px_rgba(0,0,0,0.28)] border border-[#22304a] bg-[#080d18]/85">
+    <div className="glass-panel p-4 md:p-5 rounded-xl shadow-lg border border-[var(--border-main)]">
       
       {/* Header and Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
         <div className="flex items-start gap-3">
           <div className="w-1 h-10 rounded-full bg-gradient-to-b from-[#5252ff] via-cyan-400 to-emerald-400 shadow-[0_0_18px_rgba(82,82,255,0.45)]"></div>
           <div>
-          <h3 className="text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-            NHẬT KÝ & VẬN HÀNH
+          <h3 className="text-sm font-black text-[var(--text-strong)] uppercase tracking-wider flex items-center gap-2">
+            {t('siteLog.title')}
           </h3>
           <div className="mt-1.5 flex items-center gap-2">
             {getStatusBadge()}
-            <span className="hidden sm:inline text-[10px] font-semibold text-slate-500">Theo dõi nhân lực, công việc, sự cố và hình ảnh site</span>
+            <span className="hidden sm:inline text-[10px] font-semibold text-slate-500">{t('siteLog.subtitle')}</span>
           </div>
           </div>
         </div>
         
         {/* Day/Week Tabs */}
-        <div className="flex rounded-lg bg-[#0b1221] p-0.5 border border-[#22304a] self-start sm:self-auto shadow-inner">
+        <div className="flex rounded-lg bg-[var(--bg-panel)] p-0.5 border border-[var(--border-main)] self-start sm:self-auto">
           <button
             onClick={() => setSelectedView('day')}
             className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
               selectedView === 'day' ? 'bg-[#5252ff] text-white shadow-[0_0_16px_rgba(82,82,255,0.28)]' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Ngày
+            {t('siteLog.day')}
           </button>
           <button
             onClick={() => setSelectedView('week')}
@@ -617,13 +707,13 @@ export default function SiteLogPanel({
               selectedView === 'week' ? 'bg-[#5252ff] text-white shadow-[0_0_16px_rgba(82,82,255,0.28)]' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
-            Tuần
+            {t('siteLog.week')}
           </button>
         </div>
       </div>
 
       {/* Traversal Navigation Bar */}
-      <div className="flex items-center gap-2 bg-[#0a1020] border border-[#22304a] p-2 rounded-lg mb-3 justify-between shadow-inner">
+      <div className="flex items-center gap-2 bg-[var(--bg-panel)] border border-[var(--border-main)] p-2 rounded-lg mb-3 justify-between">
         <button
           onClick={handlePrev}
           disabled={isPrevDisabled()}
@@ -635,24 +725,21 @@ export default function SiteLogPanel({
         {/* Day view: clickable date text → opens calendar picker */}
         {selectedView === 'day' && (
           <div 
-            className="flex-1 flex items-center justify-center cursor-pointer hover:bg-[#18233a]/70 rounded-md py-1.5 transition-all relative"
+            className="flex-1 flex items-center justify-center cursor-pointer hover:bg-[var(--bg-hover)] rounded-md py-1.5 transition-all relative"
             onClick={() => {
               if (datePickerRef.current) {
                 try { datePickerRef.current.showPicker(); } catch(e) { datePickerRef.current.click(); }
               }
             }}
           >
-            <span className="text-xs font-bold text-slate-100 flex items-center gap-1.5 select-none">
-              {selectedDate} ({getVietnameseDayOfWeek(selectedDate)})
+            <span className="text-xs font-bold text-[var(--text-main)] flex items-center gap-1.5 select-none">
+              {selectedDate} ({getDayOfWeek(selectedDate, weekdays)})
               <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
             </span>
             <input
               type="date"
               ref={datePickerRef}
-              value={(() => {
-                const parts = selectedDate.split('/');
-                return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : '';
-              })()}
+              value={toInputDateValue(selectedDate)}
               onChange={handleAddNewDate}
               className="absolute opacity-0 pointer-events-none"
               style={{ width: 0, height: 0, border: 'none', padding: 0 }}
@@ -676,7 +763,7 @@ export default function SiteLogPanel({
               const weekNum = getWeekNumber(monday);
               return (
                 <option key={wKey} value={wKey} className="bg-[var(--bg-panel)] text-slate-200">
-                  Tuần {weekNum} ({wKey.substring(0, 5)} - {formatDateStr(sunday).substring(0, 5)})
+                  {tf('siteLog.weekLabel', { n: weekNum })} ({wKey.substring(0, 5)} - {formatDateStr(sunday).substring(0, 5)})
                 </option>
               );
             })}
@@ -701,9 +788,9 @@ export default function SiteLogPanel({
             const manpower = activeLog?.MANPOWER !== undefined ? activeLog?.MANPOWER : (activeLog?.NHÂN_LỰC_SITE || 0);
             const engineers = activeLog?.ENGINEERS !== undefined ? activeLog?.ENGINEERS : (activeLog?.KỸ_SƯ_GS || 0);
             
-            const weatherCond = parsedW.condition || liveWeather?.condition || 'Nắng đẹp';
+            const weatherCond = ts(parsedW.condition || liveWeather?.condition || 'Nắng đẹp');
             const weatherTemp = parsedW.tempHumid || liveWeather?.tempHumid || 'N/A';
-            const weatherDetail = parsedW.detail || liveWeather?.detail || 'Chưa có thông tin';
+            const weatherDetail = ts(parsedW.detail || liveWeather?.detail || 'Chưa có thông tin');
             
             const incidents = activeLog?.INCIDENT_COUNT !== undefined ? activeLog?.INCIDENT_COUNT : (parseInt(activeLog?.SỰ_CỐ) || 0);
 
@@ -924,12 +1011,12 @@ export default function SiteLogPanel({
                       <Users className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Nhân lực Site</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">{t('siteLog.manpower')}</p>
                       <div className="flex items-baseline gap-1">
                         <span className="text-xl font-bold text-white">{manpower}</span>
-                        <span className="text-[10px] text-slate-500">người</span>
+                        <span className="text-[10px] text-slate-500">{t('siteLog.people')}</span>
                       </div>
-                      <p className="text-[9px] text-slate-400 mt-0.5">Kỹ sư / GS: <span className="text-slate-200 font-semibold">{engineers}</span></p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">{t('siteLog.engineers')}: <span className="text-slate-200 font-semibold">{engineers}</span></p>
                     </div>
                   </div>
 
@@ -939,7 +1026,7 @@ export default function SiteLogPanel({
                       {getWeatherIcon(activeLog?.WEATHER || activeLog?.THỜI_TIẾT)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Thời tiết</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">{t('siteLog.weather')}</p>
                       <p className="text-xs font-bold text-white leading-tight">{weatherCond}</p>
                       <p className="text-[9px] text-[#3b82f6] mt-0.5 font-medium">{weatherTemp}</p>
                       <p className="text-[9px] text-slate-400 mt-0.5 leading-tight truncate" title={weatherDetail}>{weatherDetail}</p>
@@ -952,16 +1039,16 @@ export default function SiteLogPanel({
                       <Wrench className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Công việc chính</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">{t('siteLog.mainTasks')}</p>
                       <div className="flex items-baseline gap-1">
                         <span className="text-xl font-bold text-white">{listChinh.length}</span>
-                        <span className="text-[10px] text-slate-500">hạng mục</span>
+                        <span className="text-[10px] text-slate-500">{t('siteLog.items')}</span>
                       </div>
                       <ul className="text-[9px] text-slate-400 mt-1 space-y-0.5 list-disc pl-3">
                         {listChinh.slice(0, 3).map((item, idx) => (
-                          <li key={idx} className="truncate" title={item}>{item}</li>
+                          <li key={idx} className="truncate" title={item}>{ts(item)}</li>
                         ))}
-                        {listChinh.length === 0 && <li className="italic text-slate-500">Không ghi nhận</li>}
+                        {listChinh.length === 0 && <li className="italic text-slate-500">{t('siteLog.noRecord')}</li>}
                       </ul>
                     </div>
                   </div>
@@ -972,14 +1059,14 @@ export default function SiteLogPanel({
                       <ShieldAlert className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Sự cố</p>
+                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">{t('siteLog.incidents')}</p>
                       <div className="flex items-baseline gap-1">
                         <span className="text-xl font-bold text-white">{incidents}</span>
-                        <span className="text-[10px] text-slate-500">sự cố</span>
+                        <span className="text-[10px] text-slate-500">{t('siteLog.incidentsUnit')}</span>
                       </div>
                       <div className="mt-1">
                         <span className={`inline-block text-[8px] font-bold px-2 py-1 rounded-full border ${incidents > 0 ? 'bg-red-500/10 text-red-400 border-red-500/20' : 'bg-green-500/10 text-green-400 border-green-500/20'}`}>
-                          {incidents > 0 ? 'Đang theo dõi' : 'Bình thường'}
+                          {incidents > 0 ? t('siteLog.monitoring') : t('siteLog.normal')}
                         </span>
                       </div>
                     </div>
@@ -990,8 +1077,9 @@ export default function SiteLogPanel({
                 <div className="bg-[#0b1221] border border-[#22304a] rounded-lg p-4 mb-3 relative group shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                      <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> Ghi chú hiện trường
+                      <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> {t('siteLog.siteNotes')}
                     </p>
+                    {canEdit && (
                     <button 
                       onClick={handleStartEdit}
                       className="w-7 h-7 rounded-md bg-[#18233a] border border-[#2b3a5c] text-slate-300 hover:text-white flex items-center justify-center hover:bg-[#243250] transition-all"
@@ -999,12 +1087,13 @@ export default function SiteLogPanel({
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
+                    )}
                   </div>
                   <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4 leading-relaxed min-h-[38px]">
                     {listGhiChu.map((item, idx) => (
-                      <li key={idx}>{item}</li>
+                      <li key={idx}>{ts(item)}</li>
                     ))}
-                    {listGhiChu.length === 0 && <li className="italic text-slate-400 list-none pl-0">Không có ghi chú. Nhấn biểu tượng bút để cập nhật nhanh nhật ký hiện trường.</li>}
+                    {listGhiChu.length === 0 && <li className="italic text-slate-400 list-none pl-0">{t('siteLog.noNotes')}</li>}
                   </ul>
                 </div>
 
@@ -1014,16 +1103,16 @@ export default function SiteLogPanel({
                   <div className="bg-[#0b1221] border border-[#22304a] rounded-lg p-4 flex flex-col justify-between shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" /> Tóm tắt ngày
+                        <CheckCircle2 className="w-3.5 h-3.5 text-blue-400" /> {t('siteLog.daySummary')}
                       </p>
                       
                       <div className="grid grid-cols-3 gap-2 text-center mb-3">
                         <div>
-                          <p className="text-[9px] text-slate-500">Tiến độ thực tế</p>
+                          <p className="text-[9px] text-slate-500">{t('siteLog.actualProgress')}</p>
                           <p className="text-sm font-bold text-white mt-0.5">{parsedNote.progressActual || '-'}</p>
                         </div>
                         <div>
-                          <p className="text-[9px] text-slate-500">Chênh lệch</p>
+                          <p className="text-[9px] text-slate-500">{t('siteLog.variance')}</p>
                           {(() => {
                             const actual = parseFloat(parsedNote.progressActual) || 0;
                             const planned = parseFloat(parsedNote.progressPlanned) || 0;
@@ -1037,10 +1126,10 @@ export default function SiteLogPanel({
                           })()}
                         </div>
                         <div>
-                          <p className="text-[9px] text-slate-500">Trạng thái ngày</p>
+                          <p className="text-[9px] text-slate-500">{t('siteLog.dayStatus')}</p>
                           <div className="flex items-center justify-center gap-1 mt-0.5">
                             <span className={`w-2 h-2 rounded-full ${parsedNote.dayStatus === 'Bình thường' ? 'bg-green-500' : 'bg-amber-500'}`} />
-                            <span className="text-[10px] font-semibold text-white">{parsedNote.dayStatus || 'Bình thường'}</span>
+                            <span className="text-[10px] font-semibold text-white">{ts(parsedNote.dayStatus || 'Bình thường')}</span>
                           </div>
                         </div>
                       </div>
@@ -1055,8 +1144,8 @@ export default function SiteLogPanel({
                         />
                       </div>
                       <div className="flex justify-between text-[9px] text-slate-500 gap-3">
-                        <span>Kế hoạch: {parsedNote.progressPlanned || '-'}</span>
-                        <span className="truncate">Chênh lệch tác động: {parsedNote.dayStatusSubtext || '-'}</span>
+                        <span>{t('siteLog.planned')}: {parsedNote.progressPlanned || '-'}</span>
+                        <span className="truncate">{t('siteLog.impactVariance')}: {parsedNote.dayStatusSubtext || '-'}</span>
                       </div>
                     </div>
                   </div>
@@ -1065,18 +1154,18 @@ export default function SiteLogPanel({
                   <div className="bg-[#0b1221] border border-[#22304a] rounded-lg p-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <CalendarClock className="w-3.5 h-3.5 text-indigo-400" /> Công việc ngày mai
+                        <CalendarClock className="w-3.5 h-3.5 text-indigo-400" /> {t('siteLog.tomorrowTasks')}
                       </p>
                       <span className="text-[8px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded">
-                        Ưu tiên cao
+                        {t('siteLog.highPriority')}
                       </span>
                     </div>
                     
                     <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4 min-h-[58px]">
                       {listNgayMai.map((item, idx) => (
-                        <li key={idx}>{item}</li>
+                        <li key={idx}>{ts(item)}</li>
                       ))}
-                      {listNgayMai.length === 0 && <li className="italic text-slate-400 list-none pl-0">Chưa ghi nhận công việc ngày mai. Có thể thêm checklist trong phần chỉnh sửa.</li>}
+                      {listNgayMai.length === 0 && <li className="italic text-slate-400 list-none pl-0">{t('siteLog.noTomorrowTasks')}</li>}
                     </ul>
                   </div>
                 </div>
@@ -1089,12 +1178,12 @@ export default function SiteLogPanel({
                         <AlertCircle className="w-4 h-4" />
                       </div>
                       <div>
-                        <p className="text-[9px] font-bold text-red-400 uppercase tracking-wider mb-0.5">Vấn đề / Rủi ro cần lưu ý</p>
-                        <p className="text-xs text-slate-300 leading-tight">{parsedNote.vanDeRuiRo}</p>
+                        <p className="text-[9px] font-bold text-red-400 uppercase tracking-wider mb-0.5">{t('siteLog.risks')}</p>
+                        <p className="text-xs text-slate-300 leading-tight">{ts(parsedNote.vanDeRuiRo)}</p>
                       </div>
                     </div>
                     <span className="text-[9px] font-bold bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full shrink-0">
-                      Đang theo dõi
+                      {t('siteLog.monitoring')}
                     </span>
                   </div>
                 )}
@@ -1103,14 +1192,20 @@ export default function SiteLogPanel({
           })()}
 
           {/* Ảnh hiện trường */}
-          <div className="mt-3 bg-[#0b1221] border border-[#22304a] rounded-lg overflow-hidden shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
-            {/* Header */}
-            <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#22304a] bg-[#10182a]">
+          <div className="mt-3 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg overflow-hidden">
+            <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--border-main)] bg-[var(--bg-hover)]">
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                📷 Ảnh hiện trường
-                <span className="ml-1 text-[8px] font-bold bg-[#5252ff]/10 text-[#8585ff] border border-[#5252ff]/20 px-1.5 py-0.5 rounded-full">{currentImages.length}/4 ảnh</span>
+                📷 {t('siteLog.sitePhotos')}
+                <span className="ml-1 text-[8px] font-bold bg-[#5252ff]/10 text-[#8585ff] border border-[#5252ff]/20 px-1.5 py-0.5 rounded-full">{tf('siteLog.photosCount', { n: currentImages.length })}</span>
+                {bgUploadCount > 0 && (
+                  <span className="ml-1 text-[8px] font-semibold text-amber-500/90 inline-flex items-center gap-1">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Lưu Drive nền ({bgUploadCount})
+                  </span>
+                )}
               </p>
               <input type="file" multiple accept="image/*" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+              {canEdit && (
               <button 
                 onClick={() => fileInputRef.current?.click()}
                 disabled={currentImages.length >= 4}
@@ -1120,40 +1215,61 @@ export default function SiteLogPanel({
               >
                 + Thêm ảnh
               </button>
+              )}
             </div>
 
-            {/* Photo Grid */}
-            <div className="p-3 border-b border-[#22304a]">
+            {uploadError && (
+              <div className="mx-3 mt-2 px-3 py-2 rounded-md bg-red-500/10 border border-red-500/30 text-[11px] text-red-600 leading-snug space-y-2">
+                <p>{uploadError}</p>
+                {needsDriveAuth && (
+                  <div className="space-y-1.5">
+                    <a
+                      href={getDriveAuthUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#5252ff] text-white text-[10px] font-bold hover:bg-[#4040ff] transition-colors"
+                    >
+                      Cấp quyền Drive (mở tab mới)
+                    </a>
+                    <p className="text-[9px] text-red-500/80 break-all select-all">
+                      Link: {getDriveAuthUrl()}
+                    </p>
+                    <p className="text-[9px] text-red-500/70">Phải có <strong>?action=test-drive</strong> ở cuối URL. Thấy JSON &quot;ok&quot;: true là được.</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="p-3 border-b border-[var(--border-main)]">
               {currentImages.length === 0 ? (
-                <div className="flex flex-col sm:flex-row items-center justify-center text-center sm:text-left gap-3 py-5 border border-dashed border-[#2b3a5c] rounded-lg bg-[#080d18]/70">
-                  <div className="w-12 h-12 rounded-lg bg-[#18233a] flex items-center justify-center text-slate-400 shrink-0">
+                <div className="flex flex-col sm:flex-row items-center justify-center text-center sm:text-left gap-3 py-5 border border-dashed border-[var(--border-main)] rounded-lg bg-[var(--bg-main)]/40">
+                  <div className="w-12 h-12 rounded-lg bg-[var(--bg-hover)] flex items-center justify-center text-[var(--text-muted)] shrink-0">
                     📷
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-slate-200">Chưa có ảnh tải lên</p>
-                    <p className="text-xs text-slate-500 mt-1 max-w-[320px]">Thêm ảnh hiện trường để báo cáo trực quan hơn. Tối đa 4 ảnh cho mỗi ngày.</p>
+                    <p className="text-sm font-semibold text-[var(--text-main)]">{t('siteLog.noPhotos')}</p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1 max-w-[320px]">{t('siteLog.noPhotosHint')}</p>
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  {currentImages.map((src, i) => (
-                    <div key={i} className="relative aspect-[16/9] rounded-lg overflow-hidden border border-[#2b3a5c] group">
-                      <img src={src} alt="site" className="w-full h-full object-cover" />
-                      <button 
-                        onClick={() => removeImage(i)}
-                        className="absolute top-2 right-2 bg-black/60 text-white w-6 h-6 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {currentPhotos.map((photo, i) => {
+                    const item = normalizePhotoItem(photo);
+                    return (
+                      <SitePhoto
+                        key={item.id || i}
+                        src={item.preview || item.remote}
+                        status={item.status}
+                        onRemove={canEdit ? () => removeImage(i) : undefined}
+                      />
+                    );
+                  })}
                 </div>
               )}
             </div>
 
-            {/* Footer hint */}
-            <div className="px-3 py-2 bg-[#10182a]/50 flex items-center justify-end">
-              <p className="text-[9px] text-slate-600">{new Date().toLocaleDateString('vi-VN')} · {activeLog.UPDATED_BY || 'Giám sát viên'}</p>
+            <div className="px-3 py-2 bg-[var(--bg-hover)]/50 flex items-center justify-end">
+              <p className="text-[9px] text-[var(--text-muted)]">{formatDateDMY(new Date())} · {activeLog?.UPDATED_BY || t('siteLog.supervisor')}</p>
             </div>
           </div>
         </>
@@ -1164,20 +1280,20 @@ export default function SiteLogPanel({
           <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg overflow-hidden mb-4">
             <div className="p-3 border-b border-[var(--border-main)] bg-[var(--bg-hover)]">
               <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider flex items-center gap-1.5">
-                📅 LỊCH TRONG TUẦN
+                📅 {t('table.weekCalendar')}
               </p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-[var(--border-main)] text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider bg-[var(--bg-hover)]/50">
-                    <th className="py-2 px-3">Thứ</th>
-                    <th className="py-2 px-3">Ngày</th>
-                    <th className="py-2 px-3 text-center">Nhân sự</th>
-                    <th className="py-2 px-3 text-center">Kỹ sư/GS</th>
-                    <th className="py-2 px-3">Thời tiết</th>
-                    <th className="py-2 px-3 text-center">Sự cố</th>
-                    <th className="py-2 px-3">Ghi chú chính</th>
+                    <th className="py-2 px-3">{t('table.weekday')}</th>
+                    <th className="py-2 px-3">{t('table.date')}</th>
+                    <th className="py-2 px-3 text-center">{t('table.staff')}</th>
+                    <th className="py-2 px-3 text-center">{t('table.engineers')}</th>
+                    <th className="py-2 px-3">{t('table.weather')}</th>
+                    <th className="py-2 px-3 text-center">{t('table.incidents')}</th>
+                    <th className="py-2 px-3">{t('table.mainNote')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--border-main)]/50">
@@ -1214,14 +1330,14 @@ export default function SiteLogPanel({
                         <td className="py-2.5 px-3 text-center font-bold text-white">
                           <div className="flex items-center justify-center gap-1">
                             <span className="text-[#3b82f6]">{man}</span>
-                            <span className="text-[10px] text-slate-500 font-normal">người</span>
+                            <span className="text-[10px] text-slate-500 font-normal">{t('siteLog.people')}</span>
                           </div>
                         </td>
                         <td className="py-2.5 px-3 text-center font-bold text-slate-300">{eng}</td>
                         <td className="py-2.5 px-3">
                           <div className="flex items-center gap-1.5 text-slate-300">
                             {getWeatherIcon(weatherText)}
-                            <span className="truncate max-w-[80px]">{weatherText.split('|')[0] || '-'}</span>
+                            <span className="truncate max-w-[80px]">{ts(weatherText.split('|')[0] || '-')}</span>
                           </div>
                         </td>
                         <td className="py-2.5 px-3 text-center">
@@ -1232,7 +1348,7 @@ export default function SiteLogPanel({
                           </span>
                         </td>
                         <td className="py-2.5 px-3 text-slate-400 truncate max-w-[150px] font-normal" title={note}>
-                          {note || '-'}
+                          {note ? ts(note) : '-'}
                         </td>
                       </tr>
                     );
@@ -1242,24 +1358,25 @@ export default function SiteLogPanel({
             </div>
             {/* Table Footer Legend */}
             <div className="px-3 py-2 bg-[var(--bg-hover)]/30 border-t border-[var(--border-main)] flex items-center justify-between text-[10px] text-slate-500">
-              <span className="font-medium text-slate-400">💡 Click vào hàng để xem/sửa chi tiết ngày đó</span>
+              <span className="font-medium text-slate-400">💡 {t('table.clickRowHint')}</span>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-4 text-[10px] text-slate-500 font-semibold px-1 mb-4">
-            <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-[#3b82f6]" /> Nhân sự tại site</span>
-            <span className="flex items-center gap-1.5"><HardHat className="w-3.5 h-3.5 text-slate-400" /> Kỹ sư / GS</span>
-            <span className="flex items-center gap-1.5"><CloudRain className="w-3.5 h-3.5 text-slate-400" /> Thời tiết</span>
-            <span className="flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5 text-red-500" /> Sự cố</span>
+            <span className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-[#3b82f6]" /> {t('table.siteStaff')}</span>
+            <span className="flex items-center gap-1.5"><HardHat className="w-3.5 h-3.5 text-slate-400" /> {t('siteLog.engineers')}</span>
+            <span className="flex items-center gap-1.5"><CloudRain className="w-3.5 h-3.5 text-slate-400" /> {t('table.weather')}</span>
+            <span className="flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5 text-red-500" /> {t('table.incidents')}</span>
           </div>
 
           <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg p-3">
-            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">Ghi chú tuần này</p>
+            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">{t('siteLog.weekNotes')}</p>
             <AutoGrowTextarea
               value={activeLog.weeklyAssessment !== undefined ? activeLog.weeklyAssessment : (activeLog.WEEKLY_ASSESSMENT || '')}
-              onChange={(e) => onUpdateLog('WEEKLY_ASSESSMENT', e.target.value)}
+              onChange={(e) => canEdit && onUpdateLog('WEEKLY_ASSESSMENT', e.target.value)}
+              disabled={!canEdit}
               className="w-full bg-transparent border-none text-xs text-slate-300 focus:ring-0 focus:outline-none placeholder-[#4d5e7a] min-h-[60px]"
-              placeholder="Nhập ghi chú tuần này..."
+              placeholder={canEdit ? 'Nhập ghi chú tuần này...' : 'Chỉ xem — bạn chưa được gán dự án này'}
             />
           </div>
         </>

@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { HardHat, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
+import { formatPercent3 } from '../../../utils/formatPercent';
 import ModuleDateHeader from './ModuleDateHeader';
+import DateInputDMY from '../../DateInputDMY';
+import { useProjectCanEdit } from '../../../context/ProjectEditContext';
+import { useI18n } from '../../../context/I18nContext';
 
 const initialGroups = [
   {
@@ -72,6 +76,8 @@ const initialGroups = [
 
 
 export default function ConstructionModule({ project, initialData, onProgressChange }) {
+  const canEdit = useProjectCanEdit();
+  const { t, tf, ts } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({ 'A': true, 'B': true, 'C': true, 'D': true });
 
@@ -157,6 +163,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   }, [groups, onProgressChange]);
 
   const handleUpdate = async (groupId, taskId, field, value) => {
+    if (!canEdit) return;
     try {
       setIsUpdating(true); setSyncStatus("saving");
 
@@ -211,6 +218,10 @@ export default function ConstructionModule({ project, initialData, onProgressCha
     totalProgress += groupProg * (g.weight / 100);
   });
 
+  const allTasks = groups.flatMap(g => g.tasks);
+  const totalTaskCount = allTasks.length;
+  const completedCount = allTasks.filter(t => Number(t.TIẾN_ĐỘ_THỰC_TẾ || 0) >= 100).length;
+
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
       <button
@@ -221,7 +232,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
           <div className="w-8 h-8 rounded bg-[#eab308]/10 text-[#eab308] flex items-center justify-center">
             <HardHat className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">THI CÔNG HIỆN TRƯỜNG / LẮP ĐẶT DỰ ÁN</h3>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">{t('modules.construction')}</h3>
         </div>
 
         <div className="flex items-center gap-4">
@@ -230,11 +241,13 @@ export default function ConstructionModule({ project, initialData, onProgressCha
             {isLoading ? (
               <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Đang tải...</span>
+                <span>{t('common.loading')}</span>
               </div>
             ) : (
-              <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-main)] px-3 py-1 rounded-full text-xs text-[var(--text-main)] min-w-[140px]">
-                <span className="whitespace-nowrap">Progress:</span> <span className="text-brand-green font-bold shrink-0">{Math.round(totalProgress)}%</span>
+              <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-light)] px-3 py-1 rounded-full text-xs min-w-[140px]">
+                <span className="text-[var(--text-main)] whitespace-nowrap">{tf('modules.completed', { done: completedCount, total: totalTaskCount })}</span>
+                <span className="w-1 h-1 bg-[#10b981] rounded-full shrink-0"></span>
+                <span className="text-[#10b981] font-bold shrink-0">{formatPercent3(totalProgress)}</span>
               </div>
             )}
           </div>
@@ -264,9 +277,9 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                       className="w-full flex items-center justify-between p-3 bg-[var(--bg-hover)] hover:bg-[#141c2f] transition-colors border-b border-[var(--border-main)]"
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-white tracking-wider">{group.name}</span>
+                        <span className="text-xs font-bold text-white tracking-wider">{ts(group.name)}</span>
                         <span className="text-[10px] font-bold text-[var(--text-muted)] bg-[var(--bg-main)] px-2 py-0.5 rounded border border-[var(--border-main)]">
-                          Trọng số: {group.weight}%
+                          {tf('modules.weight', { n: group.weight })}
                         </span>
                       </div>
                       <div className="flex items-center gap-4">
@@ -292,69 +305,67 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                             <table className="w-full text-left text-xs min-w-[800px]">
                               <thead>
                                 <tr className="bg-[var(--bg-main)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                                  <th className="p-3 w-16">Mã CV</th>
-                                  <th className="p-3">Hạng mục công việc hiện trường</th>
-                                  <th className="p-3 w-28">Ngày bắt đầu</th>
-                                  <th className="p-3 w-28">Ngày kết thúc</th>
-                                  <th className="p-3 w-28">Ngày HT thực tế</th>
-                                  <th className="p-3 w-48 text-right pr-6">Tiến độ thực tế</th>
+                                  <th className="p-3 w-16">{t('table.taskCode')}</th>
+                                  <th className="p-3">{t('table.taskItem')}</th>
+                                  <th className="p-3 w-28">{t('table.startDate')}</th>
+                                  <th className="p-3 w-28">{t('table.endDate')}</th>
+                                  <th className="p-3 w-28">{t('table.actualEnd')}</th>
+                                  <th className="p-3 w-48 text-right pr-6">{t('table.actualProgress')}</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-[var(--border-main)]">
                                 {group.tasks.map(task => (
                                   <tr key={task.id} className="hover:bg-[#141c2f]/40 transition-colors">
                                     <td className="p-3 font-semibold text-[var(--text-muted)]">{task.code}</td>
-                                    <td className="p-3 font-semibold text-slate-200">{task.item}</td>
+                                    <td className="p-3 font-semibold text-slate-200">{ts(task.item)}</td>
                                     <td className="p-3">
-                                      <input
-                                        type="text"
-                                        className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                                      <DateInputDMY
+                                        className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_BẮT_ĐẦU || ''}
-                                        placeholder="-"
-                                        onChange={(e) => {
-                                          const v = e.target.value;
+                                        placeholder="dd/mm/yyyy"
+                                        disabled={!canEdit || isUpdating}
+                                        onChange={(val) => {
                                           setGroups(prev => prev.map(g => g.id === group.id ? {
-                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, NGÀY_BẮT_ĐẦU: v } : t)
+                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, NGÀY_BẮT_ĐẦU: val } : t)
                                           } : g));
                                         }}
-                                        onBlur={(e) => handleUpdate(group.id, task.id, 'NGÀY_BẮT_ĐẦU', e.target.value)}
+                                        onBlur={(_e, val) => handleUpdate(group.id, task.id, 'NGÀY_BẮT_ĐẦU', val)}
                                       />
                                     </td>
                                     <td className="p-3">
-                                      <input
-                                        type="text"
-                                        className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                                      <DateInputDMY
+                                        className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_KẾT_THÚC || ''}
-                                        placeholder="-"
-                                        onChange={(e) => {
-                                          const v = e.target.value;
+                                        placeholder="dd/mm/yyyy"
+                                        disabled={!canEdit || isUpdating}
+                                        onChange={(val) => {
                                           setGroups(prev => prev.map(g => g.id === group.id ? {
-                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, NGÀY_KẾT_THÚC: v } : t)
+                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, NGÀY_KẾT_THÚC: val } : t)
                                           } : g));
                                         }}
-                                        onBlur={(e) => handleUpdate(group.id, task.id, 'NGÀY_KẾT_THÚC', e.target.value)}
+                                        onBlur={(_e, val) => handleUpdate(group.id, task.id, 'NGÀY_KẾT_THÚC', val)}
                                       />
                                     </td>
                                     <td className="p-3">
-                                      <input
-                                        type="text"
-                                        className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${task.NGÀY_HT_THỰC_TẾ && task.NGÀY_HT_THỰC_TẾ !== '-' ? 'text-emerald-400' : 'text-slate-400'} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                                      <DateInputDMY
+                                        className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${task.NGÀY_HT_THỰC_TẾ && task.NGÀY_HT_THỰC_TẾ !== '-' ? 'text-emerald-400' : 'text-slate-400'} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_HT_THỰC_TẾ || ''}
-                                        placeholder="-"
-                                        onChange={(e) => {
-                                          const v = e.target.value;
+                                        placeholder="dd/mm/yyyy"
+                                        disabled={!canEdit || isUpdating}
+                                        onChange={(val) => {
                                           setGroups(prev => prev.map(g => g.id === group.id ? {
-                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, NGÀY_HT_THỰC_TẾ: v } : t)
+                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, NGÀY_HT_THỰC_TẾ: val } : t)
                                           } : g));
                                         }}
-                                        onBlur={(e) => handleUpdate(group.id, task.id, 'NGÀY_HT_THỰC_TẾ', e.target.value)}
+                                        onBlur={(_e, val) => handleUpdate(group.id, task.id, 'NGÀY_HT_THỰC_TẾ', val)}
                                       />
                                     </td>
                                     <td className="p-3 text-right pr-6">
                                       <div className="flex items-center justify-end gap-3">
                                         <input
                                           type="text"
-                                          className={`bg-transparent font-bold focus:outline-none w-12 text-right border-b border-transparent focus:border-[#5252ff] ${task.TIẾN_ĐỘ_THỰC_TẾ === 100 ? 'text-emerald-400' : 'text-slate-300'} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                                          disabled={!canEdit || isUpdating}
+                                          className={`bg-transparent font-bold focus:outline-none w-12 text-right border-b border-transparent focus:border-[#5252ff] ${task.TIẾN_ĐỘ_THỰC_TẾ === 100 ? 'text-emerald-400' : 'text-slate-300'} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                           value={task.TIẾN_ĐỘ_THỰC_TẾ !== undefined ? `${task.TIẾN_ĐỘ_THỰC_TẾ}%` : '0%'}
                                           onChange={(e) => {
                                             const rawVal = e.target.value.replace('%', '');

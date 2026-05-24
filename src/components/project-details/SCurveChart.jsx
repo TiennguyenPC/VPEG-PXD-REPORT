@@ -2,6 +2,31 @@ import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart, ReferenceDot, Label } from 'recharts';
 import { Maximize2, Loader2, Minimize2, Flag, FileText, PenTool, Package, Wrench, Zap, CheckCircle2 } from 'lucide-react';
 import { api } from '../../services/api';
+import { useI18n } from '../../context/I18nContext';
+
+const MILESTONE_LABEL_KEYS = {
+  Kickoff: 'scurve.milestone.kickoff',
+  'Pháp lý': 'scurve.milestone.legal',
+  'Giấy phép': 'scurve.milestone.legal',
+  'Thiết kế': 'scurve.milestone.design',
+  'Vật tư': 'scurve.milestone.materials',
+  COD: 'scurve.milestone.cod',
+  Handover: 'scurve.milestone.handover',
+  'Thi công': 'scurve.milestone.construction',
+};
+
+const translateMilestoneTitle = (title, tr) => {
+  if (!title) return title;
+  return title.split(' & ').map((part) => {
+    const key = MILESTONE_LABEL_KEYS[part.trim()];
+    return key ? tr(key) : part;
+  }).join(' & ');
+};
+
+const formatMonthLabel = (monthStr, monthPrefix) => {
+  if (!monthStr) return monthStr;
+  return monthStr.replace(/^THÁNG\s/, `${monthPrefix} `);
+};
 
 const getIconForTitle = (title) => {
   const t = title.toLowerCase();
@@ -16,7 +41,7 @@ const getIconForTitle = (title) => {
 
 // Removed mock data
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, tr }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     const actual = data.actual;
@@ -31,17 +56,17 @@ const CustomTooltip = ({ active, payload, label }) => {
         <div className="space-y-1.5">
           {actual !== null && (
             <div className="flex justify-between items-center gap-4 text-xs">
-              <span className="text-[#10b981] font-medium">Thực tế:</span>
+              <span className="text-[#10b981] font-medium">{tr('scurve.actualShort')}:</span>
               <span className="text-white font-bold">{actual}%</span>
             </div>
           )}
           <div className="flex justify-between items-center gap-4 text-xs">
-            <span className="text-[#64748b] font-medium">Kế hoạch:</span>
+            <span className="text-[#64748b] font-medium">{tr('scurve.planShort')}:</span>
             <span className="text-white font-bold">{plan}%</span>
           </div>
           {diff !== null && diff !== 0 && (
             <div className={`mt-2 pt-2 border-t border-[#263554] flex justify-between items-center gap-4 text-xs ${diff < 0 ? 'text-[#ef4444]' : 'text-[#10b981]'}`}>
-              <span className="font-medium">Chênh lệch:</span>
+              <span className="font-medium">{tr('scurve.varianceShort')}:</span>
               <span className="font-bold">{diff > 0 ? '+' : ''}{diff}%</span>
             </div>
           )}
@@ -52,9 +77,10 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-export default function SCurveChart({ project, milestonesData = [], onPlanCalculated }) {
+export default function SCurveChart({ project, milestonesData = [], initialData, onPlanCalculated }) {
+  const { t } = useI18n();
   const [chartData, setChartData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(initialData === undefined);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const lastPlanCalculated = React.useRef(null);
 
@@ -69,8 +95,14 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
   useEffect(() => {
     const fetchSCurve = async () => {
       try {
-        setIsLoading(true);
-        const data = await api.getSCurves(project?.PROJECT_ID || project?.id);
+        let data = initialData;
+        const useBundledData = initialData !== undefined;
+
+        if (!useBundledData) {
+          setIsLoading(true);
+          data = await api.getSCurves(project?.PROJECT_ID || project?.id);
+        }
+
         if (data && data.length > 0) {
           const normalizeMDate = (dStr) => {
              if (!dStr || dStr === '-') return null;
@@ -135,7 +167,6 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
           localMilestones.forEach(lm => {
              const existingRow = (milestonesData || []).find(m => String(m.MILESTONE).toUpperCase().includes(lm.name));
              const hasValidDate = existingRow && existingRow.NGÀY_KẾ_HOẠCH && existingRow.NGÀY_KẾ_HOẠCH !== '-';
-             console.log(`[SCurve Debug] ${lm.name}: exists=${!!existingRow}, validDate=${hasValidDate}, val=${existingRow?.NGÀY_KẾ_HOẠCH}`);
              
              if (!hasValidDate) {
                 const dObj = getLocalMDate(lm.key);
@@ -554,7 +585,7 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
     };
 
     if (project?.PROJECT_ID || project?.id) fetchSCurve();
-  }, [project, milestonesData]);
+  }, [project, milestonesData, initialData]);
 
   useEffect(() => {
     if (!chartData || chartData.length === 0) return;
@@ -598,7 +629,7 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
     <>
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-          ĐƯỜNG ĐỒ THỊ TIẾN ĐỘ (S-CURVE)
+          {t('scurve.title')}
           {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--text-muted)]" />}
         </h3>
         
@@ -606,15 +637,15 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
               <div className="w-4 h-0 border-t-2 border-dashed border-[#64748b]"></div>
-              Kế hoạch (%)
+              {t('scurve.plan')}
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
               <div className="w-4 h-1 bg-[#10b981] rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-              Thực tế (%)
+              {t('scurve.actual')}
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
               <div className="w-4 h-1 bg-[#ef4444] rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)] opacity-80"></div>
-              Chênh lệch (%)
+              {t('scurve.variance')}
             </div>
           </div>
         </div>
@@ -629,8 +660,8 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
                 </svg>
               </div>
-              <p className="font-semibold mb-1">Đang thiết lập biểu đồ...</p>
-              <p className="text-xs opacity-70">Vui lòng cập nhật Ngày Kickoff và COD để biểu đồ tự động nội suy.</p>
+              <p className="font-semibold mb-1">{t('scurve.loading')}</p>
+              <p className="text-xs opacity-70">{t('scurve.loadingHint')}</p>
             </div>
           </div>
         ) : (
@@ -693,7 +724,7 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
                         textAnchor="middle"
                         className="uppercase tracking-widest"
                       >
-                        {dataPoint.monthStr}
+                        {formatMonthLabel(dataPoint.monthStr, t('scurve.monthPrefix'))}
                       </text>
                     )}
                   </g>
@@ -703,17 +734,18 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
             <YAxis 
               stroke="#4d5e7a" 
               tick={{ fill: 'var(--text-muted)', fontSize: 10, fontWeight: 600 }}
-              tickFormatter={(val) => val <= 100 ? `${val}%` : ''}
+              tickFormatter={(val) => `${val}%`}
               axisLine={false}
               tickLine={false}
-              domain={[0, 140]}
+              domain={[0, 100]}
+              ticks={[0, 25, 50, 75, 100]}
             />
-            <Tooltip content={<CustomTooltip />} />
+            <Tooltip content={<CustomTooltip tr={t} />} />
             
             <Area 
               type="monotone" 
               dataKey="delayRange" 
-              name="Chênh lệch"
+              name={t('scurve.varianceShort')}
               stroke="none" 
               fillOpacity={1} 
               fill="url(#colorDelay)" 
@@ -724,7 +756,7 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
             <Line 
               type="monotone" 
               dataKey="plan" 
-              name="Kế hoạch" 
+              name={t('scurve.planShort')} 
               stroke="#64748b" 
               strokeWidth={2}
               strokeDasharray="6 4" 
@@ -737,7 +769,7 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
             <Area 
               type="monotone" 
               dataKey="actual" 
-              name="Thực tế"
+              name={t('scurve.actualShort')}
               stroke="#10b981" 
               strokeWidth={3}
               fillOpacity={1} 
@@ -825,7 +857,7 @@ export default function SCurveChart({ project, milestonesData = [], onPlanCalcul
                                    }}
                                  >
                                    <IconComponent className="w-3.5 h-3.5" />
-                                   <span className="text-[10px] font-bold whitespace-nowrap">{d.milestoneTitle}</span>
+                                   <span className="text-[10px] font-bold whitespace-nowrap">{translateMilestoneTitle(d.milestoneTitle, t)}</span>
                                  </div>
                                </foreignObject>
                              </g>

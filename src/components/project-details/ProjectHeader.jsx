@@ -1,13 +1,76 @@
-import React, { useState } from 'react';
-import { ChevronLeft, Share2, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, Share2, Download, Menu, Link2Off } from 'lucide-react';
+import { api } from '../../services/api';
 
-export default function ProjectHeader({ project, onBack }) {
+export default function ProjectHeader({ project, onBack, onToggleSidebar, isSidebarCollapsed, shareMode = 'internal' }) {
   const [copied, setCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareStatus, setShareStatus] = useState(null);
 
-  const handleShare = () => {
+  const projectId = project?.PROJECT_ID || project?.id;
+
+  useEffect(() => {
+    if (shareMode !== 'public' || !projectId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await api.getProjectShareStatus(projectId);
+        if (!cancelled) setShareStatus(status);
+      } catch {
+        if (!cancelled) setShareStatus({ enabled: false, token: '' });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [shareMode, projectId]);
+
+  const buildShareUrl = (token) => `${window.location.origin}/share/${token}`;
+
+  const handleShare = async () => {
+    if (shareMode === 'public') {
+      try {
+        setSharing(true);
+        let token = shareStatus?.token;
+        if (!shareStatus?.enabled || !token) {
+          const data = await api.enableProjectShare(projectId);
+          token = data?.token;
+          setShareStatus({ projectId, enabled: true, token });
+        }
+        if (!token) throw new Error('Không nhận được token chia sẻ');
+        await navigator.clipboard.writeText(buildShareUrl(token));
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      } catch (e) {
+        window.alert(e.message || 'Không tạo được link chia sẻ');
+      } finally {
+        setSharing(false);
+      }
+      return;
+    }
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleDisableShare = async () => {
+    if (!window.confirm('Tắt link chia sẻ khách? Khách sẽ không truy cập được link hiện tại.')) return;
+    try {
+      setSharing(true);
+      await api.disableProjectShare(projectId);
+      setShareStatus((prev) => ({ ...prev, enabled: false }));
+    } catch (e) {
+      window.alert(e.message || 'Không tắt được link chia sẻ');
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const shareButtonLabel = () => {
+    if (sharing) return 'Đang xử lý...';
+    if (copied) return 'Đã copy link!';
+    if (shareMode === 'public') {
+      return shareStatus?.enabled ? 'Copy link khách' : 'Bật & copy link';
+    }
+    return 'Chia sẻ';
   };
 
   const handleExport = () => {
@@ -31,6 +94,13 @@ export default function ProjectHeader({ project, onBack }) {
         
         <div>
           <h1 className="text-2xl font-black text-white tracking-tight flex items-center gap-3">
+            <button 
+              onClick={onToggleSidebar} 
+              className="text-slate-400 hover:text-white bg-[#141c2f] hover:bg-[#1a243a] p-1.5 rounded-lg transition-all border border-[#263554] print:hidden shrink-0"
+              title={isSidebarCollapsed ? "Mở rộng Sidebar" : "Thu gọn Sidebar"}
+            >
+              {isSidebarCollapsed ? <Menu className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </button>
             DỰ ÁN ĐIỆN MẶT TRỜI {(project.name || "").toUpperCase()}
             {(project.status === 'completed' || project.status === 'COMPLETED') && (
               <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
@@ -52,13 +122,36 @@ export default function ProjectHeader({ project, onBack }) {
 
       <div className="flex flex-col items-end gap-4 relative z-10 w-full md:w-auto mt-4 md:mt-0">
         <div className="flex items-center gap-2 w-full md:w-auto justify-end print:hidden">
+          {shareMode === 'public' && shareStatus !== null && (
+            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border ${
+              shareStatus.enabled
+                ? 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10'
+                : 'text-slate-400 border-slate-600/40 bg-slate-800/40'
+            }`}>
+              {shareStatus.enabled ? 'Link khách: đang bật' : 'Link khách: đã tắt'}
+            </span>
+          )}
           <button 
+            type="button"
             onClick={handleShare}
-            className={`flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] px-4 py-2 rounded-lg text-xs font-semibold transition-all ${copied ? 'text-[#10b981] border-[#10b981]/50' : 'text-slate-200'}`}
+            disabled={sharing}
+            className={`flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-60 ${copied ? 'text-[#10b981] border-[#10b981]/50' : 'text-slate-200'}`}
           >
             <Share2 className={`w-3.5 h-3.5 ${copied ? 'text-[#10b981]' : 'text-[#7373ff]'}`} />
-            {copied ? 'Đã copy link!' : 'Chia sẻ'}
+            {shareButtonLabel()}
           </button>
+          {shareMode === 'public' && shareStatus?.enabled && (
+            <button
+              type="button"
+              onClick={handleDisableShare}
+              disabled={sharing}
+              className="flex items-center gap-2 bg-[#141c2f] hover:bg-red-950/40 border border-red-500/30 text-red-400 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-60"
+              title="Tắt link chia sẻ công khai"
+            >
+              <Link2Off className="w-3.5 h-3.5" />
+              Tắt link
+            </button>
+          )}
           <button 
             onClick={handleExport}
             className="flex items-center gap-2 bg-[#141c2f] hover:bg-[#1a243a] border border-[#263554] text-slate-200 px-4 py-2 rounded-lg text-xs font-semibold transition-all"

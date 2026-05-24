@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Bot, Send, User, Sparkles } from 'lucide-react';
-import { buildSystemInstruction, getOfflineAppHint } from '../data/aiKnowledge';
+import { buildSystemInstruction, getLocalDataAnswer, getOfflineAppHint } from '../data/aiKnowledge';
 import { sendGeminiChat, hasGeminiApiKey } from '../services/geminiChat';
-import { getPageLabel } from '../utils/dashboardContext';
+import { api } from '../services/api';
+import { getPageLabel, updateDashboardContext } from '../utils/dashboardContext';
 import AIMessageContent from './AIMessageContent';
 
 const WELCOME =
@@ -21,6 +22,39 @@ const QUICK_PROMPTS = [
   'Giải thích S-Curve và milestone',
 ];
 
+function readLocalJson(key, fallback = []) {
+  if (typeof window === 'undefined') return fallback;
+  try {
+    const value = window.localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function buildFallbackTables(data = {}) {
+  const projects = Array.isArray(data.projects) && data.projects.length > 0
+    ? data.projects
+    : readLocalJson('epc_projects_cache', []);
+  const tasks = Array.isArray(data.tasks) && data.tasks.length > 0
+    ? data.tasks
+    : readLocalJson('epc_tasks_cache', []);
+  const employees = readLocalJson('epc_employees_cache', []);
+
+  return {
+    PROJECT_MASTER: projects,
+    PROJECT_TASKS: tasks,
+    EMPLOYEE: employees,
+    PROJECT_RISK: data.risks || [],
+    PROJECT_PERMIT: data.permits || [],
+    PROJECT_DESIGN: data.designs || [],
+    PROJECT_PROCUREMENT: data.procurements || [],
+    PROJECT_CONSTRUCTION: data.constructions || [],
+    DAILY_SITE_LOG: data.siteLogs || [],
+    PROJECT_MILESTONE: data.milestones || [],
+  };
+}
+
 export default function AIAssistant() {
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
@@ -35,15 +69,45 @@ export default function AIAssistant() {
 
   const buildContext = useCallback(() => {
     const data = typeof window !== 'undefined' ? window.__DASHBOARD_DATA__ || {} : {};
+    const fallbackTables = buildFallbackTables(data);
     return {
       currentPath: location.pathname,
       currentPage: getPageLabel(location.pathname),
-      projects: data.projects,
-      tasks: data.tasks,
+      currentDateTime: new Date().toLocaleString('vi-VN', {
+        weekday: 'long',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      projects: data.projects || fallbackTables.PROJECT_MASTER,
+      tasks: data.tasks || fallbackTables.PROJECT_TASKS,
       currentProject: data.currentProject,
       projectId: data.projectId,
+      milestones: data.milestones,
+      risks: data.risks,
+      procurements: data.procurements,
+      constructions: data.constructions,
+      siteLogs: data.siteLogs,
+      permits: data.permits,
+      designs: data.designs,
+      tables: data.tables || fallbackTables,
     };
   }, [location.pathname]);
+
+  const buildContextWithTables = useCallback(async () => {
+    const context = buildContext();
+    try {
+      const tables = await api.getAIContext();
+      const mergedTables = { ...(context.tables || {}), ...(tables || {}) };
+      updateDashboardContext({ tables: mergedTables });
+      return { ...context, tables: mergedTables };
+    } catch (error) {
+      console.warn('Không tải được dữ liệu bảng đầy đủ cho AI:', error);
+      return context;
+    }
+  }, [buildContext]);
 
   const handlePointerDown = (e) => {
     setIsDragging(true);
@@ -75,25 +139,29 @@ export default function AIAssistant() {
     const userMsg = (textOverride ?? inputValue).trim();
     if (!userMsg || isTyping) return;
 
-    let snapshot;
-    setMessages((prev) => {
-      snapshot = [...prev, { role: 'user', content: userMsg }];
-      return snapshot;
-    });
+    const snapshot = [...messages, { role: 'user', content: userMsg }];
+    setMessages(snapshot);
     setInputValue('');
+
+    const context = await buildContextWithTables();
+    const localAnswer = getLocalDataAnswer(userMsg, context, snapshot);
+    if (localAnswer) {
+      setMessages([...snapshot, { role: 'ai', content: localAnswer }]);
+      return;
+    }
 
     if (!hasGeminiApiKey()) {
       const hint = getOfflineAppHint(userMsg);
       const fallback =
         hint ||
-        '⚠️ Chưa cấu hình API Gemini. Tạo file `.env` với `VITE_GEMINI_API_KEY=...` rồi khởi động lại `npm run dev`.';
+        '⚠️ Chưa cấu hình Groq API. Tạo file `.env` với `VITE_GROQ_API_KEY=...` rồi khởi động lại `npm run dev`.';
       setMessages([...snapshot, { role: 'ai', content: fallback }]);
       return;
     }
 
     setIsTyping(true);
     try {
-      const systemInstruction = buildSystemInstruction(buildContext());
+      const systemInstruction = buildSystemInstruction(context);
       const aiText = await sendGeminiChat({
         messages: snapshot,
         systemInstruction,
@@ -129,8 +197,8 @@ export default function AIAssistant() {
         <Sparkles className="w-4 h-4 animate-pulse" />
       </button>
 
-      <div
-        className={`fixed bottom-6 right-6 w-80 md:w-[400px] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] flex flex-col transition-all duration-300 z-50 print:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        <div
+        className={`fixed bottom-6 right-6 w-80 md:w-[400px] bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] flex flex-col transition-all duration-300 z-50 print:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         style={{
           height: '580px',
           maxHeight: '85vh',
@@ -173,12 +241,12 @@ export default function AIAssistant() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 min-h-0">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[var(--bg-main)]/40 min-h-0">
           {messages.map((msg, idx) => (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex gap-2 max-w-[90%] ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-auto shadow-sm ${msg.role === 'user' ? 'bg-blue-100 text-blue-600' : 'bg-indigo-100 text-indigo-600'}`}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-auto shadow-sm ${msg.role === 'user' ? 'bg-blue-500/20 text-blue-400' : 'bg-indigo-500/20 text-indigo-400'}`}
                 >
                   {msg.role === 'user' ? <User className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
                 </div>
@@ -186,7 +254,7 @@ export default function AIAssistant() {
                   className={`p-3 rounded-2xl shadow-sm ${
                     msg.role === 'user'
                       ? 'bg-blue-600 text-white rounded-br-sm text-sm'
-                      : 'bg-white border border-slate-100 text-slate-700 rounded-bl-sm'
+                      : 'bg-[var(--bg-panel)] border border-[var(--border-main)] text-[var(--text-main)] rounded-bl-sm'
                   }`}
                 >
                   {msg.role === 'user' ? (
@@ -202,10 +270,10 @@ export default function AIAssistant() {
           {isTyping && (
             <div className="flex justify-start">
               <div className="flex gap-2 flex-row">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-indigo-100 text-indigo-600">
+                <div className="w-8 h-8 rounded-full flex items-center justify-center bg-indigo-500/20 text-indigo-400">
                   <Sparkles className="w-4 h-4" />
                 </div>
-                <div className="p-4 rounded-2xl bg-white border border-slate-100 flex items-center gap-1">
+                <div className="p-4 rounded-2xl bg-[var(--bg-panel)] border border-[var(--border-main)] flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" />
                   <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:150ms]" />
                   <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:300ms]" />
@@ -217,13 +285,13 @@ export default function AIAssistant() {
         </div>
 
         {!isTyping && messages.length <= 2 && (
-          <div className="px-3 pb-2 flex flex-wrap gap-1.5 bg-slate-50/80 border-t border-slate-100">
+          <div className="px-3 pb-2 flex flex-wrap gap-1.5 bg-[var(--bg-panel)] border-t border-[var(--border-main)]">
             {QUICK_PROMPTS.map((q) => (
               <button
                 key={q}
                 type="button"
                 onClick={() => handleSend(q)}
-                className="text-[10px] px-2 py-1 rounded-full bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 transition-colors"
+                className="text-[10px] px-2 py-1 rounded-full bg-[var(--bg-hover)] border border-[var(--border-main)] text-[var(--text-main)] hover:border-indigo-400 hover:text-indigo-400 transition-colors"
               >
                 {q}
               </button>
@@ -231,14 +299,14 @@ export default function AIAssistant() {
           </div>
         )}
 
-        <div className="p-3 bg-white border-t border-slate-100 rounded-b-2xl shrink-0">
-          <div className="flex items-end gap-2 bg-slate-50 border border-slate-200 rounded-xl p-1 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
+        <div className="p-3 bg-[var(--bg-panel)] border-t border-[var(--border-main)] rounded-b-2xl shrink-0">
+          <div className="flex items-end gap-2 bg-[var(--bg-hover)] border border-[var(--border-main)] rounded-xl p-1 focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500 transition-all">
             <textarea
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Hỏi cách dùng app, số liệu dự án, kỹ thuật Solar..."
-              className="flex-1 max-h-32 min-h-[44px] bg-transparent border-none outline-none resize-none p-3 text-sm text-slate-700"
+              className="flex-1 max-h-32 min-h-[44px] bg-transparent border-none outline-none resize-none p-3 text-sm text-[var(--text-main)] placeholder:text-[var(--text-muted)]"
               rows={1}
             />
             <button
@@ -250,8 +318,8 @@ export default function AIAssistant() {
               <Send className="w-4 h-4" />
             </button>
           </div>
-          <p className="text-center mt-1.5 text-[9px] text-slate-400">
-            {getPageLabel(location.pathname)} · Gemini
+          <p className="text-center mt-1.5 text-[9px] text-[var(--text-muted)]">
+            {getPageLabel(location.pathname)} · by Tien Nguyen
           </p>
         </div>
       </div>

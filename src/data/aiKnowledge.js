@@ -73,7 +73,7 @@ export const APP_USAGE_GUIDE = `
 
 ## 4. Trang CÔNG VIỆC (\`/tasks\`)
 ### Chế độ xem (tab trên cùng)
-- **Lưới**: Bảng danh sách, sort cột, phân trang.
+- **Lưới**: Bảng danh sách (Tên tác vụ, **Mô tả**, Dự án…), sort cột, phân trang. Mô tả lưu cột GHI_CHÚ trên Sheet.
 - **Bảng (Kanban)**: Cột theo **Bộ chứa** (VĂN PHÒNG, DỰ ÁN, ...).
 - **Lịch**: Lịch tháng theo ngày bắt đầu/hạn.
 - **Biểu đồ**: Trạng thái, ưu tiên, bộ chứa, thành viên.
@@ -105,86 +105,775 @@ export const APP_USAGE_GUIDE = `
 - "Xuất báo cáo?" → Chi tiết dự án → Export (in PDF) hoặc Danh sách dự án → Xuất Excel.
 `;
 
+// Danh sách 15 hạng mục mua sắm chuẩn (đồng bộ với ProcurementModule)
+const DEFAULT_PROCUREMENTS = [
+  'An toàn tạm',
+  'Dây cáp (AC/DC/Cứu sinh/dây mạng/dây tín hiệu,...)',
+  'Lan can cứng',
+  'Walkway',
+  'Hệ thống khung đỡ (Rail, xà gồ, kẹp biên, kẹp giữa, kẹp seamlock, Pad L,..)',
+  'Tấm pin PV ( Kẹp tiếp địa, kẹp thoát nước,...)',
+  'Máng cáp (Máng DC, AC, nắp đậy máng, thanh V làm support,..)',
+  'Nhà biến tần (khung lưới, mái tôn, chân trụ, bản mã, xà gồ, khung treo biến tần,...)',
+  'Biến tần (Inverter, phụ kiện bấm MC4,...)',
+  'Tủ điện (Isolator, ACDB)',
+  'Hệ thống tiếp địa (dây PE, kẹp tiếp địa, hộp test box, dây đồng trần,...)',
+  'Hệ PCCC (Quả cầu PCCC, tiêu lệnh, bình xịt PCCC,...)',
+  'Hệ thống giám sát (Tủ Mornitoring, Bluelog, Data logger, UPS, nguồn điện,...)',
+  'Hệ thống tủ thông tin/không phát ngược lưới (Tủ zero export, Multi Meter, CT,...)',
+  'Hệ thống vệ sinh pin (Bơm, phụ kiện bơm, bồn nước, CB bơm, ống nước, khơi thủy)',
+];
+
+function normalizeFieldKey(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function getAnyField(row, aliases) {
+  if (!row) return '';
+  const keys = Object.keys(row);
+  for (const alias of aliases) {
+    const wanted = normalizeFieldKey(alias);
+    const match = keys.find((key) => normalizeFieldKey(key) === wanted);
+    if (match && row[match] !== undefined && row[match] !== null) {
+      return row[match];
+    }
+  }
+  return '';
+}
+
+function mergeProcurementsForAI(rawData) {
+  const norm = normalizeFieldKey;
+  return DEFAULT_PROCUREMENTS.map((name) => {
+    const row = Array.isArray(rawData)
+      ? rawData.find((r) => {
+          const hm = getAnyField(r, [
+            'HẠNG_MỤC_MUA_HÀNG',
+            'HẠNG_MỤC',
+            'HANG_MUC',
+            'hangmuc',
+            'hang_muc',
+            'hang_muc_mua_hang',
+          ]);
+          return norm(hm) === norm(name);
+        })
+      : null;
+    return {
+      hang_muc: name,
+      tinh_trang: getAnyField(row, [
+        'TÌNH_TRẠNG_VẬT_TƯ',
+        'tinhtrangvattu',
+        'tinh_trang_vat_tu',
+        'trang_thai_vat_tu',
+      ]),
+      ngay_du_kien: getAnyField(row, [
+        'NGÀY_VỀ_DỰ_KIẾN',
+        'ngayvedukien',
+        'ngay_ve_du_kien',
+        'ngay ve du kien',
+        'expectedDate',
+      ]),
+      ngay_thuc_te: getAnyField(row, [
+        'NGÀY_VỀ_THỰC_TẾ',
+        'ngayvethucte',
+        'ngay_ve_thuc_te',
+        'ngay ve thuc te',
+        'actualDate',
+      ]),
+      danh_gia: getAnyField(row, [
+        'ĐÁNH_GIÁ_TIẾN_ĐỘ',
+        'danhgiatiendo',
+        'danh_gia_tien_do',
+        'evaluation',
+      ]),
+      ghi_chu: getAnyField(row, [
+        'GHI_CHÚ',
+        'ghichu',
+        'ghi_chu',
+        'note',
+      ]),
+    };
+  });
+}
+
+function findProcurementSubject(message, messages, procurements) {
+  const recentText = [
+    message,
+    ...(Array.isArray(messages) ? messages.slice(-6).map((m) => m.content || '') : []),
+  ].join(' ');
+  const normalizedRecent = normalizeFieldKey(recentText);
+
+  return procurements.find((item) => {
+    const fullName = normalizeFieldKey(item.hang_muc);
+    const shortName = normalizeFieldKey(String(item.hang_muc || '').split('(')[0]);
+    return (shortName && normalizedRecent.includes(shortName)) ||
+      (fullName && normalizedRecent.includes(fullName));
+  });
+}
+
+function formatProcurementLine(item) {
+  const expected = item.ngay_du_kien || 'chưa có';
+  const actual = item.ngay_thuc_te || 'chưa có';
+  const status = item.tinh_trang || 'chưa có trạng thái';
+  const evaluation = item.danh_gia ? `, đánh giá: **${item.danh_gia}**` : '';
+  const note = item.ghi_chu ? `, ghi chú: ${item.ghi_chu}` : '';
+  return `- **${item.hang_muc}**: dự kiến **${expected}**, thực tế **${actual}**, trạng thái **${status}**${evaluation}${note}`;
+}
+
+function compactValue(value) {
+  if (value === undefined || value === null) return '';
+  const text = String(value).trim();
+  if (!text || text === '-' || text.toLowerCase() === 'null') return '';
+  return text.length > 500 ? `${text.slice(0, 500)}...` : value;
+}
+
+function compactRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.map((row) => {
+    const cleaned = {};
+    Object.entries(row || {}).forEach(([key, value]) => {
+      if (key === '_rowIndex') return;
+      const compacted = compactValue(value);
+      if (compacted !== '') cleaned[key] = compacted;
+    });
+    return cleaned;
+  });
+}
+
+function buildTableSnapshot(tables) {
+  if (!tables || typeof tables !== 'object') return null;
+  const snapshot = {};
+  Object.entries(tables).forEach(([tableName, rows]) => {
+    if (!Array.isArray(rows)) return;
+    snapshot[tableName] = {
+      so_dong: rows.length,
+      du_lieu: compactRows(rows),
+    };
+  });
+  return snapshot;
+}
+
+function formatCurrentDateAnswer(now = new Date()) {
+  const weekdays = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
+  const weekday = weekdays[now.getDay()];
+  const date = now.toLocaleDateString('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const time = now.toLocaleTimeString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  return `Hôm nay là **${weekday}, ngày ${date}**. Giờ hiện tại khoảng **${time}**.`;
+}
+
+function getTableRows(context, tableName, fallback = []) {
+  const rows = context?.tables?.[tableName];
+  return Array.isArray(rows) ? rows : fallback;
+}
+
+function getProjectIdentity(project) {
+  if (!project) return [];
+  return [
+    project.id,
+    project.PROJECT_ID,
+    project.name,
+    project.TÊN_DỰ_ÁN,
+    project.PROJECT_NAME,
+  ].filter(Boolean).map((value) => normalizeFieldKey(value));
+}
+
+function rowBelongsToProject(row, project) {
+  if (!project) return true;
+  const identities = getProjectIdentity(project);
+  if (identities.length === 0) return true;
+  const rowValues = [
+    row.PROJECT_ID,
+    row.projectId,
+    row.TÊN_DỰ_ÁN,
+    row.PROJECT_NAME,
+    row.name,
+  ].filter(Boolean).map((value) => normalizeFieldKey(value));
+  return rowValues.some((value) => identities.includes(value));
+}
+
+function findMentionedProject(context, userMessage) {
+  if (context.currentProject) return context.currentProject;
+  const q = normalizeFieldKey(userMessage);
+  const candidates = [
+    ...(Array.isArray(context.projects) ? context.projects : []),
+    ...getTableRows(context, 'PROJECT_MASTER'),
+  ];
+  return candidates.find((project) => {
+    const identities = getProjectIdentity(project);
+    return identities.some((identity) => identity && q.includes(identity));
+  }) || null;
+}
+
+function takeRows(rows, limit = 8) {
+  return rows.slice(0, limit);
+}
+
+function formatProject(project) {
+  const name = project.name || project.TÊN_DỰ_ÁN || project.PROJECT_NAME || project.PROJECT_ID || 'Dự án';
+  const plan = project.planProgress ?? project.TIẾN_ĐỘ_KẾ_HOẠCH ?? project.PLAN_PROGRESS ?? '';
+  const actual = project.actualProgress ?? project.TIẾN_ĐỘ_THỰC_TẾ ?? project.ACTUAL_PROGRESS ?? '';
+  const delay = project.delay ?? project.DELAY ?? '';
+  const status = project.status || project.TRẠNG_THÁI || project.STATUS || '';
+  const risk = project.risk || project.RISK_LEVEL || '';
+  const cod = project.cod || project.KẾ_HOẠCH_COD || project.COD_PLAN || '';
+  return `- **${name}**: kế hoạch **${plan || '-'}%**, thực tế **${actual || '-'}%**, delay **${delay || '-'}**, trạng thái **${status || '-'}**, risk **${risk || '-'}**, COD **${cod || '-'}**`;
+}
+
+function formatTask(task) {
+  const title = task.TÁC_VỤ || task.TÊN_CÔNG_VIỆC || task.title || 'Task';
+  const project = task.TÊN_DỰ_ÁN || task.PROJECT_ID || '';
+  const status = task.TRẠNG_THÁI || task.computedStatus || task.status || '';
+  const priority = task.ƯU_TIÊN || task.priority || '';
+  const assignee = task.NHÂN_SỰ || task.assignee || task.ĐÃ_CHỈ_ĐỊNH_CHO || '';
+  const due = task.NGÀY_KẾT_THÚC || task.ĐẾN_HẠN || task.due || '';
+  return `- **${title}**${project ? ` (${project})` : ''}: ${status || 'chưa rõ'}${priority ? `, ưu tiên ${priority}` : ''}${assignee ? `, phụ trách ${assignee}` : ''}${due ? `, hạn ${due}` : ''}`;
+}
+
+function formatRisk(risk) {
+  const text = risk.MÔ_TẢ || risk.RISK || risk.description || risk.VƯỚNG_MẮC || 'Rủi ro';
+  const level = risk.MỨC_ĐỘ || risk.LEVEL || risk.level || risk.RISK_LEVEL || '';
+  const status = risk.TRẠNG_THÁI || risk.STATUS || '';
+  const action = risk.BIỆN_PHÁP || risk.ACTION || risk.GIẢI_PHÁP || '';
+  return `- **${text}**${level ? ` — mức ${level}` : ''}${status ? `, trạng thái ${status}` : ''}${action ? `, xử lý: ${action}` : ''}`;
+}
+
+function formatMilestone(row) {
+  const name = row.MILESTONE || row.HẠNG_MỤC || row.TÊN_MỐC || row.name || 'Milestone';
+  const plan = row.NGÀY_KẾ_HOẠCH || row.PLAN_DATE || row.KẾ_HOẠCH || '';
+  const actual = row.NGÀY_THỰC_TẾ || row.ACTUAL_DATE || row.THỰC_TẾ || '';
+  const delay = row.DELAY || row.delay || '';
+  const status = row.TRẠNG_THÁI || row.STATUS || '';
+  return `- **${name}**: kế hoạch **${plan || '-'}**, thực tế **${actual || '-'}**${delay !== '' ? `, delay **${delay}**` : ''}${status ? `, ${status}` : ''}`;
+}
+
+function formatConstruction(row) {
+  const item = row.HẠNG_MỤC_CÔNG_VIỆC || row.HẠNG_MỤC || row.MÃ_CV || 'Hạng mục thi công';
+  const group = row.NHÓM_THI_CÔNG || row.NHÓM || '';
+  const progress = row.TIẾN_ĐỘ_THỰC_TẾ ?? row.ACTUAL_PROGRESS ?? row.progress ?? '';
+  const start = row.NGÀY_BẮT_ĐẦU || '';
+  const end = row.NGÀY_KẾT_THÚC || row.NGÀY_HT_THỰC_TẾ || '';
+  return `- **${item}**${group ? ` (${group})` : ''}: tiến độ **${progress || '-'}**${start ? `, bắt đầu ${start}` : ''}${end ? `, kết thúc ${end}` : ''}`;
+}
+
+function formatSiteLog(row) {
+  const date = row.LOG_DATE || row.NGÀY || 'Ngày chưa rõ';
+  const manpower = row.MANPOWER ?? row.NHÂN_LỰC_SITE ?? '';
+  const engineers = row.ENGINEERS ?? row.KỸ_SƯ_GS ?? '';
+  const weather = row.WEATHER || row.THỜI_TIẾT || '';
+  const note = row.DAILY_NOTE || row.GHI_CHÚ_HIỆN_TRƯỜNG || '';
+  return `- **${date}**: nhân lực ${manpower || 0}, kỹ sư ${engineers || 0}${weather ? `, thời tiết ${weather}` : ''}${note ? ` — ${note}` : ''}`;
+}
+
+function formatWebMapAnswer() {
+  return [
+    '**Web có các phần chính:**',
+    '- **Tổng quan**: KPI, tiến độ dự án, rủi ro, task quan trọng.',
+    '- **Dự án**: danh sách dự án, lọc, xuất Excel, thêm/sửa dự án.',
+    '- **Chi tiết dự án**: tiến độ, milestone, S-Curve, site log, risk, permit, design, procurement, construction, handover.',
+    '- **Công việc**: task, trạng thái, ưu tiên, người phụ trách, hạn.',
+    '- **AI PXD**: hỏi dữ liệu web, cách dùng app, phân tích Solar EPC.',
+  ].join('\n');
+}
+
+function toNumber(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const num = Number(String(value).replace('%', '').replace(',', '.'));
+  return Number.isFinite(num) ? num : null;
+}
+
+function getProjectProgress(project) {
+  const plan = toNumber(project?.planProgress ?? project?.TIẾN_ĐỘ_KẾ_HOẠCH ?? project?.PLAN_PROGRESS);
+  const actual = toNumber(project?.actualProgress ?? project?.TIẾN_ĐỘ_THỰC_TẾ ?? project?.ACTUAL_PROGRESS);
+  const rawDelay = toNumber(project?.delay ?? project?.DELAY);
+  const gap = rawDelay ?? (actual !== null && plan !== null ? actual - plan : null);
+  return { plan, actual, gap };
+}
+
+function isDelayedValue(value) {
+  const num = toNumber(value);
+  if (num !== null) return num < 0;
+  return /trễ|tre|delay|chậm|cham/i.test(String(value || ''));
+}
+
+function getLatestSiteLog(siteLogs) {
+  return Array.isArray(siteLogs) && siteLogs.length > 0 ? siteLogs[siteLogs.length - 1] : null;
+}
+
+function getRowNote(row) {
+  return getAnyField(row, [
+    'GHI_CHÚ',
+    'GHI_CHÚ_HIỆN_TRƯỜNG',
+    'DAILY_NOTE',
+    'WEEKLY_ASSESSMENT',
+    'MONTHLY_REPORT',
+    'MÔ_TẢ',
+    'BIỆN_PHÁP',
+    'ACTION',
+    'GIẢI_PHÁP',
+    'VƯỚNG_MẮC',
+    'THỜI_TIẾT',
+    'WEATHER',
+    'NOTE',
+  ]);
+}
+
+function collectNotes(label, rows, formatter = getRowNote) {
+  if (!Array.isArray(rows)) return [];
+  return rows
+    .map((row) => {
+      const note = formatter(row);
+      return note ? { label, note: String(note), row } : null;
+    })
+    .filter(Boolean);
+}
+
+function hasRaw(text, pattern) {
+  return pattern.test(String(text || '').toLowerCase());
+}
+
+function hasNorm(text, pattern) {
+  return pattern.test(normalizeFieldKey(text));
+}
+
+function classifyEPCNotes(notes) {
+  const buckets = {
+    weather: [],
+    procurement: [],
+    manpower: [],
+    designPermit: [],
+    construction: [],
+    risk: [],
+  };
+
+  notes.forEach((item) => {
+    const text = item.note;
+    if (hasRaw(text, /mưa|giông|bão|gió lớn|thời tiết|ẩm ướt/) || hasNorm(text, /rain|storm|weather|wind/)) {
+      buckets.weather.push(item);
+    }
+    if (hasRaw(text, /vật tư|nhà cung cấp|ncc|giao hàng|chậm giao|eta|lead time|thiếu hàng/) || hasNorm(text, /supplier|delivery|material|procurement|leadtime|eta/)) {
+      buckets.procurement.push(item);
+    }
+    if (hasRaw(text, /nhân lực|nhân sự|thiếu người|đội thi công|kỹ sư|giám sát/) || hasNorm(text, /manpower|engineer|worker|crew/)) {
+      buckets.manpower.push(item);
+    }
+    if (hasRaw(text, /thiết kế|bản vẽ|permit|giấy phép|phê duyệt|đấu nối|pccc/) || hasNorm(text, /design|drawing|permit|approval/)) {
+      buckets.designPermit.push(item);
+    }
+    if (hasRaw(text, /thi công|lắp đặt|mái|kéo cáp|inverter|module|tủ điện|khung/) || hasNorm(text, /construction|install|roof|cable|inverter|module/)) {
+      buckets.construction.push(item);
+    }
+    if (hasRaw(text, /rủi ro|vướng mắc|sự cố|issue|risk|blocker|chờ/) || hasNorm(text, /risk|issue|blocker|incident/)) {
+      buckets.risk.push(item);
+    }
+  });
+
+  return buckets;
+}
+
+function formatNoteExamples(items, limit = 2) {
+  return items.slice(0, limit).map((item) => `"${item.note}"`).join('; ');
+}
+
+function buildEPCRecommendations(causes) {
+  const actions = [];
+  if (causes.weather.length) {
+    actions.push('Mưa/thời tiết: chuyển việc ngoài trời sang việc trong nhà/xưởng (lắp tủ, pre-assembly, kiểm vật tư), che chắn khu vực làm được, cập nhật look-ahead 3 ngày và bù tiến độ bằng tăng ca khi khô ráo');
+  }
+  if (causes.procurement.length) {
+    actions.push('Vật tư/NCC: xác nhận ETA từng hạng mục blocking, tách giao hàng từng phần, ưu tiên vật tư đường găng, có phương án NCC thay thế hoặc mượn tạm vật tư tương đương đã duyệt');
+  }
+  if (causes.manpower.length) {
+    actions.push('Nhân sự: bổ sung đội thi công/kỹ sư GS cho khu vực chậm, chia ca, giao sản lượng/ngày và kiểm soát output cuối ngày');
+  }
+  if (causes.designPermit.length) {
+    actions.push('Thiết kế/giấy phép: mở danh sách pending approval, gán owner/deadline, ưu tiên bản vẽ/permit đang chặn thi công và họp daily 15 phút để gỡ');
+  }
+  if (causes.construction.length) {
+    actions.push('Thi công: xác định hạng mục đường găng, tăng nguồn lực cho roof/DC cable/inverter nếu đang chậm, nghiệm thu cuốn chiếu để không dồn cuối dự án');
+  }
+  if (causes.risk.length) {
+    actions.push('Risk/issue: lập action log gồm nguyên nhân, owner, deadline, trạng thái, escalation nếu quá hạn 24-48h');
+  }
+  return actions;
+}
+
+function analyzeProjectRecovery({ project, projectName, procurements, milestones, constructions, risks, siteLogs }) {
+  const { plan, actual, gap } = getProjectProgress(project);
+  const delayedMilestones = milestones.filter((row) =>
+    isDelayedValue(row.DELAY ?? row.delay ?? row.TRẠNG_THÁI ?? row.STATUS)
+  );
+  const delayedConstructions = constructions.filter((row) =>
+    isDelayedValue(row.ĐÁNH_GIÁ_TIẾN_ĐỘ ?? row.TRẠNG_THÁI ?? row.STATUS) ||
+    (toNumber(row.TIẾN_ĐỘ_THỰC_TẾ ?? row.ACTUAL_PROGRESS) !== null &&
+      toNumber(row.TIẾN_ĐỘ_THỰC_TẾ ?? row.ACTUAL_PROGRESS) < 100)
+  );
+  const activeRisks = risks.filter((row) =>
+    !/đóng|dong|done|closed|hoàn thành|hoan thanh/i.test(String(row.TRẠNG_THÁI || row.STATUS || ''))
+  );
+  const notArrivedProcurements = procurements.filter((item) =>
+    !normalizeFieldKey(item.tinh_trang).includes('datoisite')
+  );
+  const latestLog = getLatestSiteLog(siteLogs);
+  const manpower = latestLog ? toNumber(latestLog.MANPOWER ?? latestLog.NHÂN_LỰC_SITE) : null;
+  const engineers = latestLog ? toNumber(latestLog.ENGINEERS ?? latestLog.KỸ_SƯ_GS) : null;
+  const notes = [
+    ...collectNotes('risk', risks),
+    ...collectNotes('construction', constructions),
+    ...collectNotes('site log', siteLogs),
+    ...collectNotes('procurement', procurements, (item) => item.ghi_chu || item.danh_gia || item.tinh_trang),
+  ];
+  const causes = classifyEPCNotes(notes);
+  const epcActions = buildEPCRecommendations(causes);
+
+  const status =
+    gap === null
+      ? 'chưa đủ dữ liệu để kết luận trễ hay không'
+      : gap < 0
+        ? `đang **trễ ${Math.abs(gap)}%** so với kế hoạch`
+        : `đang **đạt/vượt ${gap}%** so với kế hoạch`;
+
+  const blockers = [];
+  if (delayedMilestones.length) blockers.push(`${delayedMilestones.length} milestone có dấu hiệu trễ`);
+  if (delayedConstructions.length) blockers.push(`${delayedConstructions.length} hạng mục thi công chưa xong/chậm`);
+  if (notArrivedProcurements.length) blockers.push(`${notArrivedProcurements.length} hạng mục vật tư chưa tới site/chưa có trạng thái`);
+  if (activeRisks.length) blockers.push(`${activeRisks.length} rủi ro/vướng mắc đang mở`);
+  if (manpower !== null && manpower < 5) blockers.push(`nhân lực site thấp (${manpower} người)`);
+  if (causes.weather.length) blockers.push(`thời tiết/mưa ảnh hưởng (${formatNoteExamples(causes.weather)})`);
+  if (causes.procurement.length) blockers.push(`ghi chú vật tư/NCC (${formatNoteExamples(causes.procurement)})`);
+  if (causes.designPermit.length) blockers.push(`thiết kế/giấy phép/phê duyệt đang ảnh hưởng (${formatNoteExamples(causes.designPermit)})`);
+
+  const actions = [];
+  if (gap !== null && gap < 0) actions.push('chốt recovery plan theo ngày: tăng ca/ca cuối tuần cho các hạng mục đường găng');
+  if (notArrivedProcurements.length) actions.push('đẩy procurement: xác nhận ETA, ưu tiên vật tư blocking, tách giao hàng từng phần');
+  if (delayedConstructions.length) actions.push('bổ sung đội thi công cho nhóm chậm nhất, giao sản lượng/ngày rõ ràng');
+  if (manpower !== null && manpower < 5) actions.push('bổ sung nhân sự site hoặc điều đội hỗ trợ trong 3-5 ngày cao điểm');
+  if (engineers !== null && engineers < 1) actions.push('bố trí kỹ sư GS bám site để gỡ vướng nhanh');
+  if (activeRisks.length) actions.push('mở action log cho rủi ro/vướng mắc: owner, deadline, trạng thái mỗi ngày');
+  actions.push(...epcActions);
+  if (!actions.length) actions.push('duy trì nhịp hiện tại, tiếp tục theo dõi milestone và S-Curve hằng ngày');
+
+  return [
+    `**${projectName}** ${status}.`,
+    plan !== null || actual !== null ? `Kế hoạch: **${plan ?? '-'}%**, thực tế: **${actual ?? '-'}%**.` : '',
+    blockers.length ? `**Điểm nghẽn:** ${blockers.join('; ')}.` : '**Điểm nghẽn:** chưa thấy blocker rõ trong dữ liệu.',
+    `**Cách kéo lại:** ${actions.join('; ')}.`,
+  ].filter(Boolean).join('\n\n');
+}
+
+function isCountQuestion(q) {
+  return /tong|baonhieu|may|soluong|dem|count/.test(q);
+}
+
+export function getLocalDataAnswer(userMessage, context = {}, messages = []) {
+  const q = normalizeFieldKey(userMessage);
+  const isCurrentDateQuestion =
+    /homnay|hnay|ngayhomnay|thu may|thumay|baygio|giohientai|maygio|ngayhientai|today|date|time/.test(q);
+
+  if (isCurrentDateQuestion) {
+    return formatCurrentDateAnswer();
+  }
+
+  if (/webcogi|appcogi|namdau|odau|module|chucnang|menugom|dulieunamdau|bangnao/.test(q)) {
+    return formatWebMapAnswer();
+  }
+
+  const usageHint = getOfflineAppHint(userMessage);
+  if (usageHint) return usageHint;
+
+  const selectedProject = findMentionedProject(context, userMessage);
+  const projectName = selectedProject?.name || selectedProject?.TÊN_DỰ_ÁN || selectedProject?.PROJECT_NAME || 'dự án đang xem';
+
+  const masterProjects = getTableRows(context, 'PROJECT_MASTER', context.projects || []);
+  const allTasks = getTableRows(context, 'PROJECT_TASKS', context.tasks || []);
+  const projectTasks = allTasks.filter((row) => rowBelongsToProject(row, selectedProject));
+  const risks = getTableRows(context, 'PROJECT_RISK', context.risks || []).filter((row) => rowBelongsToProject(row, selectedProject));
+  const milestones = getTableRows(context, 'PROJECT_MILESTONE', context.milestones || []).filter((row) => rowBelongsToProject(row, selectedProject));
+  const constructions = getTableRows(context, 'PROJECT_CONSTRUCTION', context.constructions || []).filter((row) => rowBelongsToProject(row, selectedProject));
+  const siteLogs = getTableRows(context, 'DAILY_SITE_LOG', context.siteLogs || []).filter((row) => rowBelongsToProject(row, selectedProject));
+  const procurementRows = getTableRows(context, 'PROJECT_PROCUREMENT', context.procurements || [])
+    .filter((row) => rowBelongsToProject(row, selectedProject));
+  const mergedProcurements = selectedProject ? mergeProcurementsForAI(procurementRows) : [];
+  const wantsCount = isCountQuestion(q);
+  const wantsAnalysis = /phantich|danhgia|tre|cham|delay|laylaitiendo|kehoachkeolai|recover|catchup|nguyennhan|diemnghen|nhansu|bosung|yeu|thieu|tien do|tiendo/.test(q);
+
+  if (wantsAnalysis && selectedProject) {
+    return analyzeProjectRecovery({
+      project: selectedProject,
+      projectName,
+      procurements: mergedProcurements,
+      milestones,
+      constructions,
+      risks,
+      siteLogs,
+    });
+  }
+
+  if (wantsAnalysis && !selectedProject && masterProjects.length) {
+    const delayedProjects = masterProjects.filter((project) => {
+      const { gap } = getProjectProgress(project);
+      return gap !== null && gap < 0;
+    });
+    if (delayedProjects.length) {
+      return `Có **${delayedProjects.length}/${masterProjects.length}** dự án đang trễ tiến độ:\n\n${takeRows(delayedProjects, 5).map(formatProject).join('\n')}`;
+    }
+    return `Chưa thấy dự án nào trễ theo chênh lệch tiến độ hiện có.`;
+  }
+
+  const isProcurementQuestion =
+    /vattu|muasam|hangmuc|toisite|datoi|dave|vengaynao|ngayvedukien|ngayvethucte|ngaynao/.test(q);
+
+  if (isProcurementQuestion && selectedProject) {
+    const procurements = mergedProcurements;
+    const arrived = procurements.filter((item) =>
+      normalizeFieldKey(item.tinh_trang).includes('datoisite')
+    );
+    const noStatus = procurements.filter((item) => !String(item.tinh_trang || '').trim());
+    const subject = findProcurementSubject(userMessage, messages, procurements);
+
+    if (wantsCount) {
+      return `${projectName} có **${arrived.length}/${procurements.length}** hạng mục vật tư đã tới site.`;
+    }
+
+    if (subject && /ngaynao|ngayve|vedukien|vethucte/.test(q)) {
+      return `**${projectName} — ${subject.hang_muc}**\n\n${formatProcurementLine(subject)}`;
+    }
+
+    if (/ngaynao|ngayve|vedukien|vethucte/.test(q)) {
+      const lines = arrived.length > 0
+        ? arrived.map(formatProcurementLine).join('\n')
+        : 'Chưa có hạng mục nào có trạng thái **Đã tới site**.';
+      return `**${projectName} — Ngày về vật tư đã tới site**\n\n${lines}`;
+    }
+
+    const arrivedLines = arrived.length > 0
+      ? arrived.map(formatProcurementLine).join('\n')
+      : 'Chưa có hạng mục nào có trạng thái **Đã tới site**.';
+    const pendingNames = noStatus.map((item) => item.hang_muc).join('; ') || 'Không có';
+    return `**${projectName} — Tình trạng vật tư**\n\nĐã tới site: **${arrived.length}/${procurements.length}** hạng mục.\n\n${arrivedLines}\n\n**Chưa có trạng thái:** ${pendingNames}`;
+  }
+
+  if (/task|congviec|tacvu|viec/.test(q)) {
+    const rows = selectedProject ? projectTasks : allTasks;
+    if (!rows.length) return `Không thấy task phù hợp trong dữ liệu hiện có.`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${rows.length}** task.`;
+    return `**Task${selectedProject ? ` của ${projectName}` : ''}** — ${rows.length} dòng\n\n${takeRows(rows).map(formatTask).join('\n')}`;
+  }
+
+  if (/ruiro|risk|vuongmac|vande/.test(q)) {
+    if (!risks.length) return `Không thấy rủi ro/vướng mắc phù hợp trong dữ liệu hiện có.`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${risks.length}** rủi ro/vướng mắc.`;
+    return `**Rủi ro/Vướng mắc${selectedProject ? ` của ${projectName}` : ''}** — ${risks.length} dòng\n\n${takeRows(risks).map(formatRisk).join('\n')}`;
+  }
+
+  if (/milestone|moc|timeline|cod|kickoff/.test(q)) {
+    if (!milestones.length) return `Không thấy milestone phù hợp trong dữ liệu hiện có.`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${milestones.length}** milestone.`;
+    return `**Milestone${selectedProject ? ` của ${projectName}` : ''}** — ${milestones.length} dòng\n\n${takeRows(milestones).map(formatMilestone).join('\n')}`;
+  }
+
+  if (/thicong|construction|lapdat|maicong|tien do thi cong|tiendothicong/.test(q)) {
+    if (!constructions.length) return `Không thấy dữ liệu thi công phù hợp trong bảng hiện có.`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${constructions.length}** hạng mục thi công.`;
+    return `**Thi công${selectedProject ? ` của ${projectName}` : ''}** — ${constructions.length} dòng\n\n${takeRows(constructions).map(formatConstruction).join('\n')}`;
+  }
+
+  if (/nhatky|sitelog|hientruong|site/.test(q)) {
+    if (!siteLogs.length) return `Không thấy nhật ký site phù hợp trong dữ liệu hiện có.`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${siteLogs.length}** dòng nhật ký site.`;
+    return `**Nhật ký site${selectedProject ? ` của ${projectName}` : ''}** — ${siteLogs.length} dòng gần nhất\n\n${takeRows([...siteLogs].reverse()).map(formatSiteLog).join('\n')}`;
+  }
+
+  if (/duan|project|tiendo|rasao|tongquan|status|trangthai|delay/.test(q)) {
+    const rows = selectedProject ? [selectedProject] : masterProjects;
+    if (!rows.length) return `Không thấy dự án phù hợp trong dữ liệu hiện có.`;
+    if (wantsCount) return `Hiện tại có **${rows.length}** dự án.`;
+    return `**Dữ liệu dự án${selectedProject ? ` — ${projectName}` : ''}**\n\n${takeRows(rows).map(formatProject).join('\n')}`;
+  }
+
+  return null;
+}
+
 export function buildSystemInstruction(context = {}) {
   const {
     currentPage,
     currentPath,
+    currentDateTime,
     projects,
     tasks,
     currentProject,
     projectId,
+    // chi tiết dự án (khi đang ở trang /projects/:id)
+    milestones,
+    risks,
+    procurements,
+    constructions,
+    siteLogs,
+    permits,
+    designs,
+    tables,
   } = context;
 
+  // Gửi toàn bộ, không giới hạn
+  const allProjects = Array.isArray(projects) ? projects.map((p) => ({
+    id: p.id,
+    name: p.name,
+    client: p.client,
+    pm: p.pm,
+    capacity: p.capacity,
+    status: p.status,
+    planProgress: p.planProgress,
+    actualProgress: p.actualProgress,
+    delay: p.delay,
+    risk: p.risk,
+    issue: p.issue,
+    cod: p.cod,
+  })) : [];
+
+  const allTasks = Array.isArray(tasks) ? tasks.map((t) => ({
+    title: t.TÁC_VỤ || t.title,
+    description: t.GHI_CHÚ || t.MÔ_TẢ || '',
+    project: t.TÊN_DỰ_ÁN || t.PROJECT_ID,
+    status: t.TRẠNG_THÁI,
+    priority: t.ƯU_TIÊN,
+    assignee: t.NHÂN_SỰ || t.assignee,
+    start: t.NGÀY_BẮT_ĐẦU,
+    due: t.NGÀY_KẾT_THÚC,
+  })) : [];
+
+  // Merge procurement với danh sách chuẩn 15 mục — đếm đúng theo TÌNH_TRẠNG_VẬT_TƯ
+  let procurementSummary = null;
+  if (currentProject) {
+    const merged = mergeProcurementsForAI(procurements);
+    const arrived = merged.filter((p) =>
+      (p.tinh_trang || '').toLowerCase().includes('đã tới') ||
+      (p.tinh_trang || '').toLowerCase().includes('da toi')
+    );
+    const late = merged.filter((p) =>
+      (p.danh_gia || '').toLowerCase().includes('trễ')
+    );
+    const noInfo = merged.filter((p) => !(p.tinh_trang || '').trim());
+    procurementSummary = {
+      tong_hang_muc: merged.length,
+      da_toi_site: arrived.length,
+      chua_co_thong_tin: noInfo.length,
+      tre_tien_do: late.length,
+      chi_tiet: merged,
+    };
+  }
+
+  // Tóm tắt risks
+  let riskSummary = null;
+  if (Array.isArray(risks) && risks.length > 0) {
+    riskSummary = risks.map((r) => ({
+      mo_ta: r.MÔ_TẢ || r.RISK || r.description || '',
+      muc_do: r.MỨC_ĐỘ || r.LEVEL || r.level || '',
+      bien_phap: r.BIỆN_PHÁP || r.ACTION || '',
+      trang_thai: r.TRẠNG_THÁI || r.STATUS || '',
+    }));
+  }
+
   const dataSnapshot = {
-    currentPage: currentPage || 'Không xác định',
-    currentPath: currentPath || '',
-    projectId: projectId || null,
-    projectCount: Array.isArray(projects) ? projects.length : 0,
-    taskCount: Array.isArray(tasks) ? tasks.length : 0,
-    currentProject: currentProject
-      ? {
-          id: currentProject.id || currentProject.PROJECT_ID,
-          name: currentProject.name || currentProject.TÊN_DỰ_ÁN,
-          client: currentProject.client || currentProject.KHÁCH_HÀNG,
-          capacity: currentProject.capacity || currentProject.CÔNG_SUẤT_KWP,
-          planProgress: currentProject.planProgress ?? currentProject.TIẾN_ĐỘ_KẾ_HOẠCH,
-          actualProgress: currentProject.actualProgress ?? currentProject.TIẾN_ĐỘ_THỰC_TẾ,
-          delay: currentProject.delay ?? currentProject.DELAY,
-          status: currentProject.status || currentProject.TRẠNG_THÁI,
-          risk: currentProject.risk || currentProject.RISK_LEVEL,
-          issue: currentProject.issue || currentProject.VƯỚNG_MẮC_CHÍNH,
-          cod: currentProject.cod || currentProject.KẾ_HOẠCH_COD,
-        }
-      : null,
-    projectsSample: Array.isArray(projects)
-      ? projects.slice(0, 15).map((p) => ({
-          id: p.id || p.PROJECT_ID,
-          name: p.name || p.TÊN_DỰ_ÁN,
-          status: p.status || p.TRẠNG_THÁI,
-          actualProgress: p.actualProgress ?? p.TIẾN_ĐỘ_THỰC_TẾ,
-          delay: p.delay ?? p.DELAY,
-          risk: p.risk || p.RISK_LEVEL,
-        }))
-      : [],
-    tasksSample: Array.isArray(tasks)
-      ? tasks.slice(0, 20).map((t) => ({
-          title: t.TÊN_CÔNG_VIỆC || t.title,
-          project: t.TÊN_DỰ_ÁN || t.PROJECT_ID,
-          status: t.TRẠNG_THÁI,
-          priority: t.ƯU_TIÊN,
-          assignee: t.ĐÃ_CHỈ_ĐỊNH_CHO || t.assignee,
-          due: t.ĐẾN_HẠN || t.due,
-        }))
-      : [],
+    trang_hien_tai: currentPage || '',
+    duong_dan: currentPath || '',
+    thoi_gian_hien_tai: currentDateTime || new Date().toLocaleString('vi-VN'),
+    tong_du_an: allProjects.length,
+    tong_cong_viec: allTasks.length,
+    du_an: allProjects,
+    cong_viec: allTasks,
   };
 
-  return `Bạn là **AI PXD** — trợ lý toàn năng của Phòng Xây Dựng (VPEG-PXD), tích hợp trong Dashboard Solar EPC.
+  const tableSnapshot = buildTableSnapshot(tables);
+  if (tableSnapshot) {
+    dataSnapshot.bang_du_lieu = tableSnapshot;
+  }
 
-## Vai trò (theo thứ tự ưu tiên khi trả lời)
-1. **HƯỚNG DẪN VIÊN PHẦN MỀM** (ưu tiên cao nhất): Giải thích rõ từng bước thao tác trên app — nút nào, menu nào, trang nào. Dùng đúng tên nút tiếng Việt trong app.
-2. **PHÂN TÍCH DỮ LIỆU**: Đọc JSON ngữ cảnh bên dưới để báo cáo dự án/công việc người dùng đang xem.
-3. **CHUYÊN GIA SOLAR EPC**: Trả lời kỹ thuật điện mặt trời, thi công, chuỗi cung ứng, tiêu chuẩn (IEC, TCVN), quản lý dự án khi được hỏi.
+  // Nếu đang xem chi tiết dự án — thêm đầy đủ data
+  if (currentProject) {
+    dataSnapshot.du_an_dang_xem = {
+      thong_tin: {
+        id: currentProject.id,
+        ten: currentProject.name,
+        khach_hang: currentProject.client,
+        cong_suat_kwp: currentProject.capacity,
+        pm: currentProject.pm,
+        sm: currentProject.sm,
+        trang_thai: currentProject.status,
+        tien_do_ke_hoach: currentProject.planProgress,
+        tien_do_thuc_te: currentProject.actualProgress,
+        delay_ngay: currentProject.delay,
+        muc_rui_ro: currentProject.risk,
+        vuong_mac: currentProject.issue,
+        cod_ke_hoach: currentProject.cod,
+      },
+      milestone: milestones || [],
+      rui_ro: riskSummary || [],
+      vat_tu_mua_sam: procurementSummary || null,
+      thi_cong: constructions || [],
+      nhat_ky_site: siteLogs ? siteLogs.slice(0, 10) : [],
+      giay_phep: permits || [],
+      thiet_ke: designs || [],
+    };
+  }
 
-## Ngữ cảnh phiên làm việc
-- Trang hiện tại: **${dataSnapshot.currentPage}** (đường dẫn: \`${dataSnapshot.currentPath}\`)
-${dataSnapshot.projectId ? `- Đang xem dự án ID: **${dataSnapshot.projectId}**` : ''}
+  const dataJson = JSON.stringify(dataSnapshot, null, 0);
 
-## Dữ liệu live từ app (JSON)
+  const solarKnowledge = `
+## Kiến thức Solar EPC
+- **Quy trình EPC**: Thiết kế → Mua sắm → Thi công → Commissioning → Bàn giao (COD).
+- **Tiêu chuẩn**: IEC 61215 (module), IEC 61730 (an toàn), IEC 62109 (inverter), TCVN 9207, NEC 690.
+- **Thành phần hệ thống**: Module PV, Inverter (string/central), Cáp DC/AC, Tủ điện (combiner box, MDB), Hệ thống giá đỡ (mounting), Đồng hồ đo đếm.
+- **Chỉ số quan trọng**: PR (Performance Ratio) > 75% là tốt; yield ~1200-1400 kWh/kWp/năm ở miền Nam VN; GHI ~1600-1900 kWh/m²/năm.
+- **Lỗi phổ biến**: Hot spot (module bị che), PID (điện thế cao), mismatch, dây lỏng, bụi bẩn.
+- **Commissioning**: Kiểm tra OCV, SCC, IV curve, đấu nối đúng cực, test bảo vệ chống sét, GFDI.
+- **Mua sắm EPC**: Lead time module 4-8 tuần, inverter 2-4 tuần, cáp/phụ kiện 1-2 tuần.
+- **Quản lý rủi ro**: Rủi ro cao = cần action plan ngay; Trung bình = theo dõi; Thấp = ghi nhận.`;
+
+  return `Bạn là **AI PXD** — trợ lý thông minh của Phòng Xây Dựng VPEG-PXD, tích hợp trong Dashboard Solar EPC.
+
+## Vai trò
+1. **Ưu tiên nội dung web**: dữ liệu dự án, task, risk, milestone, vật tư, thi công, nhật ký site, S-Curve.
+2. **Hướng dẫn app**: Giải thích từng bước thao tác, đúng tên nút/menu tiếng Việt.
+3. **Chuyên gia Solar EPC**: Tư vấn kỹ thuật khi câu hỏi không phải dữ liệu/cách dùng web.
+
+## Quy tắc
+- Luôn trả lời **tiếng Việt**, thân thiện, chuyên nghiệp.
+- Số âm ở delay/COD = **TRỄ**. Không bịa số liệu.
+- Dùng **Markdown** (in đậm, danh sách) khi cần.
+- Mặc định trả lời **ngắn, đúng trọng tâm**. Chỉ phân tích dài khi người dùng hỏi "vì sao", "phân tích", "cách xử lý", "lấy lại tiến độ", "đề xuất".
+- Thứ tự ưu tiên bắt buộc: **(1) dữ liệu bảng/web**, **(2) cách sử dụng web**, **(3) kiến thức Solar EPC**, **(4) kiến thức chung**.
+- Nếu câu hỏi có thể trả lời từ dữ liệu bảng thì phải trả lời bằng số liệu/tên dòng cụ thể, không nói chung chung.
+- Nếu người dùng hỏi dạng **tổng / bao nhiêu / mấy / số lượng** thì chỉ trả lời con số và đơn vị, không liệt kê danh sách nếu chưa được hỏi thêm.
+- Nếu hỏi **tiến độ / trễ / lấy lại tiến độ / nhân sự yếu / vì sao chậm**: phải tự phân tích theo chuỗi EPC: Project gap → milestone → construction → procurement → risk → site log/nhân lực. Trả lời gồm: kết luận, điểm nghẽn, hành động đề xuất.
+- Khi phân tích phải đọc các trường ghi chú/nguyên nhân: GHI_CHÚ, DAILY_NOTE, WEEKLY_ASSESSMENT, THỜI_TIẾT/WEATHER, BIỆN_PHÁP/ACTION, VƯỚNG_MẮC. Nếu ghi chú nói mưa, vật tư chậm, NCC, thiếu nhân lực, bản vẽ/permit, phải nêu đúng nguyên nhân đó.
+- Với câu hỏi recovery, hành động phải cụ thể: tăng ca, bổ sung đội, ưu tiên vật tư blocking, owner/deadline cho risk, theo dõi sản lượng/ngày.
+- Nếu mưa ảnh hưởng tiến độ: đề xuất chuyển việc trong nhà/pre-assembly, che chắn khu vực làm được, cập nhật look-ahead 3 ngày, bù tiến độ bằng tăng ca khi thời tiết tốt.
+- Nếu vật tư chậm: đề xuất xác nhận ETA, tách giao hàng, ưu tiên vật tư blocking, NCC thay thế/vật tư tương đương đã duyệt, escalation mua hàng.
+- Khi hỏi dữ liệu nằm đâu: chỉ rõ trang/module trong web trước, rồi mới nói bảng dữ liệu nếu cần.
+- Nếu thiếu data → nói rõ thiếu bảng/cột nào và gợi ý mở đúng trang trong app.
+- Bạn chỉ nhận **dữ liệu app/Google Sheets**, hướng dẫn sử dụng và kiến thức Solar EPC. **Không có source code, API key, .env hoặc file hệ thống** trong context.
+- Nếu người dùng hỏi về source code/API key/file bí mật, nói rằng context AI không được cấp phần đó.
+- Khi hỏi "bảng có gì", "dự án nào", "task nào", "rủi ro nào", "thi công tới đâu": ưu tiên đọc mục "bang_du_lieu" vì đó là dữ liệu Google Sheets thật.
+- Mỗi bảng trong "bang_du_lieu" có dạng { so_dong, du_lieu }. Khi trả lời phải dựa vào du_lieu, không tự suy đoán từ kiến thức Solar EPC.
+- Khi hỏi về **vật tư**: đọc trường "vat_tu_mua_sam.chi_tiet", đếm dòng có tinh_trang = "Đã tới site". Dùng số "da_toi_site" trong summary — **không tự đếm tên thiết bị**.
+- Khi hỏi **"vật tư về được gì"**: liệt kê chính xác hang_muc có tinh_trang = "Đã tới site", và hang_muc chưa có trạng thái.
+${solarKnowledge}
+
+## Dữ liệu thực tế (JSON):
 \`\`\`json
-${JSON.stringify(dataSnapshot, null, 2)}
-\`\`\`
-
-## Sổ tay hướng dẫn app (bám sát khi hỏi "làm sao", "ở đâu", "nút nào")
-${APP_USAGE_GUIDE}
-
-## Quy tắc trả lời
-- Luôn **tiếng Việt**, thân thiện, chuyên nghiệp.
-- Câu hỏi về **cách dùng app**: trả lời theo đúng trang người dùng đang ở (nếu biết); nêu đường đi Sidebar + tên nút cụ thể; có thể đưa 2–4 bước đánh số.
-- Câu hỏi **số liệu**: chỉ dùng JSON trên; nếu thiếu dữ liệu thì nói rõ và gợi ý mở đúng trang.
-- **Số ngày âm** ở milestone/COD = **TRỄ**, không phải sớm hay lỗi nhập.
-- Ngắn gọn, đi thẳng vấn đề; dùng Markdown (**in đậm**, danh sách) khi cần.
-- Không bịa tính năng không có trong sổ tay hoặc JSON.
-- Ngoài phạm vi app/Solar: trả lời ngắn gọn hoặc khuyên hỏi cụ thể hơn.`;
+${dataJson}
+\`\`\``;
 }
 
 /** Gợi ý nhanh khi API lỗi — chỉ câu hỏi app phổ biến */

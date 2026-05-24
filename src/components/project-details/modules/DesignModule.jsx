@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { PenTool, ChevronDown, ChevronUp, Loader2, Compass, CloudOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
+import { formatPercent3 } from '../../../utils/formatPercent';
 import ModuleDateHeader from './ModuleDateHeader';
+import { useProjectCanEdit } from '../../../context/ProjectEditContext';
+import { useI18n } from '../../../context/I18nContext';
+import { ModuleCell } from '../../ModuleCell';
 
 const defaultDesigns = [
   'Bản vẽ sơ bộ làm giấy phép',
@@ -12,6 +16,8 @@ const defaultDesigns = [
 ];
 
 export default function DesignModule({ project, initialData, onProgressChange }) {
+  const { t, tf, ts } = useI18n();
+  const canEdit = useProjectCanEdit();
   const [isOpen, setIsOpen] = useState(false);
 
   const mergeDesignData = (data) => {
@@ -119,11 +125,12 @@ export default function DesignModule({ project, initialData, onProgressChange })
 
   useEffect(() => {
     const completedCount = designs.filter(d => d.KẾT_QUẢ_CUỐI && d.KẾT_QUẢ_CUỐI !== '-' && d.KẾT_QUẢ_CUỐI !== '---' && d.KẾT_QUẢ_CUỐI !== 'N/A' && d.KẾT_QUẢ_CUỐI.trim() !== '').length;
-    const progressPercent = designs.length > 0 ? Math.round((completedCount / designs.length) * 100) : 0;
+    const progressPercent = designs.length > 0 ? (completedCount / designs.length) * 100 : 0;
     if (onProgressChange) onProgressChange(progressPercent);
   }, [designs, onProgressChange]);
 
   const handleUpdate = async (id, field, value) => {
+    if (!canEdit) return;
     let updatedItem = null;
     const nextItems = designs.map(d => {
       if (d.id === id) {
@@ -237,7 +244,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
   };
 
   const completedCount = designs.filter(d => d.KẾT_QUẢ_CUỐI && d.KẾT_QUẢ_CUỐI !== '-' && d.KẾT_QUẢ_CUỐI !== '---' && d.KẾT_QUẢ_CUỐI !== 'N/A' && d.KẾT_QUẢ_CUỐI.trim() !== '').length;
-  const progressPercent = designs.length > 0 ? Math.round((completedCount / designs.length) * 100) : 0;
+  const progressPercent = designs.length > 0 ? (completedCount / designs.length) * 100 : 0;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
@@ -249,7 +256,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
           <div className="w-8 h-8 rounded bg-[#a855f7]/10 text-[#a855f7] flex items-center justify-center">
             <PenTool className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">THIẾT KẾ KỸ THUẬT / SHOPDRAWING</h3>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">{t('modules.design')}</h3>
         </div>
         
         <div className="flex items-center gap-4">
@@ -258,20 +265,20 @@ export default function DesignModule({ project, initialData, onProgressChange })
             {isLoading ? (
               <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Đang tải...</span>
+                <span>{t('common.loading')}</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 justify-end w-full">
                 {syncError && (
                   <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-full text-xs text-amber-400">
                     <CloudOff className="w-3 h-3" />
-                    <span className="hidden xl:inline">Lưu cục bộ</span>
+                    <span className="hidden xl:inline">{t('common.savedLocal')}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-light)] px-3 py-1 rounded-full text-xs min-w-[140px]">
-                  <span className="text-[#8ca0c3] whitespace-nowrap">{completedCount}/{designs.length} hoàn thành</span>
+                  <span className="text-[var(--text-main)] whitespace-nowrap">{tf('modules.completed', { done: completedCount, total: designs.length })}</span>
                   <span className="w-1 h-1 bg-[#10b981] rounded-full shrink-0"></span>
-                  <span className="text-[#10b981] font-bold shrink-0">{progressPercent}%</span>
+                  <span className="text-[#10b981] font-bold shrink-0">{formatPercent3(progressPercent)}</span>
                 </div>
               </div>
             )}
@@ -294,11 +301,11 @@ export default function DesignModule({ project, initialData, onProgressChange })
                 <table className="w-full text-left text-xs min-w-[800px]">
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                      <th className="p-3">Hạng mục bản vẽ</th>
-                      <th className="p-3">Tình trạng</th>
-                      <th className="p-3">Phê duyệt</th>
-                      <th className="p-3">Bước tiếp theo</th>
-                      <th className="p-3">Kết quả cuối</th>
+                      <th className="p-3">{t('table.drawingItem')}</th>
+                      <th className="p-3">{t('table.status')}</th>
+                      <th className="p-3">{t('table.approval')}</th>
+                      <th className="p-3">{t('table.nextStepLong')}</th>
+                      <th className="p-3">{t('table.finalResult')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
@@ -306,12 +313,14 @@ export default function DesignModule({ project, initialData, onProgressChange })
                       <tr key={d.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
                         <td className="p-3 font-semibold text-slate-200 flex items-center gap-2">
                           <Compass className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{d.HẠNG_MỤC}</span>
+                          <span>{ts(d.HẠNG_MỤC)}</span>
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={d.TÌNH_TRẠNG} colorClass={getStatusColor(d.TÌNH_TRẠNG)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(d.TÌNH_TRẠNG)}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(d.TÌNH_TRẠNG)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={d.TÌNH_TRẠNG || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(d.id, 'TÌNH_TRẠNG', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chưa làm</option>
@@ -320,11 +329,14 @@ export default function DesignModule({ project, initialData, onProgressChange })
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã gửi CĐT</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đang chỉnh sửa</option>
                           </select>
+                          </ModuleCell>
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={d.PHÊ_DUYỆT} colorClass={getApprovalColor(d.PHÊ_DUYỆT)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getApprovalColor(d.PHÊ_DUYỆT)}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getApprovalColor(d.PHÊ_DUYỆT)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={d.PHÊ_DUYỆT || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(d.id, 'PHÊ_DUYỆT', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chưa phản hồi</option>
@@ -333,11 +345,14 @@ export default function DesignModule({ project, initialData, onProgressChange })
                             <option className="bg-[var(--bg-panel)] text-slate-200">Yêu cầu chỉnh sửa</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Không đạt</option>
                           </select>
+                          </ModuleCell>
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={d.BƯỚC_TIẾP_THEO} colorClass={getNextStepColor(d.BƯỚC_TIẾP_THEO)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(d.BƯỚC_TIẾP_THEO)}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(d.BƯỚC_TIẾP_THEO)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={d.BƯỚC_TIẾP_THEO || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(d.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Vẽ mới</option>
@@ -348,11 +363,14 @@ export default function DesignModule({ project, initialData, onProgressChange })
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chốt hồ sơ</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Hoàn tất thiết kế</option>
                           </select>
+                          </ModuleCell>
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={d.KẾT_QUẢ_CUỐI} colorClass={getFinalResultColor(d.KẾT_QUẢ_CUỐI)} ts={ts}>
                           <select 
-                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(d.KẾT_QUẢ_CUỐI)}`}
+                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(d.KẾT_QUẢ_CUỐI)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={d.KẾT_QUẢ_CUỐI || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(d.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200" value="-">-</option>
@@ -363,6 +381,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
                             <option className="bg-[var(--bg-panel)] text-slate-200">Hoàn tất thiết kế</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">N/A</option>
                           </select>
+                          </ModuleCell>
                         </td>
                       </tr>
                     ))}

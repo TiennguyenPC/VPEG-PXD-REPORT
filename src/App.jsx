@@ -31,22 +31,24 @@ import {
   MapPin,
   Clock,
   Send,
-  Sun,
-  Moon,
   Trash2,
   Menu
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "./services/api";
-import { useTheme } from "./hooks/useTheme";
 import { useSidebar } from "./hooks/useSidebar";
 import Sidebar from "./components/Sidebar";
+import DateInputDMY from "./components/DateInputDMY";
 import { updateDashboardContext } from "./utils/dashboardContext";
+import { enrichProjectsProgress } from "./utils/projectProgress";
+import { parseFlexibleDate, normalizeToDMY } from "./utils/timelineDates";
+import { useAuth } from "./context/AuthContext";
+import { canEditProject, isAdmin } from "./utils/permissions";
 
 export default function App() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { isCollapsed, toggleSidebar } = useSidebar();
-  const { theme, toggleTheme } = useTheme();
   
   // Projects state initialized from cache if available for instant render
   const [projects, setProjects] = useState(() => {
@@ -250,6 +252,7 @@ export default function App() {
   const [editIssueValue, setEditIssueValue] = useState("");
 
   const handleIssueEditSave = async (p) => {
+    if (!canEditProject(user, p.id || p.PROJECT_ID)) return;
     if (editIssueValue === p.issue) {
       setEditingIssueId(null);
       return;
@@ -374,34 +377,7 @@ export default function App() {
 
   // Apply search, filters and sort
   const processedProjects = useMemo(() => {
-    // 0. Sync with locally calculated dynamic progress from Project Detail pages
-    const enrichedProjects = projects.map(p => {
-      const pId = p.id || p.PROJECT_ID;
-      const localActual = localStorage.getItem(`actualProgress_${pId}`);
-      const localPlan = localStorage.getItem(`planProgress_${pId}`);
-      
-      let overrideActual = p.actualProgress;
-      let overrideDelay = p.delay;
-      let overridePlan = p.planProgress;
-      
-      if (localActual !== null) {
-        overrideActual = Number(localActual);
-      }
-      if (localPlan !== null) {
-        overridePlan = Number(localPlan);
-      }
-      if (localActual !== null && localPlan !== null) {
-        overrideDelay = Number(localActual) - Number(localPlan);
-      }
-      
-      return {
-        ...p,
-        actualProgress: overrideActual,
-        planProgress: overridePlan,
-        delay: overrideDelay
-      };
-    });
-
+    const enrichedProjects = enrichProjectsProgress(projects);
     let result = [...enrichedProjects];
     // 1. Search filter
     if (searchTerm.trim() !== "") {
@@ -625,17 +601,17 @@ export default function App() {
     return (
       <th
         onClick={handleClick}
-        className={`py-2.5 px-4 font-semibold select-none cursor-pointer hover:bg-[#141c2f] hover:text-white transition-all duration-200 border-b border-[var(--border-main)] relative group whitespace-nowrap ${
+        className={`py-2.5 px-4 font-semibold select-none cursor-pointer hover:bg-[var(--bg-hover)] hover:text-[var(--text-strong)] transition-all duration-200 border-b border-[var(--border-main)] relative group whitespace-nowrap ${
           align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"
-        } ${isSorted ? "text-white bg-[#0e1628]" : "text-[var(--text-muted)] bg-[var(--bg-hover)]"} ${extraClass}`}
+        } ${isSorted ? "text-[var(--text-strong)] bg-[var(--bg-hover)]" : "text-[var(--text-muted)] bg-[var(--bg-hover)]"} ${extraClass}`}
       >
         <div className={`flex items-center w-full ${align === "center" ? "justify-center" : align === "right" ? "justify-end" : ""}`}>
           <span className="font-bold tracking-wider uppercase text-[10px] whitespace-nowrap z-10">{label}</span>
           <span 
             className={`absolute right-3 top-1/2 -translate-y-1/2 text-[10px] select-none font-bold transition-all duration-200 ${
               isSorted 
-                ? "text-[#7373ff] opacity-100 scale-110 drop-shadow-[0_0_4px_rgba(82,82,255,0.4)]" 
-                : "opacity-0 text-slate-400 group-hover:opacity-60"
+                ? "text-[#5252ff] opacity-100" 
+                : "opacity-0 text-[var(--text-muted)] group-hover:opacity-60"
             }`}
           >
             {indicator}
@@ -646,7 +622,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans relative">
+    <div className="min-h-screen flex bg-[var(--bg-main)] text-[var(--text-main)] font-sans relative">
       {isLoading && (
         <div className="absolute inset-0 z-50 bg-[var(--bg-main)]/80 backdrop-blur-sm flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
@@ -663,28 +639,22 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         
         {/* 2. TOP HEADER */}
-        <header className="px-8 pt-6 pb-4 border-b border-[var(--border-main)]/30 flex justify-between items-center bg-[#070b14]/30 backdrop-blur-md">
+        <header className="px-8 pt-6 pb-4 border-b border-[var(--border-main)]/30 flex justify-between items-center bg-[var(--bg-panel)]/60 backdrop-blur-md">
           <div className="flex items-center gap-4">
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">DANH SÁCH DỰ ÁN</h1>
+              <h1 className="text-xl font-bold text-[var(--text-strong)] tracking-tight">DANH SÁCH DỰ ÁN</h1>
               <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Theo dõi và điều phối toàn bộ dự án đang triển khai</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={toggleTheme}
-              className="border border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-slate-200 text-xs p-2 rounded flex items-center justify-center transition-all cursor-pointer shadow-sm"
-              title={theme === 'dark' ? 'Chuyển sang Giao diện Sáng' : 'Chuyển sang Giao diện Tối'}
-            >
-              {theme === 'dark' ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-            </button>
             <button 
               onClick={handleExportCSV}
-              className="border border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[#141c2f] hover:border-[#263554] text-slate-200 text-xs px-3.5 py-2 rounded flex items-center gap-2 border shadow-sm transition-all cursor-pointer font-medium"
+              className="border border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-[var(--text-main)] text-xs px-3.5 py-2 rounded flex items-center gap-2 shadow-sm transition-all cursor-pointer font-medium"
             >
               <Download className="w-3.5 h-3.5 text-slate-400" />
               <span>Xuất Excel</span>
             </button>
+            {isAdmin(user) && (
             <button 
               onClick={() => setIsAddDrawerOpen(true)}
               className="bg-[#5252ff] hover:bg-[#4141d6] text-white text-xs font-medium px-3.5 py-2 rounded flex items-center gap-2 shadow-[0_0_15px_rgba(82,82,255,0.3)] hover:shadow-[0_0_20px_rgba(82,82,255,0.5)] transition-all cursor-pointer"
@@ -692,6 +662,7 @@ export default function App() {
               <Plus className="w-3.5 h-3.5" />
               <span>Thêm dự án</span>
             </button>
+            )}
           </div>
         </header>
 
@@ -901,9 +872,9 @@ export default function App() {
         <section className="px-8 py-6 bg-[var(--bg-main)] flex-1">
           {/* Table Header Section */}
           <div className="mb-3.5 flex justify-between items-center">
-            <h2 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+            <h2 className="text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider flex items-center gap-2">
               DANH SÁCH DỰ ÁN 
-              <span className="bg-[var(--border-main)] text-slate-300 font-semibold px-2 py-0.5 rounded text-[10px] tracking-normal normal-case">
+              <span className="bg-[var(--bg-hover)] text-[var(--text-muted)] font-semibold px-2 py-0.5 rounded text-[10px] tracking-normal normal-case border border-[var(--border-main)]">
                 {processedProjects.length} kết quả
               </span>
             </h2>
@@ -957,17 +928,17 @@ export default function App() {
                           priorityClass = "text-brand-green border-[#10b981]/30 bg-[#10b981]/5";
                       }
 
-                      // Map Risk badges with stronger contrast and subtle glow
+                      // Map Risk badges — đồng bộ tone với module accordion
                       let riskBadgeClass = "";
                       switch (p.risk) {
                         case "HIGH":
-                          riskBadgeClass = "text-red-400 bg-red-950/45 border border-red-500/40 shadow-[0_0_8px_rgba(239,68,68,0.2)] font-semibold";
+                          riskBadgeClass = "text-red-500 bg-red-500/10 border border-red-500/25 font-semibold";
                           break;
                         case "MEDIUM":
-                          riskBadgeClass = "text-orange-400 bg-orange-950/45 border border-orange-500/40 shadow-[0_0_8px_rgba(249,115,22,0.2)] font-semibold";
+                          riskBadgeClass = "text-amber-600 bg-amber-500/10 border border-amber-500/25 font-semibold";
                           break;
                         default:
-                          riskBadgeClass = "text-emerald-400 bg-emerald-950/45 border border-emerald-500/40 shadow-[0_0_8px_rgba(16,185,129,0.2)] font-semibold";
+                          riskBadgeClass = "text-emerald-600 bg-emerald-500/10 border border-emerald-500/25 font-semibold";
                       }
 
                       // Map issue color dots
@@ -989,12 +960,12 @@ export default function App() {
                       return (
                         <tr
                           key={p.id}
-                          className="hover:bg-[#111827]/70 transition-all text-xs border-b border-[var(--border-main)]/40"
+                          className="hover:bg-[var(--bg-hover)] transition-all text-xs border-b border-[var(--border-main)]/40"
                         >
                           {/* Project Name */}
                           <td 
-                            className={`align-middle py-2.5 px-4 font-bold text-white cursor-pointer hover:underline truncate max-w-[200px] ${
-                              sortField === "name" ? "text-slate-100 bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
+                            className={`align-middle py-2.5 px-4 font-bold text-[var(--text-strong)] cursor-pointer hover:underline truncate max-w-[200px] ${
+                              sortField === "name" ? "bg-[var(--bg-hover)] font-extrabold" : "bg-inherit"
                             }`}
                             onClick={() => {
                               navigate('/projects/' + encodeURIComponent(p.name || p.id || p.PROJECT_ID));
@@ -1004,15 +975,15 @@ export default function App() {
                           </td>
 
                           {/* Client */}
-                          <td className={`align-middle py-2.5 px-4 text-slate-300 font-medium min-w-[250px] ${
-                            sortField === "client" ? "text-slate-100 bg-[#0e1628]/30 font-bold" : "bg-inherit"
+                          <td className={`align-middle py-2.5 px-4 text-[var(--text-main)] font-medium min-w-[250px] ${
+                            sortField === "client" ? "bg-[var(--bg-hover)] font-bold" : "bg-inherit"
                           }`}>{p.client}</td>
 
                           {/* PM */}
                           <td className={`align-middle py-2.5 px-4 text-center ${
-                            sortField === "pm" ? "bg-[#0e1628]/30" : "bg-inherit"
+                            sortField === "pm" ? "bg-[var(--bg-hover)]" : "bg-inherit"
                           }`}>
-                            <span className="bg-[#18183c] text-[#a0a0ff] px-2 py-0.5 rounded text-[10px] font-medium border border-[#2d2db3]/20 whitespace-nowrap">
+                            <span className="bg-[#5252ff]/10 text-[#5252ff] px-2 py-0.5 rounded text-[10px] font-medium border border-[#5252ff]/20 whitespace-nowrap">
                               {p.pm}
                             </span>
                           </td>
@@ -1020,18 +991,18 @@ export default function App() {
 
 
                           {/* Capacity */}
-                          <td className={`align-middle py-2.5 px-4 font-bold text-slate-200 text-center ${
-                            sortField === "capacity" ? "text-white bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
+                          <td className={`align-middle py-2.5 px-4 font-bold text-[var(--text-main)] text-center ${
+                            sortField === "capacity" ? "bg-[var(--bg-hover)] font-extrabold" : "bg-inherit"
                           }`}>
                             {Number(p.capacity || 0).toLocaleString()}
                           </td>
 
                           {/* Progress */}
                           <td className={`align-middle py-2.5 px-4 min-w-[90px] text-center ${
-                            sortField === "progress" ? "bg-[#0e1628]/30" : "bg-inherit"
+                            sortField === "progress" ? "bg-[var(--bg-hover)]" : "bg-inherit"
                           }`}>
                             <div className="flex flex-col items-center">
-                              <span className={`font-bold ${sortField === "progress" ? "text-[#8a8aff]" : "text-[#5252ff]"}`}>{p.actualProgress || 0}%</span>
+                              <span className={`font-bold ${sortField === "progress" ? "text-[#5252ff]" : "text-[var(--text-main)]"}`}>{p.actualProgress || 0}%</span>
                               <div className="w-16 h-1 bg-[var(--border-main)] rounded-full overflow-hidden mt-1.5">
                                 <div
                                   className="bg-[#5252ff] h-full rounded-full"
@@ -1043,7 +1014,7 @@ export default function App() {
 
                           {/* Delta Plan Deviation */}
                           <td className={`align-middle py-2.5 px-4 font-bold text-center ${
-                            sortField === "deviation" ? "bg-[#0e1628]/30 font-extrabold" : "bg-inherit"
+                            sortField === "deviation" ? "bg-[var(--bg-hover)] font-extrabold" : "bg-inherit"
                           }`}>
                             <span className={(p.delay || 0) >= 0 ? "text-[#10b981]" : "text-[#ef4444]"}>
                               {(p.delay || 0) >= 0 ? "+" : ""}
@@ -1053,7 +1024,7 @@ export default function App() {
 
                           {/* COD Remaining */}
                           <td className={`align-middle py-2.5 px-4 text-center ${
-                            sortField === "codDays" ? "bg-[#0e1628]/30" : "bg-inherit"
+                            sortField === "codDays" ? "bg-[var(--bg-hover)]" : "bg-inherit"
                           }`}>
                             <div className="flex flex-col items-center">
                               {(() => {
@@ -1075,8 +1046,8 @@ export default function App() {
                                 
                                 return (
                                   <>
-                                    <span className="font-semibold text-[#7373ff]">{codDays > 0 ? codDays : 0} ngày</span>
-                                    <span className="text-[10px] text-slate-400 mt-0.5">Hạn: {finalCod}</span>
+                                    <span className="font-semibold text-[var(--text-main)]">{codDays > 0 ? codDays : 0} ngày</span>
+                                    <span className="text-[10px] text-[var(--text-muted)] mt-0.5">Hạn: {finalCod}</span>
                                   </>
                                 );
                               })()}
@@ -1085,7 +1056,7 @@ export default function App() {
 
                           {/* Risk Badge */}
                           <td className={`align-middle py-2.5 px-4 text-center ${
-                            sortField === "risk" ? "bg-[#0e1628]/30" : "bg-inherit"
+                            sortField === "risk" ? "bg-[var(--bg-hover)]" : "bg-inherit"
                           }`}>
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${riskBadgeClass} whitespace-nowrap`}>
                               {p.risk}
@@ -1094,14 +1065,15 @@ export default function App() {
 
                           {/* Key Issue */}
                           <td 
-                            className={`align-middle py-2.5 px-4 max-w-[200px] truncate cursor-text hover:bg-[var(--bg-hover)] transition-colors group relative ${
-                              sortField === "issue" ? "bg-[#0e1628]/30" : "bg-inherit"
-                            }`}
+                            className={`align-middle py-2.5 px-4 max-w-[200px] truncate transition-colors group relative ${
+                              sortField === "issue" ? "bg-[var(--bg-hover)]" : "bg-inherit"
+                            } ${canEditProject(user, p.id || p.PROJECT_ID) ? 'cursor-text hover:bg-[var(--bg-hover)]' : ''}`}
                             onDoubleClick={() => {
+                              if (!canEditProject(user, p.id || p.PROJECT_ID)) return;
                               setEditingIssueId(p.id);
                               setEditIssueValue(p.issue && p.issue !== "Không có" && p.issue !== "-" ? p.issue : "");
                             }}
-                            title="Click đúp để chỉnh sửa"
+                            title={canEditProject(user, p.id || p.PROJECT_ID) ? "Click đúp để chỉnh sửa" : undefined}
                           >
                             {editingIssueId === p.id ? (
                               <div className="flex items-center gap-1">
@@ -1119,10 +1091,12 @@ export default function App() {
                                 />
                               </div>
                             ) : (
-                              <div className="flex items-center gap-1.5 text-slate-300 font-medium">
+                              <div className="flex items-center gap-1.5 text-[var(--text-main)] font-medium">
                                 <span className={`w-1.5 h-1.5 rounded-full ${issueDotClass} inline-block`}></span>
                                 <span className="truncate">{p.issue || '-'}</span>
+                                {canEditProject(user, p.id || p.PROJECT_ID) && (
                                 <span className="absolute right-2 opacity-0 group-hover:opacity-100 text-[#5252ff] text-[10px] italic pointer-events-none">Sửa</span>
+                                )}
                               </div>
                             )}
                           </td>
@@ -1137,13 +1111,13 @@ export default function App() {
                                   navigate('/projects/' + encodeURIComponent(p.name || p.id || p.PROJECT_ID));
                                 }}
                                 title="Xem chi tiết"
-                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
+                                className="p-1.5 hover:text-[var(--text-strong)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] border border-transparent hover:border-[var(--border-main)] rounded transition-all duration-200 cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
                               <button
                                 title="Khác"
-                                className="p-1.5 hover:text-white text-slate-400 hover:bg-[var(--border-main)] hover:shadow-[0_0_8px_rgba(82,82,255,0.2)] border border-transparent hover:border-[#263554]/30 rounded transition-all duration-200 cursor-pointer"
+                                className="p-1.5 hover:text-[var(--text-strong)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] border border-transparent hover:border-[var(--border-main)] rounded transition-all duration-200 cursor-pointer"
                               >
                                 <MoreHorizontal className="w-3.5 h-3.5" />
                               </button>
@@ -1186,7 +1160,7 @@ export default function App() {
                   className={`p-1 rounded border border-[var(--border-main)] flex items-center justify-center transition-all ${
                     currentPage === 1 
                       ? "opacity-40 cursor-not-allowed" 
-                      : "hover:bg-[#141c2f] hover:border-[#263554] text-slate-200 cursor-pointer"
+                      : "hover:bg-[var(--bg-hover)] hover:border-[var(--border-main)] text-[var(--text-main)] cursor-pointer"
                   }`}
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
@@ -1199,7 +1173,7 @@ export default function App() {
                     className={`px-2.5 py-1 rounded text-xs font-semibold border transition-all cursor-pointer ${
                       currentPage === page
                         ? "bg-[#5252ff] border-[#5252ff] text-white"
-                        : "border-[var(--border-main)] text-slate-400 hover:bg-[#141c2f] hover:border-[#263554] hover:text-white"
+                        : "border-[var(--border-main)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-strong)]"
                     }`}
                   >
                     {page}
@@ -1212,7 +1186,7 @@ export default function App() {
                   className={`p-1 rounded border border-[var(--border-main)] flex items-center justify-center transition-all ${
                     currentPage === totalPages 
                       ? "opacity-40 cursor-not-allowed" 
-                      : "hover:bg-[#141c2f] hover:border-[#263554] text-slate-200 cursor-pointer"
+                      : "hover:bg-[var(--bg-hover)] hover:border-[var(--border-main)] text-[var(--text-main)] cursor-pointer"
                   }`}
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -1531,31 +1505,28 @@ export default function App() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Ngày Kickoff</label>
-                  <input
-                    type="date"
+                  <DateInputDMY
                     value={newProject.kickoffDate}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, kickoffDate: e.target.value }))}
-                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] [color-scheme:dark]"
+                    onChange={(val) => setNewProject(prev => ({ ...prev, kickoffDate: val }))}
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[var(--text-muted)] font-bold uppercase tracking-wider block">Ngày đóng điện (COD)</label>
-                  <input
-                    type="date"
+                  <DateInputDMY
                     value={newProject.codDate}
-                    onChange={(e) => {
-                      const val = e.target.value;
+                    onChange={(val) => {
                       let codDays = newProject.codDays;
-                      if (val) {
-                        const codD = new Date(val);
-                        if (!isNaN(codD.getTime())) {
-                          const diffTime = codD.getTime() - new Date().getTime();
-                          codDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                        }
+                      const codD = parseFlexibleDate(normalizeToDMY(val));
+                      if (codD) {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        codD.setHours(0, 0, 0, 0);
+                        codDays = Math.ceil((codD.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                       }
                       setNewProject(prev => ({ ...prev, codDate: val, codDays }));
                     }}
-                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff] [color-scheme:dark]"
+                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
                   />
                 </div>
               </div>

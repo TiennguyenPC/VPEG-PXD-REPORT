@@ -1,20 +1,9 @@
 import React, { useRef, useEffect } from 'react';
 import { Users, HardHat, CloudRain, ShieldAlert, Sun, Cloud, CloudLightning, Activity, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-const parseDateStr = (dateStr) => {
-  if (!dateStr) return null;
-  const parts = String(dateStr).split('/');
-  if (parts.length !== 3) return null;
-  return new Date(parts[2], parts[1] - 1, parts[0]);
-};
-
-const formatDateStr = (date) => {
-  const d = String(date.getDate()).padStart(2, '0');
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
-};
+import { parseFlexibleDate as parseDateStr, formatDateStr } from '../../utils/timelineDates';
+import { useProjectCanEdit } from '../../context/ProjectEditContext';
+import { useI18n } from '../../context/I18nContext';
 
 const getWeekNumber = (d) => {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -103,6 +92,10 @@ export default function WeeklyKPI({
   onUpdateLog,
   saveStatus
 }) {
+  const canEdit = useProjectCanEdit();
+  const { t, tf, ts } = useI18n();
+  const weekdaysShort = t('siteLog.weekdayShort');
+  const weekdaysFull = t('siteLog.weekdays');
   
   // Overall project metrics
   const actualProgress = Number(project?.actualProgress || 0);
@@ -111,36 +104,34 @@ export default function WeeklyKPI({
   const delaySign = deviation > 0 ? '+' : '';
 
   if (selectedView === 'day') {
-    const stat3Label = 'Nhân lực site';
+    const stat3Label = t('siteLog.manpower');
     const stat3Val = String(activeLog.MANPOWER !== undefined ? activeLog.MANPOWER : (activeLog.NHÂN_LỰC_SITE || 0));
-    const stat4Label = 'Kỹ sư / GS';
+    const stat4Label = t('siteLog.engineers');
     const stat4Val = String(activeLog.ENGINEERS !== undefined ? activeLog.ENGINEERS : (activeLog.KỸ_SƯ_GS || 0));
     
-    const textareaLabel = 'Ghi chú hiện trường';
+    const textareaLabel = t('siteLog.siteNotes');
     const textareaVal = activeLog.DAILY_NOTE !== undefined ? activeLog.DAILY_NOTE : (activeLog.GHI_CHÚ_HIỆN_TRƯỜNG || '');
-    const textareaPlaceholder = 'Nhập ghi chú hiện trường...';
+    const textareaPlaceholder = t('weeklyKpi.siteNotesPlaceholder');
     const updateFieldName = 'DAILY_NOTE';
 
     return (
       <div className="glass-panel p-5 rounded-xl shadow-lg border border-[var(--border-main)]">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-            CHỈ SỐ VẬN HÀNH <span className="text-[var(--text-muted)] font-medium normal-case tracking-normal">
-              (Ngày {selectedDate})
+            {t('weeklyKpi.opsTitle')} <span className="text-[var(--text-muted)] font-medium normal-case tracking-normal">
+              {tf('weeklyKpi.dayLabel', { date: selectedDate })}
             </span>
           </h3>
         </div>
 
         <div className="grid grid-cols-4 gap-3 mb-4">
-          {/* Tiến độ thực tế */}
           <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
-            <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Tiến độ thực tế</p>
+            <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('siteLog.actualProgress')}</p>
             <p className="text-lg font-bold text-white">{Math.round(actualProgress)}%</p>
           </div>
 
-          {/* So với KH */}
           <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center gap-1">
-            <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">So với KH</p>
+            <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('weeklyKpi.vsPlan')}</p>
             <p className={`text-lg font-bold ${delayColor}`}>{delaySign}{Math.round(deviation)}%</p>
           </div>
 
@@ -159,12 +150,17 @@ export default function WeeklyKPI({
 
         <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg p-3">
           <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">{textareaLabel}</p>
+          {canEdit ? (
           <AutoGrowTextarea
             value={textareaVal}
             onChange={(e) => onUpdateLog(updateFieldName, e.target.value)}
+            disabled={false}
             className="w-full bg-transparent border-none text-xs text-slate-300 focus:ring-0 focus:outline-none placeholder-[#4d5e7a] min-h-[60px]"
             placeholder={textareaPlaceholder}
           />
+          ) : (
+          <p className="text-xs text-slate-300 min-h-[60px] whitespace-pre-wrap">{ts(textareaVal) || '-'}</p>
+          )}
         </div>
       </div>
     );
@@ -173,8 +169,6 @@ export default function WeeklyKPI({
   // Week view calculations
   const monday = parseDateStr(selectedWeek);
   const weekDays = [];
-  const weekdaysVn = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-  const weekdayFullVn = ['Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy', 'Chủ Nhật'];
   
   if (monday) {
     for (let i = 0; i < 7; i++) {
@@ -185,8 +179,8 @@ export default function WeeklyKPI({
       weekDays.push({
         date: d,
         dateStr,
-        weekday: weekdaysVn[i],
-        fullName: weekdayFullVn[i],
+        weekday: weekdaysShort[i],
+        fullName: weekdaysFull[(d.getDay())],
         log: log || null
       });
     }
@@ -270,17 +264,25 @@ export default function WeeklyKPI({
 
     // Outstanding issues list
     if (incidents > 0 || weather.includes('mưa lớn') || weather.includes('mưa to') || (note && note.length > 20)) {
-      let severity = 'Nhẹ';
+      let severityKey = 'light';
       if (incidents > 1 || weather.includes('mưa lớn') || weather.includes('mưa to')) {
-        severity = 'Trung bình';
+        severityKey = 'medium';
       }
       if (incidents > 2 || (note && (note.includes('dừng thi công') || note.includes('sự cố nghiêm trọng')))) {
-        severity = 'Nặng';
+        severityKey = 'heavy';
       }
+      const severityLabel = severityKey === 'light' ? t('weeklyKpi.severityLight')
+        : severityKey === 'medium' ? t('weeklyKpi.severityMedium')
+        : t('weeklyKpi.severityHeavy');
       incidentsList.push({
         dateStr: day.dateStr.substring(0, 5),
-        description: note || (incidents > 0 ? `Có ${incidents} sự cố hiện trường.` : `Thời tiết xấu: ${weather}`),
-        severity
+        description: note
+          ? ts(note)
+          : (incidents > 0
+            ? tf('weeklyKpi.incidentCount', { n: incidents })
+            : tf('weeklyKpi.badWeather', { weather: ts(weather) })),
+        severity: severityLabel,
+        severityKey,
       });
     }
   });
@@ -296,7 +298,7 @@ export default function WeeklyKPI({
   return (
     <div className="glass-panel p-5 rounded-xl shadow-lg border border-[var(--border-main)]">
       <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center justify-between">
-        <span>TỔNG HỢP TUẦN {weekNum}</span>
+        <span>{tf('weeklyKpi.weekSummary', { n: weekNum })}</span>
         <span className="text-[10px] text-slate-400 font-medium normal-case tracking-normal">
           ({mondayVal} - {sundayVal})
         </span>
@@ -305,24 +307,24 @@ export default function WeeklyKPI({
       {/* 4 KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
         <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center">
-          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Tổng nhân sự</p>
+          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">{t('weeklyKpi.totalStaff')}</p>
           <p className="text-lg font-bold text-white">{totalManpower}</p>
-          <p className="text-[9px] text-slate-500 mt-0.5">người</p>
+          <p className="text-[9px] text-slate-500 mt-0.5">{t('siteLog.people')}</p>
         </div>
         <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center">
-          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Trung bình / ngày</p>
+          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">{t('weeklyKpi.avgPerDay')}</p>
           <p className="text-lg font-bold text-white">{avgManpower}</p>
-          <p className="text-[9px] text-slate-500 mt-0.5">người/ngày</p>
+          <p className="text-[9px] text-slate-500 mt-0.5">{t('weeklyKpi.perDay')}</p>
         </div>
         <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center">
-          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Cao nhất</p>
+          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">{t('weeklyKpi.highest')}</p>
           <p className="text-lg font-bold text-emerald-400">{maxManpower}</p>
           <p className="text-[8px] text-slate-500 mt-0.5 truncate max-w-full">
             {maxDates.length > 0 ? `${maxDates[0].dateStr.substring(0, 5)} (${maxDates[0].weekday})` : '-'}
           </p>
         </div>
         <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] p-3 rounded-lg flex flex-col items-center justify-center text-center">
-          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Thấp nhất</p>
+          <p className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">{t('weeklyKpi.lowest')}</p>
           <p className="text-lg font-bold text-amber-500">{minManpower}</p>
           <p className="text-[8px] text-slate-500 mt-0.5 truncate max-w-full">
             {minDates.map(d => d.dateStr.substring(0, 5)).join(', ')}
@@ -334,30 +336,30 @@ export default function WeeklyKPI({
       <div className="grid grid-cols-4 gap-2 mb-4">
         <div className="bg-[var(--bg-panel)]/60 border border-[var(--border-main)] p-2 rounded-lg flex flex-col items-center justify-center text-center">
           <CloudRain className="w-4 h-4 text-blue-400 mb-1" />
-          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Ngày mưa</p>
-          <p className="text-xs font-bold text-white mt-0.5">{rainDays} ngày</p>
+          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('weeklyKpi.rainDays')}</p>
+          <p className="text-xs font-bold text-white mt-0.5">{rainDays} {t('weeklyKpi.daysUnit')}</p>
         </div>
         <div className="bg-[var(--bg-panel)]/60 border border-[var(--border-main)] p-2 rounded-lg flex flex-col items-center justify-center text-center">
           <Cloud className="w-4 h-4 text-slate-400 mb-1" />
-          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Nhiều mây</p>
-          <p className="text-xs font-bold text-white mt-0.5">{cloudyDays} ngày</p>
+          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('weeklyKpi.cloudyDays')}</p>
+          <p className="text-xs font-bold text-white mt-0.5">{cloudyDays} {t('weeklyKpi.daysUnit')}</p>
         </div>
         <div className="bg-[var(--bg-panel)]/60 border border-[var(--border-main)] p-2 rounded-lg flex flex-col items-center justify-center text-center">
           <Sun className="w-4 h-4 text-amber-400 mb-1" />
-          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Ngày nắng</p>
-          <p className="text-xs font-bold text-white mt-0.5">{sunnyDays} ngày</p>
+          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('weeklyKpi.sunnyDays')}</p>
+          <p className="text-xs font-bold text-white mt-0.5">{sunnyDays} {t('weeklyKpi.daysUnit')}</p>
         </div>
         <div className="bg-[var(--bg-panel)]/60 border border-[var(--border-main)] p-2 rounded-lg flex flex-col items-center justify-center text-center">
           <ShieldAlert className="w-4 h-4 text-red-400 mb-1" />
-          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Tổng sự cố</p>
-          <p className="text-xs font-bold text-white mt-0.5">{totalIncidents} sự cố</p>
+          <p className="text-[8px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('weeklyKpi.totalIncidents')}</p>
+          <p className="text-xs font-bold text-white mt-0.5">{totalIncidents} {t('siteLog.incidentsUnit')}</p>
         </div>
       </div>
 
       {/* BIỂU ĐỒ NHÂN LỰC THEO NGÀY */}
       <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg p-3 mb-4">
         <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5 text-[#5252ff]" /> BIỂU ĐỒ NHÂN LỰC THEO NGÀY
+          <Activity className="w-3.5 h-3.5 text-[#5252ff]" /> {t('weeklyKpi.manpowerChart')}
         </p>
         <div className="h-[120px] w-full mt-2">
           <ResponsiveContainer width="100%" height="100%">
@@ -371,7 +373,7 @@ export default function WeeklyKPI({
                 itemStyle={{ fontSize: '10px', color: '#fff' }}
                 cursor={{ fill: 'rgba(82, 82, 255, 0.1)' }}
               />
-              <Bar dataKey="manpower" name="Tổng nhân sự" fill="#5252ff" radius={[4, 4, 0, 0]} barSize={20} isAnimationActive={false} />
+              <Bar dataKey="manpower" name={t('weeklyKpi.totalStaff')} fill="#5252ff" radius={[4, 4, 0, 0]} barSize={20} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -379,7 +381,7 @@ export default function WeeklyKPI({
 
       {/* THỜI TIẾT TRONG TUẦN */}
       <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg p-3 mb-4">
-        <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">🌦️ THỜI TIẾT TRONG TUẦN</p>
+        <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2">🌦️ {t('weeklyKpi.weatherWeek')}</p>
         <div className="grid grid-cols-7 gap-1 mt-2 text-center">
           {weatherIconsRow.map((item, idx) => (
             <div key={idx} className="flex flex-col items-center">
@@ -396,7 +398,7 @@ export default function WeeklyKPI({
       {/* SỰ CỐ & VẤN ĐỀ NỔI BẬT */}
       <div className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg p-3">
         <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-2 flex items-center gap-1.5">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> SỰ CỐ & VẤN ĐỀ NỔI BẬT
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> {t('weeklyKpi.incidentsHighlights')}
         </p>
         {incidentsList.length > 0 ? (
           <div className="space-y-2 max-h-[150px] overflow-y-auto mt-2">
@@ -407,8 +409,8 @@ export default function WeeklyKPI({
                   <span className="text-slate-300 truncate max-w-[200px]" title={item.description}>{item.description}</span>
                 </div>
                 <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold shrink-0 ${
-                  item.severity === 'Nhẹ' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                  item.severity === 'Trung bình' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                  item.severityKey === 'light' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
+                  item.severityKey === 'medium' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
                   'bg-red-500/10 text-red-400 border border-red-500/20'
                 }`}>
                   {item.severity}
@@ -417,7 +419,7 @@ export default function WeeklyKPI({
             ))}
           </div>
         ) : (
-          <p className="text-[10px] text-slate-500 italic mt-2">Không ghi nhận sự cố hay thời tiết bất thường.</p>
+          <p className="text-[10px] text-slate-500 italic mt-2">{t('weeklyKpi.noIncidents')}</p>
         )}
       </div>
     </div>

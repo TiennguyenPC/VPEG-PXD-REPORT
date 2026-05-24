@@ -3,6 +3,11 @@ import { Truck, ChevronDown, ChevronUp, Loader2, CloudOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 import ModuleDateHeader from './ModuleDateHeader';
+import DateInputDMY from '../../DateInputDMY';
+import { parseFlexibleDate } from '../../../utils/timelineDates';
+import { useProjectCanEdit } from '../../../context/ProjectEditContext';
+import { useI18n } from '../../../context/I18nContext';
+import { ModuleCell } from '../../ModuleCell';
 
 const defaultProcurements = [
   'An toàn tạm',
@@ -22,48 +27,7 @@ const defaultProcurements = [
   'Hệ thống vệ sinh pin (Bơm, phụ kiện bơm, bồn nước, CB bơm, ống nước, khơi thủy)'
 ];
 
-const parseDateStr = (str) => {
-  if (!str) return null;
-  const cleaned = str.trim();
-  if (cleaned === '-' || cleaned === '' || cleaned === '---') return null;
-  
-  if (cleaned.includes('/')) {
-    const parts = cleaned.split('/');
-    if (parts.length === 3) {
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1;
-      let year = parseInt(parts[2], 10);
-      if (parts[2].length === 2) {
-        year += 2000;
-      }
-      const d = new Date(year, month, day);
-      if (!isNaN(d.getTime())) return d;
-    }
-  }
-  
-  if (cleaned.includes('-')) {
-    const parts = cleaned.split('-');
-    if (parts.length === 3) {
-      if (parts[0].length === 4) {
-        const year = parseInt(parts[0], 10);
-        const month = parseInt(parts[1], 10) - 1;
-        const day = parseInt(parts[2], 10);
-        const d = new Date(year, month, day);
-        if (!isNaN(d.getTime())) return d;
-      } else {
-        const day = parseInt(parts[0], 10);
-        const month = parseInt(parts[1], 10) - 1;
-        const year = parseInt(parts[2], 10);
-        const d = new Date(year, month, day);
-        if (!isNaN(d.getTime())) return d;
-      }
-    }
-  }
-  
-  const d = new Date(cleaned);
-  if (!isNaN(d.getTime())) return d;
-  return null;
-};
+const parseDateStr = (str) => parseFlexibleDate(str);
 
 const getAutoEvaluation = (expectedStr, actualStr) => {
   const expected = parseDateStr(expectedStr);
@@ -108,6 +72,8 @@ function AutoGrowingTextarea({ value, onChange, onBlur, disabled, placeholder })
 }
 
 export default function ProcurementModule({ project, initialData, onProgressChange }) {
+  const canEdit = useProjectCanEdit();
+  const { t, tf, ts } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   
   const mergeProcurementData = (data) => {
@@ -224,6 +190,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
   }, [progressPercent, onProgressChange]);
 
   const handleUpdate = async (id, field, value) => {
+    if (!canEdit) return;
     let updatedItem = null;
     const nextItems = items.map(i => {
       if (i.id === id) {
@@ -336,7 +303,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
           <div className="w-8 h-8 rounded bg-[#f97316]/10 text-[#f97316] flex items-center justify-center">
             <Truck className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">CUNG ỨNG VẬT TƯ / PROCUREMENT</h3>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">{t('modules.procurement')}</h3>
         </div>
         
         <div className="flex items-center gap-4">
@@ -345,20 +312,20 @@ export default function ProcurementModule({ project, initialData, onProgressChan
             {isLoading ? (
               <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Đang tải...</span>
+                <span>{t('common.loading')}</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 justify-end w-full">
                 {syncError && (
                   <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-full text-xs text-amber-400">
                     <CloudOff className="w-3 h-3" />
-                    <span className="hidden xl:inline">Lưu cục bộ</span>
+                    <span className="hidden xl:inline">{t('common.savedLocal')}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-light)] px-3 py-1 rounded-full text-xs min-w-[140px]">
-                  <span className="text-[#8ca0c3] whitespace-nowrap">{completedCount}/{items.length} hoàn thành</span>
-                  <span className="w-1 h-1 bg-[#f97316] rounded-full shrink-0"></span>
-                  <span className="text-[#f97316] font-bold shrink-0">{progressPercent}%</span>
+                  <span className="text-[var(--text-main)] whitespace-nowrap">{tf('modules.completed', { done: completedCount, total: items.length })}</span>
+                  <span className="w-1 h-1 bg-[#10b981] rounded-full shrink-0"></span>
+                  <span className="text-[#10b981] font-bold shrink-0">{progressPercent}%</span>
                 </div>
               </div>
             )}
@@ -381,86 +348,46 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                 <table className="w-full text-left text-xs min-w-[950px]">
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                      <th className="p-3">Thiết bị / Vật tư mua hàng</th>
-                      <th className="p-3 w-32">Ngày về dự kiến</th>
-                      <th className="p-3 w-32">Ngày về thực tế</th>
-                      <th className="p-3 w-36">Tình trạng vật tư</th>
-                      <th className="p-3 w-40">Đánh giá tiến độ</th>
-                      <th className="p-3 w-64">Ghi chú</th>
+                      <th className="p-3">{t('table.equipment')}</th>
+                      <th className="p-3 w-32">{t('table.expectedArrival')}</th>
+                      <th className="p-3 w-32">{t('table.actualArrival')}</th>
+                      <th className="p-3 w-36">{t('table.materialStatus')}</th>
+                      <th className="p-3 w-40">{t('table.progressEval')}</th>
+                      <th className="p-3 w-64">{t('table.notes')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
                     {items.map(item => (
                       <tr key={item.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
-                        <td className="p-3 font-semibold text-slate-200">{item.HẠNG_MỤC_MUA_HÀNG}</td>
+                        <td className="p-3 font-semibold text-slate-200">{ts(item.HẠNG_MỤC_MUA_HÀNG)}</td>
                         <td className="p-3">
-                          <input 
-                            type="date" 
-                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${!item.NGÀY_VỀ_DỰ_KIẾN || item.NGÀY_VỀ_DỰ_KIẾN === '-' ? 'text-transparent' : ''}`}
-                            value={item.NGÀY_VỀ_DỰ_KIẾN && item.NGÀY_VỀ_DỰ_KIẾN !== '-' ? (() => {
-                              const v = item.NGÀY_VỀ_DỰ_KIẾN;
-                              if (v.includes('/')) {
-                                const parts = v.split('/');
-                                if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-                              }
-                              return v;
-                            })() : ''}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              let formatted = v;
-                              if (v && v.includes('-')) {
-                                const parts = v.split('-');
-                                if (parts.length === 3) formatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                              }
-                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, NGÀY_VỀ_DỰ_KIẾN: formatted } : i));
+                          <DateInputDMY
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${!item.NGÀY_VỀ_DỰ_KIẾN || item.NGÀY_VỀ_DỰ_KIẾN === '-' ? 'opacity-60' : ''} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            value={item.NGÀY_VỀ_DỰ_KIẾN && item.NGÀY_VỀ_DỰ_KIẾN !== '-' ? item.NGÀY_VỀ_DỰ_KIẾN : ''}
+                            disabled={!canEdit}
+                            onChange={(val) => {
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, NGÀY_VỀ_DỰ_KIẾN: val } : i));
                             }}
-                            onBlur={(e) => {
-                              const rawVal = e.target.value;
-                              let finalVal = rawVal;
-                              if (rawVal && rawVal.includes('-')) {
-                                const parts = rawVal.split('-');
-                                if (parts.length === 3) finalVal = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                              }
-                              handleUpdate(item.id, 'NGÀY_VỀ_DỰ_KIẾN', finalVal);
-                            }}
+                            onBlur={(_e, val) => handleUpdate(item.id, 'NGÀY_VỀ_DỰ_KIẾN', val)}
                           />
                         </td>
                         <td className="p-3">
-                          <input 
-                            type="date" 
-                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${!item.NGÀY_VỀ_THỰC_TẾ || item.NGÀY_VỀ_THỰC_TẾ === '-' ? 'text-transparent' : ''}`}
-                            value={item.NGÀY_VỀ_THỰC_TẾ && item.NGÀY_VỀ_THỰC_TẾ !== '-' ? (() => {
-                              const v = item.NGÀY_VỀ_THỰC_TẾ;
-                              if (v.includes('/')) {
-                                const parts = v.split('/');
-                                if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-                              }
-                              return v;
-                            })() : ''}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              let formatted = v;
-                              if (v && v.includes('-')) {
-                                const parts = v.split('-');
-                                if (parts.length === 3) formatted = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                              }
-                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, NGÀY_VỀ_THỰC_TẾ: formatted } : i));
+                          <DateInputDMY
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${!item.NGÀY_VỀ_THỰC_TẾ || item.NGÀY_VỀ_THỰC_TẾ === '-' ? 'opacity-60' : ''} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            value={item.NGÀY_VỀ_THỰC_TẾ && item.NGÀY_VỀ_THỰC_TẾ !== '-' ? item.NGÀY_VỀ_THỰC_TẾ : ''}
+                            disabled={!canEdit}
+                            onChange={(val) => {
+                              setItems(prev => prev.map(i => i.id === item.id ? { ...i, NGÀY_VỀ_THỰC_TẾ: val } : i));
                             }}
-                            onBlur={(e) => {
-                              const rawVal = e.target.value;
-                              let finalVal = rawVal;
-                              if (rawVal && rawVal.includes('-')) {
-                                const parts = rawVal.split('-');
-                                if (parts.length === 3) finalVal = `${parts[2]}/${parts[1]}/${parts[0]}`;
-                              }
-                              handleUpdate(item.id, 'NGÀY_VỀ_THỰC_TẾ', finalVal);
-                            }}
+                            onBlur={(_e, val) => handleUpdate(item.id, 'NGÀY_VỀ_THỰC_TẾ', val)}
                           />
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={item.TÌNH_TRẠNG_VẬT_TƯ || '-'} colorClass={getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={item.TÌNH_TRẠNG_VẬT_TƯ || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(item.id, 'TÌNH_TRẠNG_VẬT_TƯ', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200" value="">-</option>
@@ -469,11 +396,14 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đang vận chuyển</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã tới site</option>
                           </select>
+                          </ModuleCell>
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={item.ĐÁNH_GIÁ_TIẾN_ĐỘ || '-'} colorClass={getProgressStyle(item.ĐÁNH_GIÁ_TIẾN_ĐỘ)} ts={ts}>
                           <select 
-                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getProgressStyle(item.ĐÁNH_GIÁ_TIẾN_ĐỘ)}`}
+                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getProgressStyle(item.ĐÁNH_GIÁ_TIẾN_ĐỘ)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={item.ĐÁNH_GIÁ_TIẾN_ĐỘ || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(item.id, 'ĐÁNH_GIÁ_TIẾN_ĐỘ', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200" value="">-</option>
@@ -481,18 +411,23 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đang theo kế hoạch</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Trễ</option>
                           </select>
+                          </ModuleCell>
                         </td>
                         <td className="p-3">
+                          {canEdit ? (
                           <AutoGrowingTextarea 
                             value={item.GHI_CHÚ || ''}
                             placeholder="Nhập ghi chú..."
-                            disabled={false}
+                            disabled={!canEdit}
                             onChange={(e) => {
                               const v = e.target.value;
                               setItems(prev => prev.map(i => i.id === item.id ? { ...i, GHI_CHÚ: v } : i));
                             }}
                             onBlur={(e) => handleUpdate(item.id, 'GHI_CHÚ', e.target.value)}
                           />
+                          ) : (
+                          <span className="text-slate-300">{ts(item.GHI_CHÚ || '-')}</span>
+                          )}
                         </td>
                       </tr>
                     ))}

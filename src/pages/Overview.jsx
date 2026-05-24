@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   AlertTriangle,
-  ListTodo,
   Zap,
   Clock,
   CheckCircle2,
@@ -15,11 +14,14 @@ import {
   Calendar,
   ArrowUpRight,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useSidebar } from '../hooks/useSidebar';
-import { api } from '../services/api';
+import { api, OVERVIEW_REFRESH_EVENT } from '../services/api';
 import { updateDashboardContext } from '../utils/dashboardContext';
+import { getTaskDescription } from '../utils/taskFields';
+import { enrichProjectsProgress } from '../utils/projectProgress';
+import { buildOverviewRiskRows } from '../utils/riskHelpers';
 
 const KPI_CARDS = [
   {
@@ -63,10 +65,10 @@ const KPI_CARDS = [
 function PanelCard({ title, action, children, className = '' }) {
   return (
     <div
-      className={`rounded-2xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)]/90 backdrop-blur-sm overflow-hidden flex flex-col shadow-lg shadow-black/20 ${className}`}
+      className={`rounded-2xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)]/90 backdrop-blur-sm overflow-hidden flex flex-col shadow-lg shadow-black/20 min-w-0 ${className}`}
     >
-      <div className="px-6 py-4 border-b border-[var(--border-main)]/50 flex justify-between items-center bg-gradient-to-r from-[#0e1628]/80 to-transparent">
-        <h3 className="text-sm font-bold text-white tracking-wide">{title}</h3>
+      <div className="px-6 py-4 border-b border-[var(--border-main)]/50 flex justify-between items-center gap-3 bg-gradient-to-r from-[#0e1628]/80 to-transparent shrink-0">
+        <h3 className="text-sm font-bold text-[var(--text-strong)] tracking-wide truncate">{title}</h3>
         {action}
       </div>
       {children}
@@ -74,64 +76,140 @@ function PanelCard({ title, action, children, className = '' }) {
   );
 }
 
+const thBase = 'py-3 px-3 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider align-top';
+const tdBase = 'py-3 px-3 text-xs align-top';
+const textWrap = 'text-[11px] leading-snug break-words line-clamp-2';
+
+function readCachedArray(key) {
+  try {
+    const cached = localStorage.getItem(key);
+    return cached ? JSON.parse(cached) : [];
+  } catch {
+    return [];
+  }
+}
+
+function AssigneeCell({ name, fallback = 'Chưa rõ' }) {
+  const display = (name || '').trim() || fallback;
+  const initials = display.length >= 2 ? display.substring(0, 2).toUpperCase() : display.substring(0, 1).toUpperCase();
+  return (
+    <div className="flex items-start gap-2 min-w-[100px]">
+      <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[9px] font-bold shrink-0">
+        {initials || '?'}
+      </div>
+      <span className={`${textWrap} font-medium text-[var(--text-main)] flex-1 min-w-0`} title={display}>
+        {display}
+      </span>
+    </div>
+  );
+}
+
+function CellText({ children, className = '', title }) {
+  const label = title ?? (typeof children === 'string' ? children : undefined);
+  return (
+    <span className={`${textWrap} ${className}`} title={label}>
+      {children}
+    </span>
+  );
+}
+
 export default function Overview() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isCollapsed, toggleSidebar } = useSidebar();
 
-  const [projects, setProjects] = useState([]);
-  const [tasks, setTasks] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [projects, setProjects] = useState(() => readCachedArray('epc_projects_cache'));
+  const [tasks, setTasks] = useState(() => readCachedArray('epc_tasks_cache'));
+  const [allRisks, setAllRisks] = useState(() => readCachedArray('epc_risks_cache'));
+  // Don't show blocking loader if localStorage cache exists
+  const [isLoading, setIsLoading] = useState(() => {
+    try {
+      const hasProjCache = !!localStorage.getItem('epc_projects_cache');
+      const hasTaskCache = !!localStorage.getItem('epc_tasks_cache');
+      return !(hasProjCache && hasTaskCache);
+    } catch { return true; }
+  });
+  const [progressTick, setProgressTick] = useState(0);
 
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
+    const refresh = () => setProgressTick((t) => t + 1);
+    window.addEventListener('epc-progress-updated', refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener('epc-progress-updated', refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
+
+  const enrichedProjects = useMemo(
+    () => enrichProjectsProgress(projects),
+    [projects, progressTick]
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const applyBundle = (bundle) => {
+      if (cancelled || !bundle) return;
+      setProjects(bundle.projects || []);
+      setTasks(bundle.tasks || []);
+      setAllRisks(bundle.risks || []);
+    };
+
+    const load = async () => {
       try {
-        const [projData, taskData] = await Promise.all([api.getProjects(), api.getTasks()]);
-        setProjects(projData || []);
-        setTasks(taskData || []);
+        const bundle = await api.getOverviewData();
+        applyBundle(bundle);
       } catch (error) {
         console.error('Error fetching overview data', error);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
-    fetchData();
+
+    load();
+
+    const onRefreshed = (e) => applyBundle(e.detail);
+    window.addEventListener(OVERVIEW_REFRESH_EVENT, onRefreshed);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(OVERVIEW_REFRESH_EVENT, onRefreshed);
+    };
   }, []);
 
+  // Khi quay lại Tổng quan từ trang khác — refresh nền (cache vẫn hiện ngay)
+  const prevPathRef = React.useRef(location.pathname);
   useEffect(() => {
-    updateDashboardContext({ projects, tasks });
-  }, [projects, tasks]);
+    const prev = prevPathRef.current;
+    prevPathRef.current = location.pathname;
+    if (location.pathname === '/' && prev !== '/') {
+      api.getOverviewData().catch(() => {});
+    }
+  }, [location.pathname]);
 
-  const totalCapacity = projects.reduce((sum, p) => sum + (Number(p.capacity) || 0), 0);
+  useEffect(() => {
+    updateDashboardContext({ projects: enrichedProjects, tasks });
+  }, [enrichedProjects, tasks]);
 
-  const activeProjects = projects.filter((p) => {
+  const totalCapacity = enrichedProjects.reduce((sum, p) => sum + (Number(p.capacity) || 0), 0);
+
+  const activeProjects = enrichedProjects.filter((p) => {
     const s = (p.status || '').toUpperCase();
     return s !== 'ĐÃ HOÀN THÀNH' && s !== 'HOÀN THÀNH' && s !== 'COMPLETED';
   });
 
-  const highMediumRisks = projects.filter((p) => {
-    const r = (p.risk || '').toUpperCase();
-    return r === 'MEDIUM' || r === 'HIGH' || r === 'TRUNG BÌNH' || r === 'CAO';
-  });
+  const overviewRisks = buildOverviewRiskRows(allRisks, enrichedProjects);
+  const riskCount = overviewRisks.length;
+  const riskList = overviewRisks.slice(0, 5);
 
   const importantTasks = tasks
     .filter((t) => {
       const p = (t.ƯU_TIÊN || '').toUpperCase();
-      return p === 'KHẨN CẤP' || p === 'QUAN TRỌNG' || p === 'IMPORTANT';
+      return p !== 'THẤP' && p !== 'LOW' && p !== '';
     })
     .filter((t) => t.TRẠNG_THÁI !== 'Đã hoàn thành');
 
   const progressProjects = [...activeProjects].sort((a, b) => b.capacity - a.capacity).slice(0, 5);
-
-  const riskList = highMediumRisks
-    .map((p) => ({
-      project: p.name,
-      id: p.id,
-      issue: p.issue && p.issue !== 'Không có' ? p.issue : 'Chưa cập nhật chi tiết',
-      assignee: p.pm || 'Chưa rõ',
-      level: p.risk,
-    }))
-    .slice(0, 5);
 
   const priorityWeight = {
     'KHẨN CẤP': 4,
@@ -155,7 +233,7 @@ export default function Overview() {
   const kpiValues = {
     capacity: { value: totalCapacity.toLocaleString(), unit: 'kWp' },
     active: { value: activeProjects.length, unit: 'Dự án' },
-    risk: { value: highMediumRisks.length, unit: 'Vấn đề' },
+    risk: { value: riskCount, unit: 'Vấn đề' },
     tasks: { value: importantTasks.length, unit: 'Công việc' },
   };
 
@@ -167,7 +245,7 @@ export default function Overview() {
   });
 
   return (
-    <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans">
+    <div className="min-h-screen flex bg-[var(--bg-main)] text-[var(--text-main)] font-sans">
       <Sidebar activeItem="overview" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
@@ -186,67 +264,78 @@ export default function Overview() {
           </div>
         )}
 
-        <header className="sticky top-0 z-20 px-8 py-5 flex justify-between items-center border-b border-[var(--border-main)]/50 bg-[var(--bg-main)]/75 backdrop-blur-xl">
+        <div className="relative z-10 px-8 pt-4 pb-4 border-b border-[var(--border-main)]/50 bg-[var(--bg-main)]">
+        <header className="flex justify-between items-center">
           <div>
             <p className="text-[10px] font-bold text-[#5252ff] uppercase tracking-[0.2em] mb-1">Dashboard PXD</p>
-            <h1 className="text-2xl font-black text-white tracking-tight">Tổng quan</h1>
+            <h1 className="text-2xl font-black text-[var(--text-strong)] tracking-tight">Tổng quan</h1>
             <p className="text-xs text-[var(--text-muted)] mt-1 capitalize">{todayLabel}</p>
           </div>
-          <button
-            type="button"
-            className="flex items-center gap-2 bg-[var(--bg-panel)] border border-[var(--border-main)] hover:border-[#5252ff]/50 px-4 py-2 rounded-lg text-sm text-slate-200 transition-all shadow-sm"
-          >
-            <Calendar className="w-4 h-4 text-[#5252ff]" />
-            <span className="font-semibold">Năm 2026</span>
-            <ChevronDown className="w-4 h-4 text-slate-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="flex items-center gap-2 bg-[var(--bg-panel)] border border-[var(--border-main)] hover:border-[#5252ff]/50 px-4 py-2 rounded-lg text-sm text-[var(--text-main)] transition-all shadow-sm"
+            >
+              <Calendar className="w-4 h-4 text-[#5252ff]" />
+              <span className="font-semibold">Năm 2026</span>
+              <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
+            </button>
+          </div>
         </header>
 
-        <div className="relative z-10 px-8 py-8 space-y-8 max-w-[1680px] w-full mx-auto">
           {/* KPI row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4 max-w-[1680px] w-full mx-auto min-w-0">
             {KPI_CARDS.map((card) => {
               const Icon = card.icon;
               const data = kpiValues[card.key];
               return (
                 <div
                   key={card.key}
-                  className={`group relative overflow-hidden rounded-2xl border border-[var(--border-main)]/80 bg-gradient-to-br from-[#0c1221] to-[var(--bg-panel)] p-5 transition-all duration-300 ${card.borderHover} hover:-translate-y-0.5 ${card.glow}`}
+                  className={`group relative overflow-hidden rounded-xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] p-4 transition-all duration-300 ${card.borderHover} hover:-translate-y-0.5 ${card.glow}`}
                 >
                   <div className={`absolute inset-0 bg-gradient-to-br ${card.accent} opacity-80`} />
                   <div className="relative flex justify-between items-start gap-3">
                     <div>
-                      <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
                         {card.label}
                       </p>
-                      <p className="text-3xl font-black text-white tabular-nums tracking-tight">
+                      <p className="text-2xl font-black text-[var(--text-strong)] tabular-nums tracking-tight">
                         {data.value}
-                        <span className="text-sm font-semibold text-slate-500 ml-1.5">{data.unit}</span>
+                        <span className="text-xs font-semibold text-slate-500 ml-1.5">{data.unit}</span>
                       </p>
                     </div>
-                    <div className={`p-3 rounded-xl ${card.iconBg} shrink-0`}>
-                      <Icon className="w-5 h-5" />
+                    <div className={`p-2.5 rounded-xl ${card.iconBg} shrink-0`}>
+                      <Icon className="w-4 h-4" />
                     </div>
                   </div>
                 </div>
               );
             })}
           </div>
+        </div>
+
+        <div className="relative z-10 px-8 pt-6 pb-6 space-y-8 max-w-[1680px] w-full mx-auto min-w-0">
 
           {/* Progress + Risks */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-w-0">
             <PanelCard title="Giám sát tiến độ dự án">
-              <div className="p-2 flex-1 overflow-x-auto">
-                <table className="w-full text-left border-collapse min-w-[480px]">
+              <div className="p-3 flex-1 overflow-x-auto min-w-0">
+                <table className="w-full border-collapse" style={{ minWidth: '420px' }}>
+                  <colgroup>
+                    <col style={{ width: '38%' }} />
+                    <col style={{ width: '24%' }} />
+                    <col style={{ width: '24%' }} />
+                    <col style={{ width: '14%' }} />
+                  </colgroup>
                   <thead>
-                    <tr className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider">
-                      <th className="py-3 px-4 font-semibold">Dự án</th>
-                      <th className="py-3 px-4 font-semibold">Kế hoạch</th>
-                      <th className="py-3 px-4 font-semibold">Thực tế</th>
-                      <th className="py-3 px-4 text-center font-semibold">Đánh giá</th>
+                    <tr>
+                      <th className={`${thBase} text-left`}>Dự án</th>
+                      <th className={`${thBase} text-center`}>Kế hoạch</th>
+                      <th className={`${thBase} text-center`}>Thực tế</th>
+                      <th className={`${thBase} text-center`}>Đánh giá</th>
                     </tr>
                   </thead>
-                  <tbody className="text-xs">
+                  <tbody>
                     {progressProjects.map((p) => {
                       const isDelayed = (p.planProgress ?? 0) > (p.actualProgress ?? 0);
                       const plan = Math.round(Number(p.planProgress) || 0);
@@ -255,36 +344,35 @@ export default function Overview() {
                         <tr
                           key={p.id}
                           onClick={() => navigate(`/projects/${p.id}`)}
-                          className="border-t border-[var(--border-main)]/40 hover:bg-[#141c2f]/60 cursor-pointer transition-colors group/row"
+                          className="border-t border-[var(--border-main)]/40 hover:bg-[var(--bg-hover)] cursor-pointer transition-colors group/row"
                         >
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-slate-100 group-hover/row:text-white truncate max-w-[140px]">
+                          <td className={tdBase}>
+                            <div className="pr-1">
+                          <CellText className="font-semibold text-[var(--text-main)]" title={p.name}>
                                 {p.name}
-                              </span>
-                              <span className="text-[10px] text-slate-500 shrink-0">{p.capacity} kWp</span>
-                              <ArrowUpRight className="w-3 h-3 text-[#5252ff] opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0" />
+                              </CellText>
+                              <span className="text-[10px] text-slate-500 tabular-nums mt-0.5 block">{p.capacity} kWp</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4 pr-4">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-1.5 bg-[#060a13] rounded-full overflow-hidden">
-                                <div className="h-full bg-[#5252ff] rounded-full transition-all" style={{ width: `${plan}%` }} />
+                          <td className={tdBase}>
+                            <div className="flex items-center justify-center gap-1.5 min-w-0">
+                              <div className="w-full max-w-[72px] h-1.5 bg-[var(--border-main)] rounded-full overflow-hidden shrink">
+                                <div className="h-full bg-[#5252ff] rounded-full" style={{ width: `${plan}%` }} />
                               </div>
-                              <span className="text-[10px] text-slate-500 w-7 text-right tabular-nums">{plan}%</span>
+                              <span className="text-[10px] text-slate-500 w-8 text-right tabular-nums shrink-0">{plan}%</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4 pr-4">
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-1.5 bg-[#060a13] rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 rounded-full transition-all" style={{ width: `${actual}%` }} />
+                          <td className={tdBase}>
+                            <div className="flex items-center justify-center gap-1.5 min-w-0">
+                              <div className="w-full max-w-[72px] h-1.5 bg-[var(--border-main)] rounded-full overflow-hidden shrink">
+                                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${actual}%` }} />
                               </div>
-                              <span className="text-[10px] text-slate-500 w-7 text-right tabular-nums">{actual}%</span>
+                              <span className="text-[10px] text-slate-500 w-8 text-right tabular-nums shrink-0">{actual}%</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4 text-center">
+                          <td className={`${tdBase} text-center`}>
                             <span
-                              className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold ${
+                              className={`inline-flex items-center justify-center whitespace-nowrap px-2 py-0.5 rounded-md text-[10px] font-bold ${
                                 isDelayed
                                   ? 'bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/25'
                                   : 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/25'
@@ -321,52 +409,59 @@ export default function Overview() {
                 </button>
               }
             >
-              <div className="overflow-x-auto flex-1">
-                <table className="w-full text-left border-collapse min-w-[480px]">
+              <div className="overflow-x-auto flex-1 min-w-0 p-3">
+                <table className="w-full border-collapse" style={{ minWidth: '520px' }}>
+                  <colgroup>
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '34%' }} />
+                    <col style={{ width: '38%' }} />
+                    <col style={{ width: '14%' }} />
+                  </colgroup>
                   <thead>
-                    <tr className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider bg-[#060a13]/40">
-                      <th className="py-3 px-5 font-semibold">Dự án</th>
-                      <th className="py-3 px-4 font-semibold">Vấn đề</th>
-                      <th className="py-3 px-4 font-semibold">Phụ trách</th>
-                      <th className="py-3 px-4 text-center font-semibold">Mức độ</th>
+                    <tr className="bg-[var(--bg-hover)]/40">
+                      <th className={`${thBase} text-left`}>Dự án</th>
+                      <th className={`${thBase} text-left`}>Vấn đề</th>
+                      <th className={`${thBase} text-left`}>Phụ trách</th>
+                      <th className={`${thBase} text-center`}>Mức độ</th>
                     </tr>
                   </thead>
-                  <tbody className="text-xs text-slate-200">
+                  <tbody className="text-[var(--text-main)]">
                     {riskList.map((r, idx) => {
-                      const levelObj = {
-                        HIGH: { color: 'text-rose-400', ring: 'ring-rose-500/25', bg: 'bg-rose-500/10', label: 'Cao' },
-                        CAO: { color: 'text-rose-400', ring: 'ring-rose-500/25', bg: 'bg-rose-500/10', label: 'Cao' },
-                        MEDIUM: { color: 'text-amber-400', ring: 'ring-amber-500/25', bg: 'bg-amber-500/10', label: 'TB' },
-                        'TRUNG BÌNH': { color: 'text-amber-400', ring: 'ring-amber-500/25', bg: 'bg-amber-500/10', label: 'TB' },
-                      };
-                      const s = levelObj[(r.level || '').toUpperCase()] || {
-                        color: 'text-slate-400',
-                        ring: 'ring-slate-500/25',
-                        bg: 'bg-slate-500/10',
-                        label: r.level || '-',
-                      };
+                      const levelLabel = r.level || '-';
+                      const s =
+                        levelLabel === 'Cao'
+                          ? { color: 'text-rose-400', ring: 'ring-rose-500/25', bg: 'bg-rose-500/10', label: 'Cao' }
+                          : levelLabel === 'Trung bình'
+                            ? { color: 'text-amber-400', ring: 'ring-amber-500/25', bg: 'bg-amber-500/10', label: 'TB' }
+                            : {
+                                color: 'text-slate-400',
+                                ring: 'ring-slate-500/25',
+                                bg: 'bg-slate-500/10',
+                                label: levelLabel,
+                              };
 
                       return (
                         <tr
                           key={idx}
-                          className="border-t border-[var(--border-main)]/40 hover:bg-[#141c2f]/50 cursor-pointer"
+                          className="border-t border-[var(--border-main)]/40 hover:bg-[var(--bg-hover)] cursor-pointer"
                           onClick={() => r.id && navigate(`/projects/${r.id}`)}
                         >
-                          <td className="py-4 px-5 font-semibold text-white">{r.project}</td>
-                          <td className="py-4 px-4 text-slate-400 max-w-[160px] truncate" title={r.issue}>
-                            {r.issue}
+                          <td className={tdBase}>
+                            <CellText className="font-semibold text-[var(--text-strong)]" title={r.project}>
+                              {r.project}
+                            </CellText>
                           </td>
-                          <td className="py-4 px-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[10px] font-bold shrink-0">
-                                {r.assignee ? r.assignee.substring(0, 1).toUpperCase() : '?'}
-                              </div>
-                              <span className="truncate max-w-[90px] font-medium">{r.assignee}</span>
-                            </div>
+                          <td className={tdBase}>
+                            <CellText className="text-slate-400" title={r.issue}>
+                              {r.issue}
+                            </CellText>
                           </td>
-                          <td className="py-4 px-4 text-center">
+                          <td className={tdBase}>
+                            <AssigneeCell name={r.assignee} />
+                          </td>
+                          <td className={`${tdBase} text-center`}>
                             <span
-                              className={`inline-flex px-2.5 py-1 rounded-md text-[10px] font-bold ring-1 ${s.bg} ${s.color} ${s.ring}`}
+                              className={`inline-flex items-center justify-center whitespace-nowrap px-2 py-0.5 rounded-md text-[10px] font-bold ring-1 ${s.bg} ${s.color} ${s.ring}`}
                             >
                               {s.label}
                             </span>
@@ -404,17 +499,26 @@ export default function Overview() {
               </button>
             }
           >
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse min-w-[800px]">
+            <div className="overflow-x-auto min-w-0 p-3">
+              <table className="w-full border-collapse" style={{ minWidth: '880px' }}>
+                <colgroup>
+                  <col style={{ width: '18%' }} />
+                  <col style={{ width: '20%' }} />
+                  <col style={{ width: '22%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '11%' }} />
+                  <col style={{ width: '9%' }} />
+                  <col style={{ width: '9%' }} />
+                </colgroup>
                 <thead>
-                  <tr className="text-[10px] text-[var(--text-muted)] uppercase tracking-wider bg-[#060a13]/50 border-b border-[var(--border-main)]/50">
-                    <th className="py-3.5 px-5 font-semibold">Công việc</th>
-                    <th className="py-3.5 px-4 font-semibold">Mô tả</th>
-                    <th className="py-3.5 px-4 font-semibold">Phân công</th>
-                    <th className="py-3.5 px-4 font-semibold">Bắt đầu</th>
-                    <th className="py-3.5 px-4 font-semibold">Đến hạn</th>
-                    <th className="py-3.5 px-4 text-center font-semibold">Trạng thái</th>
-                    <th className="py-3.5 px-4 text-center font-semibold">Ưu tiên</th>
+                  <tr className="bg-[var(--bg-hover)]/50 border-b border-[var(--border-main)]/50">
+                    <th className={`${thBase} text-left`}>Công việc</th>
+                    <th className={`${thBase} text-left`}>Mô tả</th>
+                    <th className={`${thBase} text-left`}>Phân công</th>
+                    <th className={`${thBase} text-center`}>Bắt đầu</th>
+                    <th className={`${thBase} text-center`}>Đến hạn</th>
+                    <th className={`${thBase} text-center`}>Trạng thái</th>
+                    <th className={`${thBase} text-center`}>Ưu tiên</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -435,14 +539,14 @@ export default function Overview() {
                     return (
                       <tr
                         key={idx}
-                        className="border-t border-[var(--border-main)]/40 hover:bg-[#141c2f]/50 transition-colors cursor-pointer"
+                        className="border-t border-[var(--border-main)]/40 hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
                         onClick={() => navigate('/tasks')}
                       >
-                        <td className="py-4 px-5">
-                          <div className="flex items-start gap-2.5">
-                            <Star className="w-3.5 h-3.5 text-slate-600 shrink-0 mt-1" />
+                        <td className={tdBase}>
+                          <div className="flex items-start gap-1.5">
+                            <Star className="w-3 h-3 text-slate-600 shrink-0 mt-0.5" />
                             <span
-                              className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                              className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
                                 computedStatus === 'Trễ'
                                   ? 'bg-red-500'
                                   : computedStatus === 'Đang diễn ra'
@@ -450,49 +554,53 @@ export default function Overview() {
                                     : 'bg-slate-500'
                               }`}
                             />
-                            <span className="font-semibold text-sm text-slate-100">{t.TÁC_VỤ}</span>
+                            <CellText className="font-semibold text-[var(--text-main)] flex-1 min-w-0" title={t.TÁC_VỤ}>
+                              {t.TÁC_VỤ}
+                            </CellText>
                           </div>
                         </td>
-                        <td className="py-4 px-4 text-slate-400 max-w-[200px] truncate" title={t.MÔ_TẢ}>
-                          {t.MÔ_TẢ || '—'}
+                        <td className={tdBase}>
+                          <CellText className="text-slate-400" title={getTaskDescription(t)}>
+                            {getTaskDescription(t) || '—'}
+                          </CellText>
                         </td>
-                        <td className="py-4 px-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-500 to-orange-600 text-white flex items-center justify-center text-[9px] font-bold">
-                              {t.NHÂN_SỰ ? t.NHÂN_SỰ.substring(0, 2).toUpperCase() : 'NV'}
-                            </div>
-                            <span className="text-slate-300 font-medium text-xs">{t.NHÂN_SỰ || 'Chưa phân công'}</span>
-                          </div>
+                        <td className={tdBase}>
+                          <AssigneeCell name={t.NHÂN_SỰ} fallback="Chưa phân công" />
                         </td>
-                        <td className="py-4 px-4 text-slate-500 tabular-nums">{t.NGÀY_BẮT_ĐẦU || '—'}</td>
+                        <td className={`${tdBase} text-center text-slate-500 tabular-nums whitespace-nowrap`}>
+                          {t.NGÀY_BẮT_ĐẦU || '—'}
+                        </td>
                         <td
-                          className={`py-4 px-4 font-semibold tabular-nums ${computedStatus === 'Trễ' ? 'text-red-400' : 'text-emerald-400'}`}
+                          className={`${tdBase} text-center font-semibold tabular-nums whitespace-nowrap ${
+                            computedStatus === 'Trễ' ? 'text-red-400' : 'text-emerald-400'
+                          }`}
                         >
                           {t.NGÀY_KẾT_THÚC || '—'}
                         </td>
-                        <td className="py-4 px-4 text-center">
+                        <td className={`${tdBase} text-center`}>
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold ring-1 ${
+                            className={`inline-flex items-center justify-center gap-0.5 max-w-full px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 whitespace-nowrap ${
                               computedStatus === 'Trễ'
                                 ? 'bg-red-500/10 text-red-400 ring-red-500/25'
                                 : computedStatus === 'Đang diễn ra'
                                   ? 'bg-blue-500/10 text-blue-400 ring-blue-500/25'
                                   : 'bg-slate-500/10 text-slate-400 ring-slate-500/25'
                             }`}
+                            title={computedStatus}
                           >
                             {computedStatus === 'Đang diễn ra' ? (
-                              <PlayCircle className="w-3 h-3" />
+                              <PlayCircle className="w-2.5 h-2.5 shrink-0" />
                             ) : computedStatus === 'Trễ' ? (
-                              <Clock className="w-3 h-3" />
+                              <Clock className="w-2.5 h-2.5 shrink-0" />
                             ) : (
-                              <Circle className="w-3 h-3" />
+                              <Circle className="w-2.5 h-2.5 shrink-0" />
                             )}
-                            {computedStatus}
+                            <span className="truncate">{computedStatus}</span>
                           </span>
                         </td>
-                        <td className="py-4 px-4 text-center">
+                        <td className={`${tdBase} text-center`}>
                           <span
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold ring-1 ${
+                            className={`inline-flex items-center justify-center gap-0.5 max-w-full px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 whitespace-nowrap ${
                               priorityLabel === 'Khẩn cấp' || priorityLabel === 'Cao'
                                 ? 'bg-red-500/10 text-red-400 ring-red-500/25'
                                 : priorityLabel === 'Thấp'
@@ -500,8 +608,8 @@ export default function Overview() {
                                   : 'bg-amber-500/10 text-amber-400 ring-amber-500/25'
                             }`}
                           >
-                            <Flag className="w-3 h-3" />
-                            {priorityLabel}
+                            <Flag className="w-2.5 h-2.5 shrink-0" />
+                            <span className="truncate">{priorityLabel}</span>
                           </span>
                         </td>
                       </tr>

@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { ClipboardCheck, ChevronDown, ChevronUp, Loader2, FileText, CheckSquare, FolderOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
+import { formatPercent3 } from '../../../utils/formatPercent';
 import ModuleDateHeader from './ModuleDateHeader';
+import { useProjectCanEdit } from '../../../context/ProjectEditContext';
+import { useI18n } from '../../../context/I18nContext';
+import { ModuleCell } from '../../ModuleCell';
 
 const defaultHandovers = [
   'Hồ sơ thiết kế hoàn công',
@@ -13,6 +17,8 @@ const defaultHandovers = [
 ];
 
 export default function HandoverModule({ project, initialData, onProgressChange }) {
+  const canEdit = useProjectCanEdit();
+  const { t, tf, ts } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
   
   const mergeHandoverData = (data) => {
@@ -98,6 +104,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
   }, [project?.PROJECT_ID, project?.id, initialData]);
 
   const handleUpdate = async (id, field, value) => {
+    if (!canEdit) return;
     try {
       
       let updatedItem = null;
@@ -201,7 +208,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
   };
 
   const completedCount = handovers.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
-  const progressPercent = handovers.length > 0 ? Math.round((completedCount / handovers.length) * 100) : 0;
+  const progressPercent = handovers.length > 0 ? (completedCount / handovers.length) * 100 : 0;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
@@ -213,7 +220,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
           <div className="w-8 h-8 rounded bg-[#10b981]/10 text-[#10b981] flex items-center justify-center">
             <ClipboardCheck className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">BÀN GIAO HỒ SƠ DỰ ÁN</h3>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">{t('modules.handover')}</h3>
         </div>
         
         <div className="flex items-center gap-4">
@@ -222,14 +229,14 @@ export default function HandoverModule({ project, initialData, onProgressChange 
             {isLoading ? (
               <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Đang tải...</span>
+                <span>{t('common.loading')}</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 justify-end w-full">
                 <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-light)] px-3 py-1 rounded-full text-xs min-w-[140px]">
-                  <span className="text-[#8ca0c3]">{completedCount}/{handovers.length} hoàn thành</span>
-                  <span className="w-1 h-1 bg-[#10b981] rounded-full"></span>
-                  <span className="text-[#10b981] font-bold">{progressPercent}%</span>
+                  <span className="text-[var(--text-main)] whitespace-nowrap">{tf('modules.completed', { done: completedCount, total: handovers.length })}</span>
+                  <span className="w-1 h-1 bg-[#10b981] rounded-full shrink-0"></span>
+                  <span className="text-[#10b981] font-bold shrink-0">{formatPercent3(progressPercent)}</span>
                 </div>
               </div>
             )}
@@ -252,11 +259,11 @@ export default function HandoverModule({ project, initialData, onProgressChange 
                 <table className="w-full text-left text-xs min-w-[800px]">
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                      <th className="p-3">Hạng mục</th>
-                      <th className="p-3">Tình trạng</th>
-                      <th className="p-3">Phản hồi</th>
-                      <th className="p-3">Bước tiếp</th>
-                      <th className="p-3">Kết quả cuối</th>
+                      <th className="p-3">{t('table.item')}</th>
+                      <th className="p-3">{t('table.status')}</th>
+                      <th className="p-3">{t('table.feedback')}</th>
+                      <th className="p-3">{t('table.nextStep')}</th>
+                      <th className="p-3">{t('table.finalResult')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
@@ -264,12 +271,14 @@ export default function HandoverModule({ project, initialData, onProgressChange 
                       <tr key={p.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
                         <td className="p-3 font-semibold text-slate-200 flex items-center gap-2">
                           {getHandoverIcon(p.HẠNG_MỤC)}
-                          <span>{p.HẠNG_MỤC}</span>
+                          <span>{ts(p.HẠNG_MỤC)}</span>
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={p.TÌNH_TRẠNG} colorClass={getStatusColor(p.TÌNH_TRẠNG)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(p.TÌNH_TRẠNG)}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(p.TÌNH_TRẠNG)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={p.TÌNH_TRẠNG || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(p.id, 'TÌNH_TRẠNG', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chưa làm</option>
@@ -278,11 +287,14 @@ export default function HandoverModule({ project, initialData, onProgressChange 
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đang chỉnh sửa</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã chốt</option>
                           </select>
+                          </ModuleCell>
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_PHẢN_HỒI} colorClass={getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={p.KẾT_QUẢ_PHẢN_HỒI || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_PHẢN_HỒI', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chưa có phản hồi</option>
@@ -290,11 +302,14 @@ export default function HandoverModule({ project, initialData, onProgressChange 
                             <option className="bg-[var(--bg-panel)] text-slate-200">Yêu cầu chỉnh sửa</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã thông qua</option>
                           </select>
+                          </ModuleCell>
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={p.BƯỚC_TIẾP_THEO} colorClass={getNextStepColor(p.BƯỚC_TIẾP_THEO)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(p.BƯỚC_TIẾP_THEO)}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(p.BƯỚC_TIẾP_THEO)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={p.BƯỚC_TIẾP_THEO || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(p.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chuẩn bị hồ sơ</option>
@@ -302,11 +317,14 @@ export default function HandoverModule({ project, initialData, onProgressChange 
                             <option className="bg-[var(--bg-panel)] text-slate-200">Bổ sung/Chỉnh sửa</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Trình ký duyệt</option>
                           </select>
+                          </ModuleCell>
                         </td>
                         <td className="p-3">
+                          <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_CUỐI} colorClass={getFinalResultColor(p.KẾT_QUẢ_CUỐI)} ts={ts}>
                           <select 
-                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(p.KẾT_QUẢ_CUỐI)}`}
+                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(p.KẾT_QUẢ_CUỐI)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={p.KẾT_QUẢ_CUỐI || ''}
+                            disabled={!canEdit}
                             onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200" value="-">-</option>
@@ -315,6 +333,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã hoàn tất</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">N/A</option>
                           </select>
+                          </ModuleCell>
                         </td>
                       </tr>
                     ))}

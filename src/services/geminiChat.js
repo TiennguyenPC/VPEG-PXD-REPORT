@@ -1,61 +1,55 @@
-const GEMINI_MODEL = 'gemini-2.5-flash';
-const API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
+const GROQ_API_BASE = 'https://api.groq.com/openai/v1/chat/completions';
 
 function getApiKey() {
-  return import.meta.env.VITE_GEMINI_API_KEY || '';
-}
-
-function toGeminiContents(messages, systemText) {
-  const contents = [];
-  if (systemText) {
-    contents.push({
-      role: 'user',
-      parts: [{ text: `[Hệ thống — chỉ đọc, không trả lời riêng]\n${systemText}` }],
-    });
-    contents.push({
-      role: 'model',
-      parts: [{ text: 'Đã hiểu. Tôi là AI PXD, sẵn sàng hỗ trợ theo hướng dẫn và dữ liệu bạn cung cấp.' }],
-    });
-  }
-
-  for (const msg of messages) {
-    if (msg.role === 'user') {
-      contents.push({ role: 'user', parts: [{ text: msg.content }] });
-    } else if (msg.role === 'ai') {
-      contents.push({ role: 'model', parts: [{ text: msg.content }] });
-    }
-  }
-  return contents;
+  return import.meta.env.VITE_GROQ_API_KEY || '';
 }
 
 export async function sendGeminiChat({ messages, systemInstruction }) {
   const apiKey = getApiKey();
   if (!apiKey) {
-    throw new Error('Chưa cấu hình VITE_GEMINI_API_KEY. Thêm vào file .env ở thư mục gốc dự án.');
+    throw new Error('Chưa cấu hình VITE_GROQ_API_KEY. Thêm vào file .env rồi restart npm run dev.');
   }
 
-  const url = `${API_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
-  const history = messages.filter((m) => m.role === 'user' || m.role === 'ai');
-  const contents = toGeminiContents(history, systemInstruction);
+  const groqMessages = [];
 
-  const response = await fetch(url, {
+  if (systemInstruction) {
+    groqMessages.push({ role: 'system', content: systemInstruction });
+  }
+
+  for (const msg of messages) {
+    if (msg.role === 'user') {
+      groqMessages.push({ role: 'user', content: msg.content });
+    } else if (msg.role === 'ai') {
+      groqMessages.push({ role: 'assistant', content: msg.content });
+    }
+  }
+
+  const response = await fetch(GROQ_API_BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
     body: JSON.stringify({
-      contents,
-      generationConfig: {
-        temperature: 0.35,
-        maxOutputTokens: 4096,
-      },
+      model: GROQ_MODEL,
+      messages: groqMessages,
+      temperature: 0.35,
+      max_tokens: 1024,
     }),
   });
 
   const data = await response.json();
+
   if (data.error) {
-    throw new Error(data.error.message || 'Lỗi Gemini API');
+    const msg = data.error.message || 'Lỗi Groq API';
+    if (response.status === 429) {
+      throw new Error('⏳ API đang quá tải. Vui lòng thử lại sau 30 giây.');
+    }
+    throw new Error(msg);
   }
 
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const text = data.choices?.[0]?.message?.content;
   if (!text) {
     throw new Error('Không nhận được phản hồi từ mô hình.');
   }

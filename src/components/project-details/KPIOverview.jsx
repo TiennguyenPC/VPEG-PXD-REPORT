@@ -1,7 +1,10 @@
 import React from 'react';
 import { Target, Activity, AlertTriangle, CalendarDays, Clock } from 'lucide-react';
+import { formatPercent3 } from '../../utils/formatPercent';
+import { useI18n } from '../../context/I18nContext';
 
 export default function KPIOverview({ project }) {
+  const { t } = useI18n();
   // Map data from exact Google Sheet fields
   const planProgress = Number(project.planProgress || 0);
   const actualProgress = Number(project.actualProgress || 0);
@@ -30,8 +33,8 @@ export default function KPIOverview({ project }) {
             <Target className="w-4.5 h-4.5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Tiến độ kế hoạch</p>
-            <p className="text-xl font-bold text-white tracking-tight">{Math.round(planProgress)}%</p>
+            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('kpi.plan')}</p>
+            <p className="text-xl font-bold text-[var(--text-strong)] tracking-tight">{formatPercent3(planProgress)}</p>
           </div>
         </div>
         <div className="absolute right-0 top-0 bottom-0 w-[3px] bg-[#3b82f6]"></div>
@@ -44,8 +47,8 @@ export default function KPIOverview({ project }) {
             <Activity className="w-4.5 h-4.5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Tiến độ thực tế</p>
-            <p className="text-xl font-bold text-white tracking-tight">{Math.round(actualProgress)}%</p>
+            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('kpi.actual')}</p>
+            <p className="text-xl font-bold text-[var(--text-strong)] tracking-tight">{formatPercent3(actualProgress)}</p>
           </div>
         </div>
         <div className="absolute right-0 top-0 bottom-0 w-[3px] bg-[#10b981]"></div>
@@ -62,9 +65,9 @@ export default function KPIOverview({ project }) {
             <AlertTriangle className="w-4.5 h-4.5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Chênh lệch / Delay</p>
+            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('kpi.deviation')}</p>
             <p className={`text-xl font-bold tracking-tight ${deviation < 0 ? "text-[#ef4444]" : "text-[#10b981]"}`}>
-              {deviation > 0 ? "+" : ""}{Math.round(deviation)}%
+              {deviation > 0 ? "+" : ""}{formatPercent3(deviation)}
             </p>
           </div>
         </div>
@@ -78,9 +81,9 @@ export default function KPIOverview({ project }) {
             <Clock className="w-4.5 h-4.5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">Thời gian còn lại</p>
-            <p className="text-xl font-bold text-white tracking-tight">
-              <span className="text-[#7373ff]">{codDays > 0 ? codDays : 0}</span> <span className="text-sm font-medium text-slate-400">ngày</span>
+            <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('kpi.timeLeft')}</p>
+            <p className="text-xl font-bold text-[var(--text-strong)] tracking-tight">
+              <span className="text-[#7373ff]">{codDays > 0 ? codDays : 0}</span> <span className="text-sm font-medium text-[var(--text-muted)]">{t('kpi.days')}</span>
             </p>
           </div>
         </div>

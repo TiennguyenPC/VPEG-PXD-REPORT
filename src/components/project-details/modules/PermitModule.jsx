@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { FileText, ChevronDown, ChevronUp, Loader2, Landmark, Zap, Shield, Leaf, Building, CloudOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
+import { formatPercent3 } from '../../../utils/formatPercent';
 import ModuleDateHeader from './ModuleDateHeader';
+import { useProjectCanEdit } from '../../../context/ProjectEditContext';
+import { useI18n } from '../../../context/I18nContext';
+import { ModuleCell } from '../../ModuleCell';
 
 const defaultPermits = [
   'Sở công thương',
@@ -13,6 +17,8 @@ const defaultPermits = [
 ];
 
 export default function PermitModule({ project, initialData, onProgressChange }) {
+  const { t, tf, ts } = useI18n();
+  const canEdit = useProjectCanEdit();
   const [isOpen, setIsOpen] = useState(false);
 
   const mergePermitData = (data) => {
@@ -120,11 +126,12 @@ export default function PermitModule({ project, initialData, onProgressChange })
 
   useEffect(() => {
     const completedCount = permits.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
-    const progressPercent = permits.length > 0 ? Math.round((completedCount / permits.length) * 100) : 0;
+    const progressPercent = permits.length > 0 ? (completedCount / permits.length) * 100 : 0;
     if (onProgressChange) onProgressChange(progressPercent);
   }, [permits, onProgressChange]);
 
   const handleUpdate = async (id, field, value) => {
+    if (!canEdit) return;
     let updatedItem = null;
     const nextItems = permits.map(p => {
       if (p.id === id) {
@@ -250,7 +257,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
   };
 
   const completedCount = permits.filter(p => p.KẾT_QUẢ_CUỐI && p.KẾT_QUẢ_CUỐI !== '-' && p.KẾT_QUẢ_CUỐI !== 'N/A' && p.KẾT_QUẢ_CUỐI.trim() !== '').length;
-  const progressPercent = permits.length > 0 ? Math.round((completedCount / permits.length) * 100) : 0;
+  const progressPercent = permits.length > 0 ? (completedCount / permits.length) * 100 : 0;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
@@ -262,7 +269,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
           <div className="w-8 h-8 rounded bg-[#6366f1]/10 text-[#6366f1] flex items-center justify-center">
             <FileText className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">GIẤY PHÉP / HỒ SƠ PHÁP LÝ DỰ ÁN</h3>
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">{t('modules.permit')}</h3>
         </div>
 
         <div className="flex items-center gap-4">
@@ -271,20 +278,20 @@ export default function PermitModule({ project, initialData, onProgressChange })
             {isLoading ? (
               <div className="flex items-center justify-end gap-2 text-[var(--text-muted)] w-full">
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Đang tải...</span>
+                <span>{t('common.loading')}</span>
               </div>
             ) : (
               <div className="flex items-center gap-2 justify-end w-full">
                 {syncError && (
                   <div className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-full text-xs text-amber-400">
                     <CloudOff className="w-3 h-3" />
-                    <span className="hidden xl:inline">Lưu cục bộ</span>
+                    <span className="hidden xl:inline">{t('common.savedLocal')}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-light)] px-3 py-1 rounded-full text-xs min-w-[140px]">
-                  <span className="text-[#8ca0c3] whitespace-nowrap">{completedCount}/{permits.length} hoàn thành</span>
+                  <span className="text-[var(--text-main)] whitespace-nowrap">{tf('modules.completed', { done: completedCount, total: permits.length })}</span>
                   <span className="w-1 h-1 bg-[#10b981] rounded-full shrink-0"></span>
-                  <span className="text-[#10b981] font-bold shrink-0">{progressPercent}%</span>
+                  <span className="text-[#10b981] font-bold shrink-0">{formatPercent3(progressPercent)}</span>
                 </div>
               </div>
             )}
@@ -307,11 +314,11 @@ export default function PermitModule({ project, initialData, onProgressChange })
                 <table className="w-full text-left text-xs min-w-[800px]">
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                      <th className="p-3">Hạng mục</th>
-                      <th className="p-3">Tình trạng</th>
-                      <th className="p-3">Phản hồi</th>
-                      <th className="p-3">Bước tiếp</th>
-                      <th className="p-3">Kết quả cuối</th>
+                      <th className="p-3">{t('table.item')}</th>
+                      <th className="p-3">{t('table.status')}</th>
+                      <th className="p-3">{t('table.feedback')}</th>
+                      <th className="p-3">{t('table.nextStep')}</th>
+                      <th className="p-3">{t('table.finalResult')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
@@ -325,12 +332,14 @@ export default function PermitModule({ project, initialData, onProgressChange })
                         <tr key={p.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
                           <td className="p-3 font-semibold text-slate-200 flex items-center gap-2">
                             {getPermitIcon(p.HẠNG_MỤC)}
-                            <span>{p.HẠNG_MỤC}</span>
+                            <span>{ts(p.HẠNG_MỤC)}</span>
                           </td>
                           <td className="p-3">
+                            <ModuleCell canEdit={canEdit} value={p.TÌNH_TRẠNG} colorClass={getStatusColor(p.TÌNH_TRẠNG)} ts={ts}>
                             <select
-                              className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(p.TÌNH_TRẠNG)}`}
+                              className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(p.TÌNH_TRẠNG)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                               value={p.TÌNH_TRẠNG || ''}
+                              disabled={!canEdit}
                               onChange={(e) => handleUpdate(p.id, 'TÌNH_TRẠNG', e.target.value)}
                             >
                               {!standardStatuses.includes(p.TÌNH_TRẠNG) && p.TÌNH_TRẠNG && (
@@ -340,11 +349,14 @@ export default function PermitModule({ project, initialData, onProgressChange })
                                 <option key={status} className="bg-[var(--bg-panel)] text-slate-200" value={status}>{status}</option>
                               ))}
                             </select>
+                            </ModuleCell>
                           </td>
                           <td className="p-3">
+                            <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_PHẢN_HỒI} colorClass={getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)} ts={ts}>
                             <select
-                              className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)}`}
+                              className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                               value={p.KẾT_QUẢ_PHẢN_HỒI || ''}
+                              disabled={!canEdit}
                               onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_PHẢN_HỒI', e.target.value)}
                             >
                               {!standardResponses.includes(p.KẾT_QUẢ_PHẢN_HỒI) && p.KẾT_QUẢ_PHẢN_HỒI && (
@@ -354,11 +366,14 @@ export default function PermitModule({ project, initialData, onProgressChange })
                                 <option key={resp} className="bg-[var(--bg-panel)] text-slate-200" value={resp}>{resp}</option>
                               ))}
                             </select>
+                            </ModuleCell>
                           </td>
                           <td className="p-3">
+                            <ModuleCell canEdit={canEdit} value={p.BƯỚC_TIẾP_THEO} colorClass={getNextStepColor(p.BƯỚC_TIẾP_THEO)} ts={ts}>
                             <select
-                              className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(p.BƯỚC_TIẾP_THEO)}`}
+                              className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(p.BƯỚC_TIẾP_THEO)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                               value={p.BƯỚC_TIẾP_THEO || ''}
+                              disabled={!canEdit}
                               onChange={(e) => handleUpdate(p.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                             >
                               {!standardSteps.includes(p.BƯỚC_TIẾP_THEO) && p.BƯỚC_TIẾP_THEO && (
@@ -368,11 +383,14 @@ export default function PermitModule({ project, initialData, onProgressChange })
                                 <option key={step} className="bg-[var(--bg-panel)] text-slate-200" value={step}>{step}</option>
                               ))}
                             </select>
+                            </ModuleCell>
                           </td>
                           <td className="p-3">
+                            <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_CUỐI} colorClass={getFinalResultColor(p.KẾT_QUẢ_CUỐI)} ts={ts}>
                             <select
-                              className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(p.KẾT_QUẢ_CUỐI)}`}
+                              className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(p.KẾT_QUẢ_CUỐI)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                               value={p.KẾT_QUẢ_CUỐI || ''}
+                              disabled={!canEdit}
                               onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                             >
                               {!standardResults.includes(p.KẾT_QUẢ_CUỐI) && p.KẾT_QUẢ_CUỐI && (
@@ -382,6 +400,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
                                 <option key={res} className="bg-[var(--bg-panel)] text-slate-200" value={res}>{res === '-' ? '-' : res}</option>
                               ))}
                             </select>
+                            </ModuleCell>
                           </td>
                         </tr>
                       );

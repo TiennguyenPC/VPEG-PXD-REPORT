@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
+import DateInputDMY from '../../DateInputDMY';
+import { getTodayDMY } from '../../../utils/timelineDates';
+import { useProjectCanEdit } from '../../../context/ProjectEditContext';
 
 export default function RiskModule({ project, initialData }) {
+  const canEdit = useProjectCanEdit();
   const [isOpen, setIsOpen] = useState(false);
   const [risks, setRisks] = useState(initialData || []);
   const [isLoading, setIsLoading] = useState(!initialData);
@@ -32,6 +36,7 @@ export default function RiskModule({ project, initialData }) {
   }, [project?.PROJECT_ID, project?.id, initialData]);
 
   const handleUpdate = async (id, field, value) => {
+    if (!canEdit) return;
     try {
       setIsUpdating(true);
       const original = risks.find(r => (r._rowIndex || r.id) === id);
@@ -121,9 +126,11 @@ export default function RiskModule({ project, initialData }) {
             transition={{ duration: 0.3 }}
           >
             <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
+              {canEdit && (
               <div className="flex justify-end mb-3">
                 <button 
                   onClick={async () => {
+                    if (!canEdit) return;
                     const newRisk = {
                       PROJECT_ID: project?.PROJECT_ID || project?.id || '',
                       MỨC_ĐỘ: 'Trung bình',
@@ -131,7 +138,7 @@ export default function RiskModule({ project, initialData }) {
                       ẢNH_HƯỞNG: '',
                       TRẠNG_THÁI: 'Open',
                       PHỤ_TRÁCH: '',
-                      NGÀY: new Date().toLocaleDateString('vi-VN'),
+                      NGÀY: getTodayDMY(),
                       GHI_CHÚ: ''
                     };
                     const tempId = 'new-' + Date.now();
@@ -153,6 +160,7 @@ export default function RiskModule({ project, initialData }) {
                   <Plus className="w-3.5 h-3.5" /> Thêm rủi ro
                 </button>
               </div>
+              )}
               
               <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
                 <table className="w-full text-left text-xs">
@@ -171,7 +179,7 @@ export default function RiskModule({ project, initialData }) {
                       <tr key={r._rowIndex || r.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent text-xs font-bold focus:outline-none appearance-none cursor-pointer px-2 py-1 rounded border ${getSeverityColor(r.MỨC_ĐỘ)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent text-xs font-bold focus:outline-none appearance-none cursor-pointer px-2 py-1 rounded border ${getSeverityColor(r.MỨC_ĐỘ)} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                             value={r.MỨC_ĐỘ}
                             onChange={(e) => handleUpdate(r._rowIndex || r.id, 'MỨC_ĐỘ', e.target.value)}
                           >
@@ -183,7 +191,7 @@ export default function RiskModule({ project, initialData }) {
                         <td className="p-3">
                           <input 
                             type="text" 
-                            className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-200 ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-200 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                             value={r.NỘI_DUNG || ''}
                             placeholder="Nhập nội dung..."
                             onChange={(e) => {
@@ -196,7 +204,7 @@ export default function RiskModule({ project, initialData }) {
                         <td className="p-3">
                           <input 
                             type="text" 
-                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[#8ca0c3] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[#8ca0c3] ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                             value={r.ẢNH_HƯỞNG || ''}
                             placeholder="Nhập ảnh hưởng..."
                             onChange={(e) => {
@@ -208,7 +216,7 @@ export default function RiskModule({ project, initialData }) {
                         </td>
                         <td className="p-3">
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(r.TRẠNG_THÁI)} ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(r.TRẠNG_THÁI)} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                             value={r.TRẠNG_THÁI}
                             onChange={(e) => handleUpdate(r._rowIndex || r.id, 'TRẠNG_THÁI', e.target.value)}
                           >
@@ -221,7 +229,7 @@ export default function RiskModule({ project, initialData }) {
                         <td className="p-3">
                           <input 
                             type="text" 
-                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 font-medium ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 font-medium ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                             value={r.PHỤ_TRÁCH || ''}
                             placeholder="Nhập người phụ trách..."
                             onChange={(e) => {
@@ -232,16 +240,14 @@ export default function RiskModule({ project, initialData }) {
                           />
                         </td>
                         <td className="p-3">
-                          <input 
-                            type="text" 
-                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[var(--text-muted)] ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+                          <DateInputDMY
+                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[var(--text-muted)] ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                             value={r.NGÀY || ''}
-                            placeholder="DD/MM/YYYY"
-                            onChange={(e) => {
-                              const val = e.target.value;
+                            disabled={!canEdit || isUpdating}
+                            onChange={(val) => {
                               setRisks(prev => prev.map(item => (item._rowIndex === r._rowIndex || item.id === r.id) ? { ...item, NGÀY: val } : item));
                             }}
-                            onBlur={(e) => handleUpdate(r._rowIndex || r.id, 'NGÀY', e.target.value)}
+                            onBlur={(_e, val) => handleUpdate(r._rowIndex || r.id, 'NGÀY', val)}
                           />
                         </td>
                       </tr>
