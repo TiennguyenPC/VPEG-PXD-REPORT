@@ -12,6 +12,7 @@ import KPIOverview from "../components/project-details/KPIOverview";
 import MilestoneTimeline from "../components/project-details/MilestoneTimeline";
 import SCurveChart from "../components/project-details/SCurveChart";
 import SiteLogPanel from "../components/project-details/SiteLogPanel";
+import SitePhotosPanel from "../components/project-details/SitePhotosPanel";
 import WeeklyKPI from "../components/project-details/WeeklyKPI";
 import RiskModule from "../components/project-details/modules/RiskModule";
 import PermitModule from "../components/project-details/modules/PermitModule";
@@ -32,7 +33,7 @@ import {
   getTodayDMY,
   normalizeToDMY,
 } from "../utils/timelineDates";
-import { getLogNoteText, mergeDailyNotePreserveImages, getCachedPhotoUrls, getPhotoUrlsFromLog } from "../utils/sitePhotoCache";
+import { getPhotoUrlsFromLog } from "../utils/sitePhotoCache";
 
 const getTodayStr = getTodayDMY;
 
@@ -461,13 +462,8 @@ export default function ProjectDetailPage() {
       (l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(toSave.LOG_DATE)
     );
     let dailyNote = toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || '');
-    const cachedPhotoUrls = getCachedPhotoUrls(id, toSave.LOG_DATE);
-    const existingNoteText = existingInLogs ? getLogNoteText(existingInLogs) : '';
-    dailyNote = mergeDailyNotePreserveImages(existingNoteText, dailyNote, cachedPhotoUrls);
     const existingPhotos = existingInLogs ? getPhotoUrlsFromLog(existingInLogs).join('\n') : '';
-    const sitePhotos = toSave.SITE_PHOTOS !== undefined
-      ? toSave.SITE_PHOTOS
-      : (cachedPhotoUrls.length ? cachedPhotoUrls.join('\n') : existingPhotos);
+    const sitePhotos = toSave.SITE_PHOTOS !== undefined ? toSave.SITE_PHOTOS : existingPhotos;
 
     return {
       PROJECT_ID: String(id),
@@ -851,10 +847,7 @@ export default function ProjectDetailPage() {
                 setSelectedMonth={setSelectedMonth}
                 activeLog={activeLog}
                 onUpdateLog={handleUpdateLog}
-                onSaveSitePhotos={saveSitePhotosToServer}
-                onLogsUpdated={handleLogsUpdated}
                 saveStatus={saveStatus}
-                onSaveStatusChange={updateSaveStatus}
               />
             </div>
             {selectedView !== 'day' && (
@@ -875,6 +868,20 @@ export default function ProjectDetailPage() {
               </div>
             )}
           </div>
+          </section>
+
+          {/* SECTION 4b - ẢNH HIỆN TRƯỜNG (tách khỏi nhật ký) */}
+          <section id="section-site-photos" className="scroll-mt-16">
+            <SitePhotosPanel
+              project={enrichedProject}
+              logs={logs}
+              selectedDate={selectedDate}
+              setSelectedDate={setSelectedDate}
+              activeLog={activeLog}
+              onSaveSitePhotos={saveSitePhotosToServer}
+              onLogsUpdated={handleLogsUpdated}
+              onSaveStatusChange={updateSaveStatus}
+            />
           </section>
 
           {/* SECTION 5 - S-CURVE CHART (FULL WIDTH) */}

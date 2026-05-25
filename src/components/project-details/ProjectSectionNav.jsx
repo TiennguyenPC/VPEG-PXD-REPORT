@@ -5,6 +5,7 @@ const SECTION_KEYS = [
   { id: 'section-kpi', labelKey: 'nav.kpi' },
   { id: 'section-timeline', labelKey: 'nav.milestone' },
   { id: 'section-site-log', labelKey: 'nav.siteLog' },
+  { id: 'section-site-photos', labelKey: 'nav.sitePhotos' },
   { id: 'section-scurve', labelKey: 'nav.scurve' },
   { id: 'section-modules', labelKey: 'nav.modules' },
 ];
@@ -60,7 +61,7 @@ export default function ProjectSectionNav({ scrollContainerId = null }) {
     <nav
       ref={navRef}
       data-section-nav
-      className="sticky top-0 z-30 px-4 md:px-5 py-2 bg-[var(--bg-main)]/95 backdrop-blur-md border-b border-[var(--border-main)]/60 print:hidden"
+      className="sticky top-0 z-30 px-4 md:px-5 py-2 max-md:pr-14 bg-[var(--bg-main)]/95 backdrop-blur-md border-b border-[var(--border-main)]/60 print:hidden"
     >
       <div className="flex items-center gap-1 overflow-x-auto scrollbar-none max-w-7xl mx-auto">
         {SECTION_KEYS.map(({ id, labelKey }) => (

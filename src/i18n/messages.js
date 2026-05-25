@@ -17,6 +17,7 @@ export const messages = {
       kpi: 'KPI',
       milestone: 'Milestone',
       siteLog: 'Nhật ký',
+      sitePhotos: 'Ảnh site',
       scurve: 'S-Curve',
       modules: 'Hạng mục',
     },
@@ -40,7 +41,7 @@ export const messages = {
     },
     siteLog: {
       title: 'NHẬT KÝ & VẬN HÀNH',
-      subtitle: 'Theo dõi nhân lực, công việc, sự cố và hình ảnh site',
+      subtitle: 'Theo dõi nhân lực, công việc và sự cố',
       day: 'Ngày',
       week: 'Tuần',
       manpower: 'Nhân lực Site',
@@ -79,6 +80,11 @@ export const messages = {
       weekNotes: 'Ghi chú tuần này',
       weekdays: ['Chủ Nhật', 'Thứ Hai', 'Thứ Ba', 'Thứ Tư', 'Thứ Năm', 'Thứ Sáu', 'Thứ Bảy'],
       weekdayShort: ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'],
+    },
+    sitePhotos: {
+      subtitle: 'Tải ảnh theo ngày — không cần nhập nhật ký. Tối đa 4 ảnh/ngày, lưu thẳng Google Sheet.',
+      emptyHint: 'Chọn ngày, bấm «Tải ảnh lên». Không cần điền nhân lực hay ghi chú.',
+      noLogRequired: 'Ảnh lưu riêng cột SITE_PHOTOS — tách khỏi nội dung nhật ký',
     },
     weeklyKpi: {
       opsTitle: 'CHỈ SỐ VẬN HÀNH',
@@ -215,6 +221,7 @@ export const messages = {
       kpi: 'KPI',
       milestone: 'Milestone',
       siteLog: 'Site log',
+      sitePhotos: 'Site photos',
       scurve: 'S-Curve',
       modules: 'Modules',
     },
@@ -238,7 +245,7 @@ export const messages = {
     },
     siteLog: {
       title: 'SITE LOG & OPERATIONS',
-      subtitle: 'Track manpower, work, incidents, and site photos',
+      subtitle: 'Track manpower, work, and incidents',
       day: 'Day',
       week: 'Week',
       manpower: 'Site manpower',
@@ -277,6 +284,11 @@ export const messages = {
       weekNotes: 'This week\'s notes',
       weekdays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
       weekdayShort: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    },
+    sitePhotos: {
+      subtitle: 'Upload photos by date — no log entry required. Up to 4/day, saved to Google Sheet.',
+      emptyHint: 'Pick a date and tap «Upload photos». No manpower or notes needed.',
+      noLogRequired: 'Photos stored in SITE_PHOTOS column — separate from the daily log',
     },
     weeklyKpi: {
       opsTitle: 'OPERATIONS KPI',
