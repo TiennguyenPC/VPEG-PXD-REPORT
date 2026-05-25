@@ -527,6 +527,16 @@ export default function ProjectDetailPage() {
     });
   };
 
+  const handleLogsUpdated = useCallback((dailyLogs) => {
+    if (!dailyLogs?.length) return;
+    setLogs(dailyLogs);
+    setBundleData((prev) => {
+      const next = { ...(prev || {}), siteLogs: dailyLogs };
+      writeBundleCache(id, next);
+      return next;
+    });
+  }, [id]);
+
   const saveSitePhotosToServer = useCallback(async (urls, logDate, rowIndex) => {
     if (!canEditProject(user, id)) {
       throw new Error('Không có quyền lưu ảnh');
@@ -842,6 +852,7 @@ export default function ProjectDetailPage() {
                 activeLog={activeLog}
                 onUpdateLog={handleUpdateLog}
                 onSaveSitePhotos={saveSitePhotosToServer}
+                onLogsUpdated={handleLogsUpdated}
                 saveStatus={saveStatus}
                 onSaveStatusChange={updateSaveStatus}
               />

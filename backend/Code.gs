@@ -119,8 +119,8 @@ function doGet(e) {
         if (!commitSid) {
           return createResponse({ status: 'error', message: 'Thiếu sessionId' }, 400);
         }
-        var commitUrl = commitSiteImageUpload_(commitSid);
-        data = { url: commitUrl };
+        var commitResult = commitSiteImageUpload_(commitSid);
+        data = commitResult;
         break;
       case 'serve-site-image':
         return serveSiteImage_(e.parameter.id);
@@ -368,7 +368,12 @@ function doPost(e) {
       case 'upload-site-image':
         const uploadedUrl = uploadSiteImageToDrive_(payload);
         auditMutation_('upload-site-image', payload);
-        return createResponse({ status: 'success', data: { url: uploadedUrl } });
+        var logsAfterUpload = attachUploadedPhotoToLog_(ss, payload, uploadedUrl);
+        return createResponse({
+          status: 'success',
+          data: { url: uploadedUrl },
+          dailyLogs: logsAfterUpload || undefined
+        });
       case 'save-site-photos':
         saveSitePhotosForLog_(ss, payload);
         auditMutation_('save-site-photos', payload);
@@ -1818,6 +1823,100 @@ function formatLogDateCellValue_(val) {
   return String(val || '').trim().replace(/^'/, '');
 }
 
+function extractDriveFileId_(url) {
+  if (!url) return '';
+  var s = String(url);
+  var patterns = [
+    /[?&]id=([\w-]+)/,
+    /\/file\/d\/([\w-]+)/,
+    /\/d\/([\w-]+)/
+  ];
+  for (var i = 0; i < patterns.length; i++) {
+    var m = s.match(patterns[i]);
+    if (m && m[1]) return m[1];
+  }
+  return '';
+}
+
+function canonicalDriveViewUrl_(url) {
+  var fileId = extractDriveFileId_(url);
+  if (fileId) return 'https://drive.google.com/uc?export=view&id=' + fileId;
+  return String(url || '').trim();
+}
+
+function mergePhotoUrlStrings_(existingStr, newUrl) {
+  var seen = {};
+  var out = [];
+  function add(raw) {
+    var u = canonicalDriveViewUrl_(raw);
+    if (!u) return;
+    var key = extractDriveFileId_(u) || u;
+    if (seen[key]) return;
+    seen[key] = true;
+    out.push(u);
+  }
+  String(existingStr || '').split('\n').forEach(function(line) {
+    add(line.trim());
+  });
+  add(newUrl);
+  return out.slice(0, 4).join('\n');
+}
+
+function getSitePhotoUrlsCell_(ss, projectId, logDate, rowIndex) {
+  ensureDailySiteLogPhotoColumn_(ss);
+  var sheet = ss.getSheetByName('DAILY_SITE_LOG');
+  if (!sheet) return { urls: '', rowIndex: -1 };
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var photoCol = findColumnIndex(headers, ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG']);
+  var idCol = findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']);
+  var dateCol = findColumnIndex(headers, ['LOG_DATE', 'NGÀY', 'NGAY']);
+  var targetRow = -1;
+
+  if (rowIndex && Number(rowIndex) > 1 && Number(rowIndex) <= data.length) {
+    targetRow = Number(rowIndex);
+  } else if (idCol !== -1 && dateCol !== -1) {
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][idCol]) == String(projectId)) {
+        if (formatLogDateCellValue_(data[i][dateCol]) === String(logDate)) {
+          targetRow = i + 1;
+          break;
+        }
+      }
+    }
+  }
+
+  if (targetRow === -1 || photoCol === -1) {
+    return { urls: '', rowIndex: targetRow };
+  }
+  return {
+    urls: String(sheet.getRange(targetRow, photoCol + 1).getValue() || ''),
+    rowIndex: targetRow
+  };
+}
+
+/** Sau upload Drive — ghi URL vào cột SITE_PHOTOS (mọi user đọc chung) */
+function attachUploadedPhotoToLog_(ss, payload, uploadedUrl) {
+  if (!uploadedUrl) return null;
+  var projectId = String(payload.projectId || payload.PROJECT_ID || '').trim();
+  var logDate = String(payload.logDate || payload.LOG_DATE || payload.NGÀY || '').trim();
+  if (!projectId || !logDate) return null;
+
+  var rowIndex = payload._rowIndex;
+  var current = getSitePhotoUrlsCell_(ss, projectId, logDate, rowIndex);
+  var merged = mergePhotoUrlStrings_(current.urls, uploadedUrl);
+  saveSitePhotosForLog_(ss, {
+    PROJECT_ID: projectId,
+    LOG_DATE: logDate,
+    NGÀY: logDate,
+    SITE_PHOTOS: merged,
+    _rowIndex: current.rowIndex > 0 ? current.rowIndex : rowIndex
+  });
+  return getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(function(row) {
+    return String(row.PROJECT_ID || row.projectId) === String(projectId);
+  });
+}
+
 /** Ghi URL ảnh hiện trường vào cột SITE_PHOTOS — mọi tài khoản đọc chung */
 function saveSitePhotosForLog_(ss, payload) {
   payload = payload || {};
@@ -1916,7 +2015,9 @@ function storeSiteImageChunk_(payload) {
   cache.put('img_' + sid + '_' + idx, chunk, SITE_IMAGE_CHUNK_TTL);
   cache.put('img_' + sid + '_meta', JSON.stringify({
     total: total,
-    projectId: payload.projectId || 'project'
+    projectId: payload.projectId || 'project',
+    logDate: payload.logDate || payload.LOG_DATE || payload.NGÀY || '',
+    _rowIndex: payload._rowIndex || null
   }), SITE_IMAGE_CHUNK_TTL);
 }
 
@@ -1990,11 +2091,23 @@ function commitSiteImageUpload_(sessionId) {
   var folder = getWritableSiteImageFolder_();
   var url = saveSiteImageBlobToFolder_(folder, blob, folder.getId());
 
+  var dailyLogs = null;
+  if (meta.logDate) {
+    var ss = getSpreadsheet();
+    dailyLogs = attachUploadedPhotoToLog_(ss, {
+      projectId: meta.projectId,
+      PROJECT_ID: meta.projectId,
+      logDate: meta.logDate,
+      LOG_DATE: meta.logDate,
+      _rowIndex: meta._rowIndex
+    }, url);
+  }
+
   for (var j = 0; j < meta.total; j++) {
     cache.remove('img_' + sessionId + '_' + j);
   }
   cache.remove('img_' + sessionId + '_meta');
-  return url;
+  return { url: url, dailyLogs: dailyLogs };
 }
 
 /** Ghi blob lên folder — chỉ dùng DriveApp, không fallback UrlFetchApp */

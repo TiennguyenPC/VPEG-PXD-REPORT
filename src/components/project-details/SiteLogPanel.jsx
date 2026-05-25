@@ -216,6 +216,7 @@ export default function SiteLogPanel({
   activeLog,
   onUpdateLog,
   onSaveSitePhotos,
+  onLogsUpdated,
   saveStatus,
   onSaveStatusChange
 }) {
@@ -234,6 +235,7 @@ export default function SiteLogPanel({
   const [liveWeather, setLiveWeather] = useState(null);
   const [uploadError, setUploadError] = useState('');
   const [needsDriveAuth, setNeedsDriveAuth] = useState(false);
+  const [syncingSheet, setSyncingSheet] = useState(false);
 
   useEffect(() => {
     photosByDateRef.current = photosByDate;
@@ -290,6 +292,25 @@ export default function SiteLogPanel({
   const currentPhotos = (photosByDate[normalizePhotoDateKey(selectedDate)] || []).map(normalizePhotoItem);
   const currentImages = currentPhotos;
   const bgUploadCount = currentPhotos.filter((p) => p.status === 'uploading').length;
+
+  const serverPhotoCount = activeLog ? getPhotoUrlsFromLog(activeLog).length : 0;
+  const readyLocalCount = currentPhotos.filter((p) => photoToPersistUrl(normalizePhotoItem(p))).length;
+  const needsSheetSync = canEdit && readyLocalCount > serverPhotoCount;
+
+  const handleSyncPhotosToSheet = async () => {
+    if (!canEdit || syncingSheet) return;
+    setSyncingSheet(true);
+    setUploadError('');
+    try {
+      const ready = currentPhotos.map(normalizePhotoItem).filter((p) => photoToPersistUrl(p));
+      await persistPhotosToLog(ready.slice(0, 4));
+    } catch (err) {
+      console.error(err);
+      setUploadError(err?.message || 'Không lưu được ảnh lên Google Sheet. Thử đăng nhập lại.');
+    } finally {
+      setSyncingSheet(false);
+    }
+  };
 
   const persistPhotosToLog = async (photos) => {
     if (!canEdit) return;
@@ -389,8 +410,18 @@ export default function SiteLogPanel({
   const uploadPhotoInBackground = async (item, dateKey) => {
     try {
       const b64 = await compressImage(item.file);
-      const rawUrl = await api.uploadSiteImage({ base64: b64, projectId });
+      const uploadResult = await api.uploadSiteImage({
+        base64: b64,
+        projectId,
+        logDate: dateKey,
+        _rowIndex: activeLog?._rowIndex,
+      });
+      const rawUrl = uploadResult?.url || uploadResult;
       const displayUrl = toDisplayableImageUrl(rawUrl);
+
+      if (uploadResult?.dailyLogs && onLogsUpdated) {
+        onLogsUpdated(uploadResult.dailyLogs);
+      }
 
       setPhotosByDate((prev) => {
         const list = (prev[dateKey] || []).map((p) => {
@@ -1251,6 +1282,20 @@ export default function SiteLogPanel({
               </button>
               )}
             </div>
+
+            {needsSheetSync && (
+              <div className="mx-3 mt-2 px-3 py-2.5 rounded-md bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-800 dark:text-amber-200 leading-snug flex flex-col sm:flex-row sm:items-center gap-2">
+                <p className="flex-1">Ảnh chỉ có trên máy bạn — chưa lưu Google Sheet nên tài khoản khác không thấy.</p>
+                <button
+                  type="button"
+                  onClick={handleSyncPhotosToSheet}
+                  disabled={syncingSheet}
+                  className="shrink-0 px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold disabled:opacity-60"
+                >
+                  {syncingSheet ? 'Đang lưu Sheet...' : 'Lưu lên Google Sheet'}
+                </button>
+              </div>
+            )}
 
             {uploadError && (
               <div className="mx-3 mt-2 px-3 py-2 rounded-md bg-red-500/10 border border-red-500/30 text-[11px] text-red-600 leading-snug space-y-2">

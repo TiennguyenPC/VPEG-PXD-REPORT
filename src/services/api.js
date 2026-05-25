@@ -524,22 +524,29 @@ export const api = {
       throw new Error('Ảnh rỗng');
     }
 
+    const uploadMeta = {
+      projectId: data.projectId,
+      logDate: data.logDate,
+      LOG_DATE: data.logDate,
+      NGÀY: data.logDate,
+      _rowIndex: data._rowIndex,
+    };
+
     // Ảnh nhỏ — 1 request POST thay vì chunk (nhanh hơn nhiều)
     const SMALL_BASE64_LIMIT = 280_000;
     if (base64.length <= SMALL_BASE64_LIMIT) {
       const result = await postToGAS('upload-site-image', {
         base64: `data:image/jpeg;base64,${base64}`,
-        projectId: data.projectId,
+        ...uploadMeta,
       });
       const url = result?.data?.url;
       if (!url) {
         throw new Error('Không nhận được link ảnh từ Google Drive');
       }
-      return url;
+      return { url, dailyLogs: result?.dailyLogs };
     }
 
     const sessionId = `${String(data.projectId || 'p').replace(/\W/g, '_')}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    // GAS CacheService giới hạn 100KB/value — chunk phải nhỏ hơn
     const CHUNK_SIZE = 90_000;
     const chunks = [];
     for (let i = 0; i < base64.length; i += CHUNK_SIZE) {
@@ -552,7 +559,7 @@ export const api = {
         index: i,
         total: chunks.length,
         chunk: chunks[i],
-        projectId: data.projectId,
+        ...uploadMeta,
       });
     }
 
@@ -577,7 +584,7 @@ export const api = {
     if (!url) {
       throw new Error('Không nhận được link ảnh từ Google Drive');
     }
-    return url;
+    return { url, dailyLogs: result?.data?.dailyLogs };
   },
   updateModuleDates: (data) => postToGAS('update-module-dates', data),
   updateProject: async (data) => {
