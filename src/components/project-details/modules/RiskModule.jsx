@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
@@ -20,7 +20,63 @@ export default function RiskModule({ project, initialData }) {
   const [isOpen, setIsOpen] = useState(false);
   const [risks, setRisks] = useState(initialData || []);
   const [isLoading, setIsLoading] = useState(!initialData);
-  const [isUpdating, setIsUpdating] = useState(false);
+  const [saveHint, setSaveHint] = useState('');
+  const pendingSaveRef = useRef(new Map());
+  const saveTimerRef = useRef(null);
+  const isSavingRef = useRef(false);
+
+  useEffect(() => () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  }, []);
+
+  const flushSaves = useCallback(async () => {
+    if (!canEdit || isSavingRef.current) return;
+    const entries = [...pendingSaveRef.current.entries()];
+    if (!entries.length) {
+      setSaveHint('');
+      return;
+    }
+
+    isSavingRef.current = true;
+    setSaveHint('saving');
+
+    try {
+      for (const [, row] of entries) {
+        const key = String(row._rowIndex || row.id);
+        pendingSaveRef.current.delete(key);
+        await api.updateRisk(row);
+      }
+      setSaveHint('saved');
+      setTimeout(() => setSaveHint(''), 1800);
+    } catch (error) {
+      console.error('Update risk error:', error);
+      setSaveHint('error');
+      setTimeout(() => setSaveHint(''), 3000);
+    } finally {
+      isSavingRef.current = false;
+      if (pendingSaveRef.current.size > 0) {
+        saveTimerRef.current = setTimeout(flushSaves, 300);
+      }
+    }
+  }, [canEdit]);
+
+  const scheduleSave = useCallback((id, field, value) => {
+    if (!canEdit) return;
+    const rowKey = String(id);
+
+    setRisks((prev) => {
+      const next = prev.map((r) => {
+        if (String(r._rowIndex || r.id) !== rowKey) return r;
+        return { ...r, [field]: value };
+      });
+      const row = next.find((r) => String(r._rowIndex || r.id) === rowKey);
+      if (row) pendingSaveRef.current.set(rowKey, row);
+      return next;
+    });
+
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(flushSaves, 450);
+  }, [canEdit, flushSaves]);
 
   useEffect(() => {
     if (initialData) {
@@ -44,34 +100,13 @@ export default function RiskModule({ project, initialData }) {
     }
   }, [project?.PROJECT_ID, project?.id, initialData]);
 
-  const handleUpdate = async (id, field, value) => {
-    if (!canEdit) return;
-    try {
-      setIsUpdating(true);
-      const original = risks.find((r) => (r._rowIndex || r.id) === id);
-      if (!original) return;
-      const updated = { ...original, [field]: value };
-
-      setRisks((prev) => prev.map((r) => ((r._rowIndex || r.id) === id ? updated : r)));
-
-      const response = await api.updateRisk(updated);
-      if (response && response.data) {
-        setRisks(response.data);
-      }
-    } catch (error) {
-      console.error('Update risk error:', error);
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
   const openCount = risks.filter((r) => normalizeRiskStatus(r.TRẠNG_THÁI) === 'Open').length;
   const activeCount = risks.filter((r) => normalizeRiskStatus(r.TRẠNG_THÁI) === 'Đang xử lý').length;
   const watchCount = risks.filter((r) => normalizeRiskStatus(r.TRẠNG_THÁI) === 'Theo dõi').length;
   const closedCount = risks.filter((r) => normalizeRiskStatus(r.TRẠNG_THÁI) === 'Đã đóng').length;
   const highCount = risks.filter((r) => normalizeRiskSeverity(r.MỨC_ĐỘ) === 'Cao').length;
 
-  const inputClass = `bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[var(--text-main)] placeholder:text-[var(--text-muted)] ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`;
+  const inputClass = `bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[var(--text-main)] placeholder:text-[var(--text-muted)] ${!canEdit ? 'opacity-50 pointer-events-none' : ''}`;
 
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
@@ -136,7 +171,18 @@ export default function RiskModule({ project, initialData }) {
           >
             <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
               {canEdit && (
-                <div className="flex justify-end mb-3">
+                <div className="flex items-center justify-end gap-3 mb-3">
+                  {saveHint === 'saving' && (
+                    <span className="text-[10px] text-blue-500 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Đang lưu...
+                    </span>
+                  )}
+                  {saveHint === 'saved' && (
+                    <span className="text-[10px] text-emerald-600">Đã lưu</span>
+                  )}
+                  {saveHint === 'error' && (
+                    <span className="text-[10px] text-red-500">Lỗi lưu — thử lại</span>
+                  )}
                   <button
                     type="button"
                     onClick={async () => {
@@ -194,7 +240,7 @@ export default function RiskModule({ project, initialData }) {
                         const severity = normalizeRiskSeverity(r.MỨC_ĐỘ) || 'Trung bình';
                         const status = normalizeRiskStatus(r.TRẠNG_THÁI);
                         const isClosed = status === 'Đã đóng';
-                        const selectDisabled = !canEdit || isUpdating;
+                        const selectDisabled = !canEdit;
 
                         return (
                           <tr
@@ -206,7 +252,7 @@ export default function RiskModule({ project, initialData }) {
                                 <select
                                   className={`relative z-10 min-w-[6.5rem] appearance-none bg-transparent text-inherit text-xs font-bold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
                                   value={severity}
-                                  onChange={(e) => handleUpdate(r._rowIndex || r.id, 'MỨC_ĐỘ', e.target.value)}
+                                  onChange={(e) => scheduleSave(r._rowIndex || r.id, 'MỨC_ĐỘ', e.target.value)}
                                 >
                                   {SEVERITY_OPTIONS.map((opt) => (
                                     <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
@@ -224,10 +270,8 @@ export default function RiskModule({ project, initialData }) {
                                 value={r.NỘI_DUNG || ''}
                                 placeholder="Nhập nội dung..."
                                 onChange={(e) => {
-                                  const val = e.target.value;
-                                  setRisks((prev) => prev.map((item) => ((item._rowIndex === r._rowIndex || item.id === r.id) ? { ...item, NỘI_DUNG: val } : item)));
+                                  scheduleSave(r._rowIndex || r.id, 'NỘI_DUNG', e.target.value);
                                 }}
-                                onBlur={(e) => handleUpdate(r._rowIndex || r.id, 'NỘI_DUNG', e.target.value)}
                               />
                             </td>
                             <td className="p-3">
@@ -237,10 +281,8 @@ export default function RiskModule({ project, initialData }) {
                                 value={r.ẢNH_HƯỞNG || ''}
                                 placeholder="Nhập ảnh hưởng..."
                                 onChange={(e) => {
-                                  const val = e.target.value;
-                                  setRisks((prev) => prev.map((item) => ((item._rowIndex === r._rowIndex || item.id === r.id) ? { ...item, ẢNH_HƯỞNG: val } : item)));
+                                  scheduleSave(r._rowIndex || r.id, 'ẢNH_HƯỞNG', e.target.value);
                                 }}
-                                onBlur={(e) => handleUpdate(r._rowIndex || r.id, 'ẢNH_HƯỞNG', e.target.value)}
                               />
                             </td>
                             <td className="p-3">
@@ -248,7 +290,7 @@ export default function RiskModule({ project, initialData }) {
                                 <select
                                   className={`relative z-10 min-w-[6.5rem] appearance-none bg-transparent text-inherit text-xs font-bold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
                                   value={status}
-                                  onChange={(e) => handleUpdate(r._rowIndex || r.id, 'TRẠNG_THÁI', e.target.value)}
+                                  onChange={(e) => scheduleSave(r._rowIndex || r.id, 'TRẠNG_THÁI', e.target.value)}
                                 >
                                   {STATUS_OPTIONS.map((opt) => (
                                     <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
@@ -266,23 +308,20 @@ export default function RiskModule({ project, initialData }) {
                                 value={r.PHỤ_TRÁCH || ''}
                                 placeholder="Nhập người phụ trách..."
                                 onChange={(e) => {
-                                  const val = e.target.value;
-                                  setRisks((prev) => prev.map((item) => ((item._rowIndex === r._rowIndex || item.id === r.id) ? { ...item, PHỤ_TRÁCH: val } : item)));
+                                  scheduleSave(r._rowIndex || r.id, 'PHỤ_TRÁCH', e.target.value);
                                 }}
-                                onBlur={(e) => handleUpdate(r._rowIndex || r.id, 'PHỤ_TRÁCH', e.target.value)}
                               />
                             </td>
                             <td className="p-3">
                               <DateInputDMY
                                 className={`${inputClass} tabular-nums`}
                                 value={r.NGÀY || ''}
-                                disabled={!canEdit || isUpdating}
-                                showCalendar={canEdit && !isUpdating}
+                                disabled={!canEdit}
+                                showCalendar={canEdit}
                                 calendarTitle="Chọn ngày ghi nhận"
                                 onChange={(val) => {
-                                  setRisks((prev) => prev.map((item) => ((item._rowIndex === r._rowIndex || item.id === r.id) ? { ...item, NGÀY: val } : item)));
+                                  scheduleSave(r._rowIndex || r.id, 'NGÀY', val);
                                 }}
-                                onBlur={(_e, val) => handleUpdate(r._rowIndex || r.id, 'NGÀY', val)}
                               />
                             </td>
                           </tr>
