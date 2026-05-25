@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy } from 'react'
+import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import './index.css'
@@ -7,17 +7,25 @@ import { ErrorBoundary } from './ErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import AdminRoute from './components/AdminRoute.jsx'
+import { lazyWithRetry } from './utils/lazyWithRetry.js'
 
-// Lazy load pages for faster initial load
-const App = lazy(() => import('./App.jsx'))
-const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage.jsx'))
-const TaskList = lazy(() => import('./pages/TaskList.jsx'))
-const Overview = lazy(() => import('./pages/Overview.jsx'))
-const LoginPage = lazy(() => import('./pages/LoginPage.jsx'))
-const AccountPage = lazy(() => import('./pages/AccountPage.jsx'))
-const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage.jsx'))
-const AuditLogPage = lazy(() => import('./pages/AuditLogPage.jsx'))
-const ShareProjectPage = lazy(() => import('./pages/ShareProjectPage.jsx'))
+const App = lazyWithRetry(() => import('./App.jsx'))
+const ProjectDetailPage = lazyWithRetry(() => import('./pages/ProjectDetailPage.jsx'))
+const TaskList = lazyWithRetry(() => import('./pages/TaskList.jsx'))
+const Overview = lazyWithRetry(() => import('./pages/Overview.jsx'))
+const LoginPage = lazyWithRetry(() => import('./pages/LoginPage.jsx'))
+const AccountPage = lazyWithRetry(() => import('./pages/AccountPage.jsx'))
+const UserSettingsPage = lazyWithRetry(() => import('./pages/UserSettingsPage.jsx'))
+const AuditLogPage = lazyWithRetry(() => import('./pages/AuditLogPage.jsx'))
+const ShareProjectPage = lazyWithRetry(() => import('./pages/ShareProjectPage.jsx'))
+
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+  if (!sessionStorage.getItem('epc-chunk-reload')) {
+    sessionStorage.setItem('epc-chunk-reload', '1')
+    window.location.reload()
+  }
+})
 
 function AuthenticatedAssistant() {
   const { user } = useAuth();

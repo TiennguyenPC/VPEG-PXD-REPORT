@@ -5,6 +5,7 @@ import {
   ChevronDown, AlertTriangle, MoreHorizontal, Calendar as CalendarIcon,
   PlayCircle, Flag, Star, MoreVertical, Bell, Sun, Moon, User, ClipboardList, X, Menu, ChevronLeft
 } from 'lucide-react';
+import PriorityBadge from '../components/PriorityBadge';
 import { api } from '../services/api';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { useTheme } from '../hooks/useTheme';
@@ -593,15 +594,7 @@ export default function TaskList() {
                           </span>
                         </td>
                         <td className={`${tdCell} text-center`}>
-                          <span className={`inline-flex items-center justify-center gap-0.5 max-w-full px-1.5 py-0.5 rounded-md text-[9px] font-bold border whitespace-nowrap ${
-                            task.ƯU_TIÊN === 'Khẩn cấp' ? 'bg-red-900/40 text-red-400 border-red-500/30' :
-                            task.ƯU_TIÊN === 'Important' || task.ƯU_TIÊN === 'Cao' ? 'bg-red-500/10 text-red-500 border-red-500/30' : 
-                            task.ƯU_TIÊN === 'Thấp' || task.ƯU_TIÊN === 'Low' ? 'bg-slate-800 text-slate-400 border-slate-700' : 
-                            'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30'
-                          }`}>
-                            <Flag className="w-2.5 h-2.5 shrink-0" />
-                            <span className="truncate">{task.ƯU_TIÊN || 'TB'}</span>
-                          </span>
+                          <PriorityBadge priority={task.ƯU_TIÊN} />
                         </td>
                         <td className={`${tdCell} text-center`}>
                           <button type="button" className="text-slate-500 hover:text-white p-1 rounded hover:bg-slate-700 transition-colors" onClick={(e) => e.stopPropagation()}>
@@ -686,9 +679,11 @@ export default function TaskList() {
                             </div>
                           </div>
                           
-                          {task.ƯU_TIÊN === 'Important' || task.ƯU_TIÊN === 'Khẩn cấp' ? (
-                            <span className="text-[10px] text-red-400 font-bold bg-red-500/10 px-1.5 py-0.5 rounded ml-6 mb-2 inline-block">! Important</span>
-                          ) : null}
+                          {(task.ƯU_TIÊN === 'Important' || task.ƯU_TIÊN === 'Khẩn cấp' || task.ƯU_TIÊN === 'Cao') && (
+                            <div className="ml-6 mb-2">
+                              <PriorityBadge priority={task.ƯU_TIÊN} />
+                            </div>
+                          )}
 
                           <div className="flex items-center justify-between mt-3 ml-6">
                             <div className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded bg-[var(--bg-main)] font-medium ${

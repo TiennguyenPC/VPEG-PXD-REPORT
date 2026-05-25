@@ -9,11 +9,11 @@ import {
   ChevronDown,
   PlayCircle,
   Circle,
-  Flag,
   Star,
   Calendar,
   ArrowUpRight,
 } from 'lucide-react';
+import PriorityBadge from '../components/PriorityBadge';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useSidebar } from '../hooks/useSidebar';
@@ -532,12 +532,6 @@ export default function Overview() {
                   {sortedTasks.map((t) => {
                     const computedStatus = t.computedStatus || 'Chưa bắt đầu';
 
-                    const priorityStr = (t.ƯU_TIÊN || '').toUpperCase();
-                    let priorityLabel = 'Trung bình';
-                    if (priorityStr === 'KHẨN CẤP' || priorityStr === 'URGENT') priorityLabel = 'Khẩn cấp';
-                    else if (priorityStr === 'QUAN TRỌNG' || priorityStr === 'IMPORTANT') priorityLabel = 'Cao';
-                    else if (priorityStr === 'THẤP' || priorityStr === 'LOW') priorityLabel = 'Thấp';
-
                     return (
                       <tr
                         key={t._rowIndex ?? `${t.TÁC_VỤ}-${t.PROJECT_ID}-${t.NGÀY_BẮT_ĐẦU}`}
@@ -601,18 +595,7 @@ export default function Overview() {
                           </span>
                         </td>
                         <td className={`${tdBase} text-center`}>
-                          <span
-                            className={`inline-flex items-center justify-center gap-0.5 max-w-full px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 whitespace-nowrap ${
-                              priorityLabel === 'Khẩn cấp' || priorityLabel === 'Cao'
-                                ? 'bg-red-500/10 text-red-400 ring-red-500/25'
-                                : priorityLabel === 'Thấp'
-                                  ? 'bg-slate-700/50 text-slate-400 ring-slate-600/50'
-                                  : 'bg-amber-500/10 text-amber-400 ring-amber-500/25'
-                            }`}
-                          >
-                            <Flag className="w-2.5 h-2.5 shrink-0" />
-                            <span className="truncate">{priorityLabel}</span>
-                          </span>
+                          <PriorityBadge priority={t.ƯU_TIÊN} />
                         </td>
                       </tr>
                     );
