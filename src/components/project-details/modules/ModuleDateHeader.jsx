@@ -45,6 +45,11 @@ export default function ModuleDateHeader({ projectId, moduleKey, syncStatus, ini
     setDateInfo(prev => {
       const next = { ...prev, [field]: val };
       localStorage.setItem(storageKey, JSON.stringify(next));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('module-dates-updated', {
+          detail: { projectId, moduleKey },
+        }));
+      }
       return next;
     });
   };
@@ -90,6 +95,8 @@ export default function ModuleDateHeader({ projectId, moduleKey, syncStatus, ini
           onChange={(val) => updateDateInfo('start', val)}
           onBlur={handleBlur}
           disabled={!canEdit}
+          showCalendar={canEdit}
+          calendarTitle={t('moduleDate.pickDate')}
           className={`bg-transparent text-[11px] font-semibold tabular-nums whitespace-nowrap text-[var(--text-main)] focus:outline-none min-w-[5.75rem] w-[5.75rem] box-border ${canEdit ? 'cursor-text' : 'cursor-default opacity-70'}`}
         />
       </div>

@@ -3,6 +3,7 @@ import { Truck, ChevronDown, ChevronUp, Loader2, CloudOff } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 import ModuleDateHeader from './ModuleDateHeader';
+import ModuleProgressPill from './ModuleProgressPill';
 import DateInputDMY from '../../DateInputDMY';
 import { parseFlexibleDate } from '../../../utils/timelineDates';
 import { useProjectCanEdit } from '../../../context/ProjectEditContext';
@@ -322,11 +323,14 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                     <span className="hidden xl:inline">{t('common.savedLocal')}</span>
                   </div>
                 )}
-                <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-light)] px-3 py-1 rounded-full text-xs min-w-[140px]">
-                  <span className="text-[var(--text-main)] whitespace-nowrap">{tf('modules.completed', { done: completedCount, total: items.length })}</span>
-                  <span className="w-1 h-1 bg-[#10b981] rounded-full shrink-0"></span>
-                  <span className="text-[#10b981] font-bold shrink-0">{progressPercent}%</span>
-                </div>
+                <ModuleProgressPill
+                  projectId={project?.PROJECT_ID || project?.id}
+                  moduleKey="procurement"
+                  initialData={rawData}
+                  done={completedCount}
+                  total={items.length}
+                  percent={progressPercent}
+                />
               </div>
             )}
           </div>

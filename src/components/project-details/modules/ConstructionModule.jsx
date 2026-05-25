@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 import { formatPercent3 } from '../../../utils/formatPercent';
 import ModuleDateHeader from './ModuleDateHeader';
+import ModuleProgressPill from './ModuleProgressPill';
 import DateInputDMY from '../../DateInputDMY';
 import { useProjectCanEdit } from '../../../context/ProjectEditContext';
 import { useI18n } from '../../../context/I18nContext';
@@ -244,11 +245,14 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                 <span>{t('common.loading')}</span>
               </div>
             ) : (
-              <div className="flex items-center justify-center gap-2 bg-[var(--border-main)]/50 border border-[var(--border-light)] px-3 py-1 rounded-full text-xs min-w-[140px]">
-                <span className="text-[var(--text-main)] whitespace-nowrap">{tf('modules.completed', { done: completedCount, total: totalTaskCount })}</span>
-                <span className="w-1 h-1 bg-[#10b981] rounded-full shrink-0"></span>
-                <span className="text-[#10b981] font-bold shrink-0">{formatPercent3(totalProgress)}</span>
-              </div>
+              <ModuleProgressPill
+                projectId={project?.PROJECT_ID || project?.id}
+                moduleKey="construction"
+                initialData={rawData}
+                done={completedCount}
+                total={totalTaskCount}
+                percent={totalProgress}
+              />
             )}
           </div>
           <div className="w-[1px] h-6 bg-[var(--border-main)] mx-2"></div>
