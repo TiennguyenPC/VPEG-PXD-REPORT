@@ -8,12 +8,12 @@ import { getPageLabel, updateDashboardContext, resolveProjectFromPath } from '..
 import AIMessageContent from './AIMessageContent';
 
 const WELCOME =
-  'Xin chào! Tôi là **AI PXD** — trợ lý trên Dashboard VPEG-PXD.\n\n' +
+  'Xin chào! Tôi là AI PXD — trợ lý trên Dashboard VPEG-PXD.\n\n' +
   'Tôi có thể:\n' +
-  '- **Hướng dẫn sử dụng** từng màn hình (thêm dự án, công việc, nhật ký site, S-Curve…)\n' +
-  '- **Đọc số liệu** dự án/công việc bạn đang xem\n' +
-  '- **Tư vấn kỹ thuật** Solar EPC\n\n' +
-  'Thử hỏi: *"Làm sao thêm dự án?"* hoặc *"Trang này dùng để làm gì?"*';
+  '- Hướng dẫn sử dụng từng màn hình (thêm dự án, công việc, nhật ký site, S-Curve…)\n' +
+  '- Đọc số liệu dự án/công việc bạn đang xem\n' +
+  '- Tư vấn kỹ thuật Solar EPC\n\n' +
+  'Thử hỏi: "Làm sao thêm dự án?" hoặc "Trang này dùng để làm gì?"';
 
 const QUICK_PROMPTS = [
   'Hướng dẫn trang tôi đang xem',

@@ -601,7 +601,7 @@ export default function App() {
     return (
       <th
         onClick={handleClick}
-        className={`py-2.5 px-4 font-semibold select-none cursor-pointer hover:bg-[var(--bg-hover)] hover:text-[var(--text-strong)] transition-all duration-200 border-b border-[var(--border-main)] relative group whitespace-nowrap ${
+        className={`py-2 px-2.5 font-semibold select-none cursor-pointer hover:bg-[var(--bg-hover)] hover:text-[var(--text-strong)] transition-all duration-200 border-b border-[var(--border-main)] relative group whitespace-nowrap ${
           align === "center" ? "text-center" : align === "right" ? "text-right" : "text-left"
         } ${isSorted ? "text-[var(--text-strong)] bg-[var(--bg-hover)]" : "text-[var(--text-muted)] bg-[var(--bg-hover)]"} ${extraClass}`}
       >
@@ -639,11 +639,11 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
         
         {/* 2. TOP HEADER */}
-        <header className="px-8 pt-6 pb-4 border-b border-[var(--border-main)]/30 flex justify-between items-center bg-[var(--bg-panel)]/60 backdrop-blur-md">
-          <div className="flex items-center gap-4">
+        <header className="px-6 pt-3 pb-2 border-b border-[var(--border-main)]/30 flex justify-between items-center bg-[var(--bg-panel)]/60 backdrop-blur-md">
+          <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-xl font-bold text-[var(--text-strong)] tracking-tight">DANH SÁCH DỰ ÁN</h1>
-              <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Theo dõi và điều phối toàn bộ dự án đang triển khai</p>
+              <h1 className="text-lg font-bold text-[var(--text-strong)] tracking-tight">DANH SÁCH DỰ ÁN</h1>
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5 font-medium">Theo dõi và điều phối toàn bộ dự án đang triển khai</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -667,7 +667,7 @@ export default function App() {
         </header>
 
         {/* 3. SEARCH + FILTER BAR */}
-        <section className="px-8 py-3 flex justify-between items-center bg-[var(--bg-main)] relative z-20 border-b border-[var(--border-main)]/20">
+        <section className="px-6 py-2 flex justify-between items-center bg-[var(--bg-main)] relative z-20 border-b border-[var(--border-main)]/20">
           
           {/* Left: Search input + Filter button */}
           <div className="flex items-center gap-3">
@@ -811,12 +811,12 @@ export default function App() {
         </section>
 
         {/* 4. KPI SUMMARY CARDS */}
-        <section className="px-8 py-2 grid grid-cols-1 md:grid-cols-4 gap-4 bg-[var(--bg-main)]">
+        <section className="px-6 py-1.5 grid grid-cols-1 md:grid-cols-4 gap-3 bg-[var(--bg-main)]">
           
           {/* Card 1: Total projects */}
-          <div className="glass-panel rounded-lg p-4 flex items-center gap-4 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
-            <div className="w-11 h-11 rounded-lg bg-[rgba(82,82,255,0.1)] text-[#5252ff] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(82,82,255,0.2)]">
-              <Folder className="w-5 h-5 text-[#5252ff]" />
+          <div className="glass-panel rounded-lg p-3 flex items-center gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
+            <div className="w-10 h-10 rounded-lg bg-[rgba(82,82,255,0.1)] text-[#5252ff] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(82,82,255,0.2)]">
+              <Folder className="w-4.5 h-4.5 text-[#5252ff]" />
             </div>
             <div className="flex flex-col">
               <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG DỰ ÁN</span>
@@ -827,9 +827,9 @@ export default function App() {
           </div>
 
           {/* Card 2: Total capacity */}
-          <div className="glass-panel rounded-lg p-4 flex items-center gap-4 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
-            <div className="w-11 h-11 rounded-lg bg-[rgba(59,130,246,0.1)] text-[#3b82f6] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(59,130,246,0.2)]">
-              <Zap className="w-5 h-5 text-[#3b82f6]" />
+          <div className="glass-panel rounded-lg p-3 flex items-center gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
+            <div className="w-10 h-10 rounded-lg bg-[rgba(59,130,246,0.1)] text-[#3b82f6] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(59,130,246,0.2)]">
+              <Zap className="w-4.5 h-4.5 text-[#3b82f6]" />
             </div>
             <div className="flex flex-col">
               <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG CÔNG SUẤT</span>
@@ -842,9 +842,9 @@ export default function App() {
           </div>
 
           {/* Card 3: In construction */}
-          <div className="glass-panel rounded-lg p-4 flex items-center gap-4 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
-            <div className="w-11 h-11 rounded-lg bg-[rgba(249,115,22,0.1)] text-[#f97316] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(249,115,22,0.2)]">
-              <HardHat className="w-5 h-5 text-[#f97316]" />
+          <div className="glass-panel rounded-lg p-3 flex items-center gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
+            <div className="w-10 h-10 rounded-lg bg-[rgba(249,115,22,0.1)] text-[#f97316] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(249,115,22,0.2)]">
+              <HardHat className="w-4.5 h-4.5 text-[#f97316]" />
             </div>
             <div className="flex flex-col">
               <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG DỰ ÁN ĐANG THI CÔNG</span>
@@ -855,9 +855,9 @@ export default function App() {
           </div>
 
           {/* Card 4: Completed */}
-          <div className="glass-panel rounded-lg p-4 flex items-center gap-4 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
-            <div className="w-11 h-11 rounded-lg bg-[rgba(16,185,129,0.1)] text-[#10b981] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(16,185,129,0.2)]">
-              <CheckCircle2 className="w-5 h-5 text-[#10b981]" />
+          <div className="glass-panel rounded-lg p-3 flex items-center gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
+            <div className="w-10 h-10 rounded-lg bg-[rgba(16,185,129,0.1)] text-[#10b981] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(16,185,129,0.2)]">
+              <CheckCircle2 className="w-4.5 h-4.5 text-[#10b981]" />
             </div>
             <div className="flex flex-col">
               <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG DỰ ÁN HOÀN THÀNH</span>
@@ -869,9 +869,9 @@ export default function App() {
         </section>
 
         {/* 5. PROJECT TABLE SECTION */}
-        <section className="px-8 py-6 bg-[var(--bg-main)] flex-1">
+        <section className="px-6 py-3 bg-[var(--bg-main)] flex-1">
           {/* Table Header Section */}
-          <div className="mb-3.5 flex justify-between items-center">
+          <div className="mb-2 flex justify-between items-center">
             <h2 className="text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider flex items-center gap-2">
               DANH SÁCH DỰ ÁN 
               <span className="bg-[var(--bg-hover)] text-[var(--text-muted)] font-semibold px-2 py-0.5 rounded text-[10px] tracking-normal normal-case border border-[var(--border-main)]">
@@ -898,7 +898,7 @@ export default function App() {
                     {renderSortableHeader("codDays", "COD còn lại", "center")}
                     {renderSortableHeader("risk", "Risk", "center")}
                     {renderSortableHeader("issue", "Vướng mắc")}
-                    <th className="py-2.5 px-4 font-semibold text-center w-[80px] bg-[var(--bg-hover)] select-none text-[var(--text-muted)]">Action</th>
+                    <th className="py-2 px-2.5 font-semibold text-center w-[80px] bg-[var(--bg-hover)] select-none text-[var(--text-muted)]">Action</th>
                   </tr>
                 </thead>
 
@@ -964,7 +964,7 @@ export default function App() {
                         >
                           {/* Project Name */}
                           <td 
-                            className={`align-middle py-2.5 px-4 font-bold text-[var(--text-strong)] cursor-pointer hover:underline truncate max-w-[200px] ${
+                            className={`align-middle py-2 px-2.5 font-bold text-[var(--text-strong)] cursor-pointer hover:underline truncate max-w-[200px] ${
                               sortField === "name" ? "bg-[var(--bg-hover)] font-extrabold" : "bg-inherit"
                             }`}
                             onClick={() => {
@@ -975,12 +975,12 @@ export default function App() {
                           </td>
 
                           {/* Client */}
-                          <td className={`align-middle py-2.5 px-4 text-[var(--text-main)] font-medium min-w-[250px] ${
+                          <td className={`align-middle py-2 px-2.5 text-[var(--text-main)] font-medium min-w-[250px] ${
                             sortField === "client" ? "bg-[var(--bg-hover)] font-bold" : "bg-inherit"
                           }`}>{p.client}</td>
 
                           {/* PM */}
-                          <td className={`align-middle py-2.5 px-4 text-center ${
+                          <td className={`align-middle py-2 px-2.5 text-center ${
                             sortField === "pm" ? "bg-[var(--bg-hover)]" : "bg-inherit"
                           }`}>
                             <span className="bg-[#5252ff]/10 text-[#5252ff] px-2 py-0.5 rounded text-[10px] font-medium border border-[#5252ff]/20 whitespace-nowrap">
@@ -991,14 +991,14 @@ export default function App() {
 
 
                           {/* Capacity */}
-                          <td className={`align-middle py-2.5 px-4 font-bold text-[var(--text-main)] text-center ${
+                          <td className={`align-middle py-2 px-2.5 font-bold text-[var(--text-main)] text-center ${
                             sortField === "capacity" ? "bg-[var(--bg-hover)] font-extrabold" : "bg-inherit"
                           }`}>
                             {Number(p.capacity || 0).toLocaleString()}
                           </td>
 
                           {/* Progress */}
-                          <td className={`align-middle py-2.5 px-4 min-w-[90px] text-center ${
+                          <td className={`align-middle py-2 px-2.5 min-w-[90px] text-center ${
                             sortField === "progress" ? "bg-[var(--bg-hover)]" : "bg-inherit"
                           }`}>
                             <div className="flex flex-col items-center">
@@ -1013,7 +1013,7 @@ export default function App() {
                           </td>
 
                           {/* Delta Plan Deviation */}
-                          <td className={`align-middle py-2.5 px-4 font-bold text-center ${
+                          <td className={`align-middle py-2 px-2.5 font-bold text-center ${
                             sortField === "deviation" ? "bg-[var(--bg-hover)] font-extrabold" : "bg-inherit"
                           }`}>
                             <span className={(p.delay || 0) >= 0 ? "text-[#10b981]" : "text-[#ef4444]"}>
@@ -1023,7 +1023,7 @@ export default function App() {
                           </td>
 
                           {/* COD Remaining */}
-                          <td className={`align-middle py-2.5 px-4 text-center ${
+                          <td className={`align-middle py-2 px-2.5 text-center ${
                             sortField === "codDays" ? "bg-[var(--bg-hover)]" : "bg-inherit"
                           }`}>
                             <div className="flex flex-col items-center">
@@ -1055,7 +1055,7 @@ export default function App() {
                           </td>
 
                           {/* Risk Badge */}
-                          <td className={`align-middle py-2.5 px-4 text-center ${
+                          <td className={`align-middle py-2 px-2.5 text-center ${
                             sortField === "risk" ? "bg-[var(--bg-hover)]" : "bg-inherit"
                           }`}>
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${riskBadgeClass} whitespace-nowrap`}>
@@ -1065,7 +1065,7 @@ export default function App() {
 
                           {/* Key Issue */}
                           <td 
-                            className={`align-middle py-2.5 px-4 max-w-[200px] truncate transition-colors group relative ${
+                            className={`align-middle py-2 px-2.5 max-w-[200px] truncate transition-colors group relative ${
                               sortField === "issue" ? "bg-[var(--bg-hover)]" : "bg-inherit"
                             } ${canEditProject(user, p.id || p.PROJECT_ID) ? 'cursor-text hover:bg-[var(--bg-hover)]' : ''}`}
                             onDoubleClick={() => {
@@ -1104,7 +1104,7 @@ export default function App() {
 
 
                           {/* Action icons */}
-                          <td className="align-middle py-2.5 px-4 bg-inherit">
+                          <td className="align-middle py-2 px-2.5 bg-inherit">
                             <div className="flex items-center justify-center gap-1.5">
                               <button
                                 onClick={() => {

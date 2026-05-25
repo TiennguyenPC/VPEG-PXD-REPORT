@@ -2,26 +2,23 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
   AlertTriangle,
   Zap,
-  Clock,
   CheckCircle2,
   Briefcase,
   FileText,
   ChevronDown,
-  PlayCircle,
-  Circle,
-  Star,
   Calendar,
   ArrowUpRight,
+  ArrowRight,
 } from 'lucide-react';
-import PriorityBadge from '../components/PriorityBadge';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useSidebar } from '../hooks/useSidebar';
 import { api, OVERVIEW_REFRESH_EVENT } from '../services/api';
 import { updateDashboardContext } from '../utils/dashboardContext';
-import { getTaskDescription, enrichTaskForUI } from '../utils/taskFields';
+import { enrichTaskForUI } from '../utils/taskFields';
 import { enrichProjectsProgress } from '../utils/projectProgress';
 import { buildOverviewRiskRows } from '../utils/riskHelpers';
+import { parseFlexibleDate } from '../utils/timelineDates';
 
 const KPI_CARDS = [
   {
@@ -62,22 +59,28 @@ const KPI_CARDS = [
   },
 ];
 
-function PanelCard({ title, action, children, className = '' }) {
+function PanelCard({ title, action, children, className = '', centerTitle = false }) {
   return (
     <div
       className={`rounded-2xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)]/90 backdrop-blur-sm overflow-hidden flex flex-col shadow-lg shadow-black/20 min-w-0 ${className}`}
     >
-      <div className="px-6 py-4 border-b border-[var(--border-main)]/50 flex justify-between items-center gap-3 bg-gradient-to-r from-[#0e1628]/80 to-transparent shrink-0">
-        <h3 className="text-sm font-bold text-[var(--text-strong)] tracking-wide truncate">{title}</h3>
-        {action}
+      <div
+        className={`px-4 py-2.5 border-b border-[var(--border-main)]/50 bg-gradient-to-r from-[#0e1628]/80 to-transparent shrink-0 ${
+          centerTitle ? 'relative flex items-center justify-center' : 'flex justify-between items-center gap-3'
+        }`}
+      >
+        <h3 className={`text-sm font-bold text-[var(--text-strong)] tracking-wide ${centerTitle ? 'text-center' : 'truncate'}`}>
+          {title}
+        </h3>
+        {action ? <div className={centerTitle ? 'absolute right-4 top-1/2 -translate-y-1/2' : ''}>{action}</div> : null}
       </div>
       {children}
     </div>
   );
 }
 
-const thBase = 'py-3 px-3 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider align-top';
-const tdBase = 'py-3 px-3 text-xs align-top';
+const thBase = 'py-2 px-2.5 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider align-top';
+const tdBase = 'py-2 px-2.5 text-xs align-top';
 const textWrap = 'text-[11px] leading-snug break-words line-clamp-2';
 
 function readCachedArray(key) {
@@ -110,6 +113,79 @@ function CellText({ children, className = '', title }) {
     <span className={`${textWrap} ${className}`} title={label}>
       {children}
     </span>
+  );
+}
+
+const KANBAN_COLUMNS = [
+  { key: 'overdue', label: 'Quá hạn', dot: 'bg-red-500', text: 'text-red-400', dateText: 'text-red-400' },
+  { key: 'today', label: 'Hôm nay', dot: 'bg-amber-400', text: 'text-amber-400', dateText: 'text-amber-400' },
+  { key: 'upcoming', label: 'Sắp tới', dot: 'bg-blue-500', text: 'text-blue-400', dateText: 'text-blue-400' },
+  { key: 'completed', label: 'Hoàn thành', dot: 'bg-emerald-500', text: 'text-emerald-400', dateText: 'text-emerald-400' },
+];
+
+function formatShortDueDate(dateStr) {
+  if (!dateStr) return '—';
+  const parts = String(dateStr).split('/');
+  if (parts.length >= 2) return `${parts[0]}/${parts[1]}`;
+  return dateStr;
+}
+
+function getAssigneeFirstName(fullName) {
+  const name = (fullName || '').trim();
+  if (!name) return null;
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return null;
+  const given = parts[parts.length - 1];
+  return given.charAt(0).toUpperCase() + given.slice(1).toLowerCase();
+}
+
+function categorizeTaskByDue(task, today) {
+  const status = task.computedStatus || task.TRẠNG_THÁI || '';
+  if (status === 'Đã hoàn thành') return 'completed';
+
+  const endDate = parseFlexibleDate(task.NGÀY_KẾT_THÚC_LOCAL || task.NGÀY_KẾT_THÚC);
+  if (!endDate) return 'upcoming';
+  if (endDate < today) return 'overdue';
+  if (endDate.getTime() === today.getTime()) return 'today';
+  return 'upcoming';
+}
+
+function TaskKanbanCard({ task, column, onClick }) {
+  const isCompleted = column.key === 'completed';
+  const projectLabel = (task.TÊN_DỰ_ÁN || task.PROJECT_ID || '').trim() || '—';
+  const assigneeFull = (task.NHÂN_SỰ || '').trim();
+  const assigneeLabel = getAssigneeFirstName(assigneeFull);
+  const dueLabel = formatShortDueDate(task.NGÀY_KẾT_THÚC_LOCAL || task.NGÀY_KẾT_THÚC);
+  const metaLine = assigneeLabel ? `${projectLabel} - ${assigneeLabel}` : projectLabel;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex-1 min-w-[120px] max-w-full text-left rounded-lg border border-[var(--border-main)]/70 bg-[var(--bg-main)]/40 hover:bg-[var(--bg-hover)]/60 hover:border-[var(--border-main)] transition-colors p-2.5 flex flex-col gap-1.5"
+    >
+      <div
+        className="text-[10px] text-slate-500 uppercase tracking-wide truncate"
+        title={[projectLabel, assigneeFull].filter(Boolean).join(' - ')}
+      >
+        {metaLine}
+      </div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-1.5 min-w-0 flex-1">
+          {isCompleted ? (
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0 mt-0.5" />
+          ) : (
+            <span className={`w-2 h-2 rounded-full shrink-0 mt-1 ${column.dot}`} />
+          )}
+          <span className="text-xs font-semibold text-[var(--text-main)] leading-snug line-clamp-2" title={task.TÁC_VỤ}>
+            {task.TÁC_VỤ}
+          </span>
+        </div>
+        <span className={`text-[10px] font-semibold tabular-nums shrink-0 pt-0.5 ${column.dateText}`}>
+          {dueLabel}
+        </span>
+      </div>
+    </button>
   );
 }
 
@@ -215,6 +291,11 @@ export default function Overview() {
     return p !== 'THẤP' && p !== 'LOW' && p !== '';
   }), [enrichedTasks]);
 
+  const kanbanTasks = useMemo(() => enrichedTasks.filter((t) => {
+    const p = (t.ƯU_TIÊN || '').toUpperCase();
+    return p !== 'THẤP' && p !== 'LOW' && p !== '';
+  }), [enrichedTasks]);
+
   const progressProjects = useMemo(
     () => [...activeProjects].sort((a, b) => b.capacity - a.capacity).slice(0, 5),
     [activeProjects]
@@ -230,14 +311,33 @@ export default function Overview() {
     LOW: 1,
   }), []);
 
-  const sortedTasks = useMemo(() => [...enrichedTasks]
-    .filter((t) => t.computedStatus !== 'Đã hoàn thành')
-    .sort((a, b) => {
+  const taskBuckets = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const buckets = { overdue: [], today: [], upcoming: [], completed: [] };
+
+    const sortByPriorityThenDue = (a, b) => {
       const pA = priorityWeight[(a.ƯU_TIÊN || '').toUpperCase()] || 0;
       const pB = priorityWeight[(b.ƯU_TIÊN || '').toUpperCase()] || 0;
-      return pB - pA;
-    })
-    .slice(0, 6), [enrichedTasks, priorityWeight]);
+      if (pB !== pA) return pB - pA;
+      const dA = parseFlexibleDate(a.NGÀY_KẾT_THÚC_LOCAL || a.NGÀY_KẾT_THÚC)?.getTime() ?? 0;
+      const dB = parseFlexibleDate(b.NGÀY_KẾT_THÚC_LOCAL || b.NGÀY_KẾT_THÚC)?.getTime() ?? 0;
+      return dA - dB;
+    };
+
+    kanbanTasks.forEach((task) => {
+      const bucket = categorizeTaskByDue(task, today);
+      buckets[bucket].push(task);
+    });
+
+    Object.keys(buckets).forEach((key) => {
+      buckets[key].sort(sortByPriorityThenDue);
+      buckets[key] = buckets[key].slice(0, 4);
+    });
+
+    return buckets;
+  }, [kanbanTasks, priorityWeight]);
 
   const kpiValues = useMemo(() => ({
     capacity: { value: totalCapacity.toLocaleString(), unit: 'kWp' },
@@ -271,12 +371,12 @@ export default function Overview() {
           </div>
         )}
 
-        <div className="relative z-10 px-8 pt-4 pb-4 border-b border-[var(--border-main)]/50 bg-[var(--bg-main)]">
+        <div className="relative z-10 px-6 pt-3 pb-2 border-b border-[var(--border-main)]/50 bg-[var(--bg-main)]">
         <header className="flex justify-between items-center">
           <div>
-            <p className="text-[10px] font-bold text-[#5252ff] uppercase tracking-[0.2em] mb-1">Dashboard PXD</p>
-            <h1 className="text-2xl font-black text-[var(--text-strong)] tracking-tight">Tổng quan</h1>
-            <p className="text-xs text-[var(--text-muted)] mt-1 capitalize">{todayLabel}</p>
+            <p className="text-[10px] font-bold text-[#5252ff] uppercase tracking-[0.2em] mb-0.5">Dashboard PXD</p>
+            <h1 className="text-xl font-black text-[var(--text-strong)] tracking-tight">Tổng quan</h1>
+            <p className="text-[11px] text-[var(--text-muted)] mt-0.5 capitalize">{todayLabel}</p>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -291,27 +391,27 @@ export default function Overview() {
         </header>
 
           {/* KPI row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mt-4 max-w-[1680px] w-full mx-auto min-w-0">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-3 max-w-[1680px] w-full mx-auto min-w-0">
             {KPI_CARDS.map((card) => {
               const Icon = card.icon;
               const data = kpiValues[card.key];
               return (
                 <div
                   key={card.key}
-                  className={`group relative overflow-hidden rounded-xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] p-4 transition-all duration-300 ${card.borderHover} hover:-translate-y-0.5 ${card.glow}`}
+                  className={`group relative overflow-hidden rounded-xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] p-3 transition-all duration-300 ${card.borderHover} hover:-translate-y-0.5 ${card.glow}`}
                 >
                   <div className={`absolute inset-0 bg-gradient-to-br ${card.accent} opacity-80`} />
-                  <div className="relative flex justify-between items-start gap-3">
+                  <div className="relative flex justify-between items-start gap-2">
                     <div>
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                         {card.label}
                       </p>
-                      <p className="text-2xl font-black text-[var(--text-strong)] tabular-nums tracking-tight">
+                      <p className="text-xl font-black text-[var(--text-strong)] tabular-nums tracking-tight">
                         {data.value}
                         <span className="text-xs font-semibold text-slate-500 ml-1.5">{data.unit}</span>
                       </p>
                     </div>
-                    <div className={`p-2.5 rounded-xl ${card.iconBg} shrink-0`}>
+                    <div className={`p-2 rounded-lg ${card.iconBg} shrink-0`}>
                       <Icon className="w-4 h-4" />
                     </div>
                   </div>
@@ -321,12 +421,12 @@ export default function Overview() {
           </div>
         </div>
 
-        <div className="relative z-10 px-8 pt-6 pb-6 space-y-8 max-w-[1680px] w-full mx-auto min-w-0">
+        <div className="relative z-10 px-6 pt-3 pb-4 space-y-4 max-w-[1680px] w-full mx-auto min-w-0">
 
           {/* Progress + Risks */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 min-w-0">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 min-w-0">
             <PanelCard title="Giám sát tiến độ dự án">
-              <div className="p-3 flex-1 overflow-x-auto min-w-0">
+              <div className="p-2 flex-1 overflow-x-auto min-w-0">
                 <table className="w-full border-collapse" style={{ minWidth: '420px' }}>
                   <colgroup>
                     <col style={{ width: '38%' }} />
@@ -393,7 +493,7 @@ export default function Overview() {
                     })}
                     {progressProjects.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="py-12 text-center text-slate-500 text-sm">
+                        <td colSpan={4} className="py-8 text-center text-slate-500 text-sm">
                           Chưa có dự án thi công
                         </td>
                       </tr>
@@ -416,7 +516,7 @@ export default function Overview() {
                 </button>
               }
             >
-              <div className="overflow-x-auto flex-1 min-w-0 p-3">
+              <div className="overflow-x-auto flex-1 min-w-0 p-2">
                 <table className="w-full border-collapse" style={{ minWidth: '520px' }}>
                   <colgroup>
                     <col style={{ width: '14%' }} />
@@ -478,7 +578,7 @@ export default function Overview() {
                     })}
                     {riskList.length === 0 && (
                       <tr>
-                        <td colSpan={4} className="py-12 text-center">
+                        <td colSpan={4} className="py-8 text-center">
                           <div className="inline-flex flex-col items-center gap-2 text-slate-500">
                             <CheckCircle2 className="w-8 h-8 text-emerald-500/60" />
                             <span className="text-sm">Không có rủi ro nghiêm trọng</span>
@@ -506,109 +606,44 @@ export default function Overview() {
               </button>
             }
           >
-            <div className="overflow-x-auto min-w-0 p-3">
-              <table className="w-full border-collapse" style={{ minWidth: '880px' }}>
-                <colgroup>
-                  <col style={{ width: '18%' }} />
-                  <col style={{ width: '20%' }} />
-                  <col style={{ width: '22%' }} />
-                  <col style={{ width: '11%' }} />
-                  <col style={{ width: '11%' }} />
-                  <col style={{ width: '9%' }} />
-                  <col style={{ width: '9%' }} />
-                </colgroup>
-                <thead>
-                  <tr className="bg-[var(--bg-hover)]/50 border-b border-[var(--border-main)]/50">
-                    <th className={`${thBase} text-left`}>Công việc</th>
-                    <th className={`${thBase} text-left`}>Mô tả</th>
-                    <th className={`${thBase} text-left`}>Phân công</th>
-                    <th className={`${thBase} text-center`}>Bắt đầu</th>
-                    <th className={`${thBase} text-center`}>Đến hạn</th>
-                    <th className={`${thBase} text-center`}>Trạng thái</th>
-                    <th className={`${thBase} text-center`}>Ưu tiên</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedTasks.map((t) => {
-                    const computedStatus = t.computedStatus || 'Chưa bắt đầu';
+            <div className="p-2.5 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {KANBAN_COLUMNS.map((col, idx) => (
+                  <div key={col.key} className="min-w-0 flex flex-col gap-1.5 relative">
+                    {idx > 0 && (
+                      <div className="hidden lg:flex absolute -left-2.5 top-[11px] items-center pointer-events-none">
+                        <ArrowRight className="w-3 h-3 text-slate-600" />
+                      </div>
+                    )}
+                    <div className="flex items-center justify-center gap-1.5 mb-1 px-1">
+                      <span className={`w-2 h-2 rounded-full ${col.dot}`} />
+                      <span className={`text-xs font-semibold ${col.text}`}>{col.label}</span>
+                      <span className="text-xs text-slate-500">({taskBuckets[col.key].length})</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {taskBuckets[col.key].map((t) => (
+                        <TaskKanbanCard
+                          key={t._rowIndex ?? `${t.TÁC_VỤ}-${t.PROJECT_ID}-${t.NGÀY_BẮT_ĐẦU}`}
+                          task={t}
+                          column={col}
+                          onClick={() => navigate('/tasks')}
+                        />
+                      ))}
+                      {taskBuckets[col.key].length === 0 && (
+                        <div className="w-full py-4 text-center text-[11px] text-slate-500 border border-dashed border-[var(--border-main)]/50 rounded-lg">
+                          Không có
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
-                    return (
-                      <tr
-                        key={t._rowIndex ?? `${t.TÁC_VỤ}-${t.PROJECT_ID}-${t.NGÀY_BẮT_ĐẦU}`}
-                        className="border-t border-[var(--border-main)]/40 hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
-                        onClick={() => navigate('/tasks')}
-                      >
-                        <td className={tdBase}>
-                          <div className="flex items-start gap-1.5">
-                            <Star className="w-3 h-3 text-slate-600 shrink-0 mt-0.5" />
-                            <span
-                              className={`w-1.5 h-1.5 rounded-full shrink-0 mt-1.5 ${
-                                computedStatus === 'Trễ'
-                                  ? 'bg-red-500'
-                                  : computedStatus === 'Đang diễn ra'
-                                    ? 'bg-blue-500'
-                                    : 'bg-slate-500'
-                              }`}
-                            />
-                            <CellText className="font-semibold text-[var(--text-main)] flex-1 min-w-0" title={t.TÁC_VỤ}>
-                              {t.TÁC_VỤ}
-                            </CellText>
-                          </div>
-                        </td>
-                        <td className={tdBase}>
-                          <CellText className="text-slate-400" title={getTaskDescription(t)}>
-                            {getTaskDescription(t) || '—'}
-                          </CellText>
-                        </td>
-                        <td className={tdBase}>
-                          <AssigneeCell name={t.NHÂN_SỰ} fallback="Chưa phân công" />
-                        </td>
-                        <td className={`${tdBase} text-center text-slate-500 tabular-nums whitespace-nowrap`}>
-                          {t.NGÀY_BẮT_ĐẦU_LOCAL || t.NGÀY_BẮT_ĐẦU || '—'}
-                        </td>
-                        <td
-                          className={`${tdBase} text-center font-semibold tabular-nums whitespace-nowrap ${
-                            computedStatus === 'Trễ' ? 'text-red-400' : 'text-emerald-400'
-                          }`}
-                        >
-                          {t.NGÀY_KẾT_THÚC_LOCAL || t.NGÀY_KẾT_THÚC || '—'}
-                        </td>
-                        <td className={`${tdBase} text-center`}>
-                          <span
-                            className={`inline-flex items-center justify-center gap-0.5 max-w-full px-1.5 py-0.5 rounded-md text-[9px] font-bold ring-1 whitespace-nowrap ${
-                              computedStatus === 'Trễ'
-                                ? 'bg-red-500/10 text-red-400 ring-red-500/25'
-                                : computedStatus === 'Đang diễn ra'
-                                  ? 'bg-blue-500/10 text-blue-400 ring-blue-500/25'
-                                  : 'bg-slate-500/10 text-slate-400 ring-slate-500/25'
-                            }`}
-                            title={computedStatus}
-                          >
-                            {computedStatus === 'Đang diễn ra' ? (
-                              <PlayCircle className="w-2.5 h-2.5 shrink-0" />
-                            ) : computedStatus === 'Trễ' ? (
-                              <Clock className="w-2.5 h-2.5 shrink-0" />
-                            ) : (
-                              <Circle className="w-2.5 h-2.5 shrink-0" />
-                            )}
-                            <span className="truncate">{computedStatus}</span>
-                          </span>
-                        </td>
-                        <td className={`${tdBase} text-center`}>
-                          <PriorityBadge priority={t.ƯU_TIÊN} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {sortedTasks.length === 0 && (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-500 text-sm">
-                        Không có công việc nào
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              {kanbanTasks.length === 0 && (
+                <div className="py-6 text-center text-slate-500 text-sm">
+                  Không có công việc quan trọng
+                </div>
+              )}
             </div>
           </PanelCard>
         </div>

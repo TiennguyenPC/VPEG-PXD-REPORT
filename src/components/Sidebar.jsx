@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Briefcase, Folder, ChevronLeft, ChevronRight, Sun, Moon, Monitor, Check, LogOut, Settings, UserCircle } from 'lucide-react';
+import { Activity, Briefcase, Folder, PanelLeftClose, PanelLeftOpen, Sun, Moon, Monitor, Check, LogOut, Settings, UserCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../context/AuthContext';
@@ -160,21 +160,23 @@ export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
             >
               {initials}
             </div>
-            <button
-              onClick={toggleSidebar}
-              className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors"
-              title="Mở rộng"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
             <NotificationBell compact sidebarPlacement />
             <ThemeToggleInline placement="sidebar" />
             <button
               onClick={handleLogout}
-              className="p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+              className="p-1.5 rounded-lg border border-red-500/25 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:border-red-500/40 transition-colors"
               title="Đăng xuất"
             >
               <LogOut className="w-4 h-4" />
+            </button>
+            <div className="w-8 h-px bg-[var(--border-main)]/80 my-0.5" />
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              className="p-1.5 rounded-lg bg-[#5252ff]/10 text-[#7373ff] hover:bg-[#5252ff]/20 border border-[#5252ff]/20 transition-colors"
+              title="Mở rộng menu"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
             </button>
           </div>
         ) : (
@@ -198,24 +200,24 @@ export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
               </button>
               <button
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleSidebar();
-                }}
-                className="shrink-0 p-1.5 rounded-lg hover:bg-[var(--bg-panel)] text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors"
-                title="Thu gọn sidebar"
+                onClick={handleLogout}
+                className="shrink-0 p-1.5 rounded-lg border border-red-500/25 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:border-red-500/40 transition-colors"
+                title="Đăng xuất"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <LogOut className="w-4 h-4" />
               </button>
             </div>
             <div className="flex border-t border-[var(--border-main)]/50">
               <button
                 type="button"
-                onClick={handleLogout}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-semibold text-[var(--text-muted)] hover:text-red-400 hover:bg-red-500/5 transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleSidebar();
+                }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[10px] font-semibold text-[#7373ff] hover:text-[#7373ff] hover:bg-[#5252ff]/10 transition-colors"
               >
-                <LogOut className="w-3.5 h-3.5" />
-                Đăng xuất
+                <PanelLeftClose className="w-3.5 h-3.5" />
+                Thu gọn
               </button>
               <div className="w-px bg-[var(--border-main)]/50" />
               <div className="flex items-center justify-center px-2 py-1 hover:bg-[var(--bg-panel)]/50 transition-colors">

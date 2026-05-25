@@ -19,8 +19,8 @@ import { compareDateStrings, normalizeToDMY } from '../utils/timelineDates';
 import { useAuth } from '../context/AuthContext';
 import { canEditTask, canCreateTask, canDeleteTask, getUserInitials } from '../utils/permissions';
 
-const thCell = 'py-3 px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider align-middle';
-const tdCell = 'py-3 px-3 text-xs align-middle overflow-hidden';
+const thCell = 'py-2 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider align-middle';
+const tdCell = 'py-2 px-2.5 text-xs align-middle overflow-hidden';
 const tdClip = `${tdCell} max-w-0`;
 const textClip = 'block truncate';
 
@@ -338,20 +338,20 @@ export default function TaskList() {
       <Sidebar activeItem="tasks" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
       
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <header className="px-8 pt-6 pb-4 border-b border-[var(--border-main)]/30 flex justify-between items-center shrink-0">
-          <div className="flex items-center gap-4">
+        <header className="px-6 pt-3 pb-2 border-b border-[var(--border-main)]/30 flex justify-between items-center shrink-0">
+          <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight uppercase">CÔNG VIỆC</h1>
-              <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Quản lý và theo dõi tiến độ các tác vụ</p>
+              <h1 className="text-lg font-bold text-white tracking-tight uppercase">CÔNG VIỆC</h1>
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5 font-medium">Quản lý và theo dõi tiến độ các tác vụ</p>
             </div>
           </div>
         </header>
 
       {/* CONTENT AREA */}
-      <div className="flex-1 overflow-y-auto bg-[var(--bg-main)] p-8 pt-0">
+      <div className="flex-1 overflow-y-auto bg-[var(--bg-main)] p-6 pt-0">
         
         {/* CONTROLS (Row 2) */}
-        <div className="sticky top-0 z-40 -mx-8 mb-5 space-y-2 bg-[var(--bg-main)] px-8 pt-4 pb-2 border-b border-[var(--border-main)]/60 shadow-sm">
+        <div className="sticky top-0 z-40 -mx-6 mb-3 space-y-2 bg-[var(--bg-main)] px-6 pt-2 pb-1.5 border-b border-[var(--border-main)]/60 shadow-sm">
         <div className="flex justify-between items-center">
           <div className="flex bg-[var(--bg-panel)] p-1 rounded-md border border-[var(--border-main)] shadow-sm">
             <button 
@@ -414,63 +414,63 @@ export default function TaskList() {
 
         {/* STAT CARDS (Row 3) */}
         <div className="grid grid-cols-5 gap-0 rounded-xl overflow-hidden border border-[var(--border-main)] bg-[var(--bg-panel)] shadow-sm">
-          <div className="p-3 border-r border-[var(--border-main)] flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#5252ff] shrink-0">
-              <ClipboardList className="w-4 h-4" />
+          <div className="p-2.5 border-r border-[var(--border-main)] flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#5252ff] shrink-0">
+              <ClipboardList className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[10px] text-slate-400 font-medium mb-0.5">Tổng công việc</div>
-              <div className="text-xl font-bold text-white leading-none">{processedTasks.length}</div>
+              <div className="text-lg font-bold text-white leading-none">{processedTasks.length}</div>
             </div>
           </div>
-          <div className="p-3 border-r border-[var(--border-main)] flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#3b82f6] shrink-0">
-              <PlayCircle className="w-4 h-4" />
+          <div className="p-2.5 border-r border-[var(--border-main)] flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#3b82f6] shrink-0">
+              <PlayCircle className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[10px] text-slate-400 font-medium mb-0.5">Đang diễn ra</div>
-              <div className="text-xl font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length}</div>
+              <div className="text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length}</div>
               <div className="text-[9px] text-[#3b82f6] font-semibold mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
             </div>
           </div>
-          <div className="p-3 border-r border-[var(--border-main)] flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-red-400 shrink-0">
-              <Clock className="w-4 h-4" />
+          <div className="p-2.5 border-r border-[var(--border-main)] flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-red-400 shrink-0">
+              <Clock className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[10px] text-slate-400 font-medium mb-0.5">Trễ hạn</div>
-              <div className="text-xl font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Trễ').length}</div>
+              <div className="text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Trễ').length}</div>
               <div className="text-[9px] text-red-400 font-semibold mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Trễ').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
             </div>
           </div>
-          <div className="p-3 border-r border-[var(--border-main)] flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#10b981] shrink-0">
-              <CheckCircle2 className="w-4 h-4" />
+          <div className="p-2.5 border-r border-[var(--border-main)] flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#10b981] shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[10px] text-slate-400 font-medium mb-0.5">Hoàn thành</div>
-              <div className="text-xl font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length}</div>
+              <div className="text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length}</div>
               <div className="text-[9px] text-[#10b981] font-semibold mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
             </div>
           </div>
-          <div className="p-3 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-yellow-500 shrink-0">
-              <Flag className="w-4 h-4" />
+          <div className="p-2.5 flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-yellow-500 shrink-0">
+              <Flag className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[10px] text-slate-400 font-medium mb-0.5">Ưu tiên cao</div>
-              <div className="text-xl font-bold text-white leading-none">{processedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length}</div>
+              <div className="text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length}</div>
               <div className="text-[9px] text-yellow-500 font-semibold mt-1">{Math.round((processedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
             </div>
           </div>
         </div>
         {viewMode === 'board' && containers.length > 0 && (
           <div
-            className="grid gap-5"
+            className="grid gap-3"
             style={{ gridTemplateColumns: `repeat(${Math.max(containers.length, 1)}, minmax(280px, 1fr))` }}
           >
             {containers.map(container => (
-              <div key={container} className="p-3 border border-[var(--border-main)] rounded-xl bg-[var(--bg-panel)]/95 shadow-sm flex justify-between items-center">
+              <div key={container} className="p-2.5 border border-[var(--border-main)] rounded-xl bg-[var(--bg-panel)]/95 shadow-sm flex justify-between items-center">
                 <h3 className="font-bold text-[var(--text-strong)] text-sm uppercase tracking-wide flex items-center gap-2">
                   {container}
                   <span className="bg-[#5252ff]/10 text-[#5252ff] px-2 py-0.5 rounded text-[10px]">
@@ -503,7 +503,7 @@ export default function TaskList() {
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center py-20 text-slate-400 text-sm">Đang tải công việc...</div>
+          <div className="flex justify-center py-12 text-slate-400 text-sm">Đang tải công việc...</div>
         ) : (
           <>
             {/* GRID VIEW */}
@@ -605,7 +605,7 @@ export default function TaskList() {
                     );})}
                     {processedTasks.length === 0 && (
                       <tr>
-                        <td colSpan={10} className="text-center py-10 text-slate-400 text-sm font-medium">Chưa có tác vụ nào phù hợp</td>
+                        <td colSpan={10} className="text-center py-8 text-slate-400 text-sm font-medium">Chưa có tác vụ nào phù hợp</td>
                       </tr>
                     )}
                   </tbody>
@@ -652,16 +652,16 @@ export default function TaskList() {
             {/* BOARD VIEW */}
             {viewMode === 'board' && (
               <div
-                className="grid gap-5 min-h-[calc(100vh-190px)] pb-4 items-start"
+                className="grid gap-3 min-h-[calc(100vh-190px)] pb-3 items-start"
                 style={{ gridTemplateColumns: `repeat(${Math.max(containers.length, 1)}, minmax(280px, 1fr))` }}
               >
                 {containers.length > 0 ? containers.map(container => (
                   <div key={container} className="bg-[var(--bg-panel)] rounded-xl border border-[var(--border-main)] flex flex-col min-h-[calc(100vh-200px)] shadow-sm">
-                    <div className="p-3 space-y-3">
+                    <div className="p-2.5 space-y-2">
                       {processedTasks.filter(t => t.BỘ_CHỨA === container).map((task, idx) => {
                         const taskEditable = canEditTask(user, task);
                         return (
-                        <div key={idx} className={`bg-[var(--bg-panel)] p-4 rounded-lg border border-[var(--border-main)] shadow-sm transition-all group ${taskEditable ? 'hover:border-[#5252ff]/50 cursor-pointer' : ''}`} onClick={taskEditable ? () => openTaskDetail(task) : undefined}>
+                        <div key={idx} className={`bg-[var(--bg-panel)] p-2.5 rounded-lg border border-[var(--border-main)] shadow-sm transition-all group ${taskEditable ? 'hover:border-[#5252ff]/50 cursor-pointer' : ''}`} onClick={taskEditable ? () => openTaskDetail(task) : undefined}>
                           <div className="flex items-start gap-2 mb-2">
                             <button
                               className={!taskEditable ? 'opacity-40 pointer-events-none' : ''}
@@ -703,7 +703,7 @@ export default function TaskList() {
                     </div>
                   </div>
                 )) : (
-                  <div className="w-full text-center py-20 text-slate-400">Chưa có dữ liệu. Hãy thêm tác vụ và gắn "Bộ chứa" (VĂN PHÒNG, DỰ ÁN...)</div>
+                  <div className="w-full text-center py-10 text-slate-400">Chưa có dữ liệu. Hãy thêm tác vụ và gắn "Bộ chứa" (VĂN PHÒNG, DỰ ÁN...)</div>
                 )}
               </div>
             )}
@@ -894,9 +894,9 @@ export default function TaskList() {
               });
 
               return (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full overflow-y-auto pb-8 pr-2">
-                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-6 col-span-1 shadow-lg">
-                    <h3 className="text-[var(--text-strong)] font-bold mb-6 uppercase text-sm border-b border-[var(--border-main)] pb-3">Trạng thái</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full overflow-y-auto pb-4 pr-2">
+                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 shadow-lg">
+                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Trạng thái</h3>
                     <div className="h-64 relative">
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mb-6">
                         <span className="text-3xl font-bold text-[var(--text-strong)]">{processedTasks.length}</span>
@@ -928,8 +928,8 @@ export default function TaskList() {
                     </div>
                   </div>
 
-                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-6 col-span-1 lg:col-span-2 shadow-lg">
-                    <h3 className="text-[var(--text-strong)] font-bold mb-6 uppercase text-sm border-b border-[var(--border-main)] pb-3">Ưu tiên</h3>
+                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 lg:col-span-2 shadow-lg">
+                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Ưu tiên</h3>
                     <div className="h-64 overflow-visible">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={priorityData} margin={chartStyles.margin}>
@@ -951,8 +951,8 @@ export default function TaskList() {
                     </div>
                   </div>
 
-                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-6 col-span-1 shadow-lg">
-                    <h3 className="text-[var(--text-strong)] font-bold mb-6 uppercase text-sm border-b border-[var(--border-main)] pb-3">Bộ chứa</h3>
+                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 shadow-lg">
+                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Bộ chứa</h3>
                     <div className="h-64 overflow-visible">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={containerData} margin={chartStyles.margin}>
@@ -979,8 +979,8 @@ export default function TaskList() {
                     </div>
                   </div>
 
-                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-6 col-span-1 lg:col-span-2 shadow-lg">
-                    <h3 className="text-[var(--text-strong)] font-bold mb-6 uppercase text-sm border-b border-[var(--border-main)] pb-3">Thành viên</h3>
+                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 lg:col-span-2 shadow-lg">
+                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Thành viên</h3>
                     <div className="h-72 overflow-visible">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={assigneeData} margin={chartStyles.marginRotated}>

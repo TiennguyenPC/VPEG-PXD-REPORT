@@ -1,4 +1,5 @@
 /** Cơ sở tri thức cố định — AI PXD ưu tiên khi hướng dẫn sử dụng app */
+import { SOLAR_EPC_KNOWLEDGE, getSolarFaqAnswer } from './solarKnowledge';
 export const APP_USAGE_GUIDE = `
 # VPEG-PXD Solar EPC Dashboard — Hướng dẫn sử dụng
 
@@ -216,13 +217,25 @@ function findProcurementSubject(message, messages, procurements) {
   });
 }
 
+function formatProcurementPercent(arrivedCount, totalCount) {
+  if (!totalCount) return '0%';
+  return `${Math.round((arrivedCount / totalCount) * 100)}%`;
+}
+
+function formatProcurementSummary(projectName, arrivedCount, totalCount, { allArrived = false } = {}) {
+  const pct = formatProcurementPercent(arrivedCount, totalCount);
+  const ratio = `${arrivedCount}/${totalCount} hạng mục (${pct})`;
+  if (allArrived) {
+    return `${projectName}: vật tư đã về đủ — ${ratio}.`;
+  }
+  return `${projectName}: vật tư đã về ${ratio}.`;
+}
+
 function formatProcurementLine(item) {
-  const expected = item.ngay_du_kien || 'chưa có';
-  const actual = item.ngay_thuc_te || 'chưa có';
-  const status = item.tinh_trang || 'chưa có trạng thái';
-  const evaluation = item.danh_gia ? `, đánh giá: **${item.danh_gia}**` : '';
+  const arrivalDate = item.ngay_thuc_te || item.ngay_du_kien || 'chưa có';
+  const evaluation = item.danh_gia ? `, đánh giá: ${item.danh_gia}` : '';
   const note = item.ghi_chu ? `, ghi chú: ${item.ghi_chu}` : '';
-  return `- **${item.hang_muc}**: dự kiến **${expected}**, thực tế **${actual}**, trạng thái **${status}**${evaluation}${note}`;
+  return `- ${item.hang_muc}: về ngày ${arrivalDate}${evaluation}${note}`;
 }
 
 function compactValue(value) {
@@ -270,7 +283,7 @@ function formatCurrentDateAnswer(now = new Date()) {
     hour: '2-digit',
     minute: '2-digit',
   });
-  return `Hôm nay là **${weekday}, ngày ${date}**. Giờ hiện tại khoảng **${time}**.`;
+  return `Hôm nay là ${weekday}, ngày ${date}. Giờ hiện tại khoảng ${time}.`;
 }
 
 function getTableRows(context, tableName, fallback = []) {
@@ -353,7 +366,7 @@ function formatProject(project) {
   const status = project.status || project.TRẠNG_THÁI || project.STATUS || '';
   const risk = project.risk || project.RISK_LEVEL || '';
   const cod = project.cod || project.KẾ_HOẠCH_COD || project.COD_PLAN || '';
-  return `- **${name}**: kế hoạch **${plan || '-'}%**, thực tế **${actual || '-'}%**, delay **${delay || '-'}**, trạng thái **${status || '-'}**, risk **${risk || '-'}**, COD **${cod || '-'}**`;
+  return `- ${name}: kế hoạch ${plan || '-'}%, thực tế ${actual || '-'}%, delay ${delay || '-'}, trạng thái ${status || '-'}, risk ${risk || '-'}, COD ${cod || '-'}`;
 }
 
 function formatTask(task) {
@@ -363,7 +376,7 @@ function formatTask(task) {
   const priority = task.ƯU_TIÊN || task.priority || '';
   const assignee = task.NHÂN_SỰ || task.assignee || task.ĐÃ_CHỈ_ĐỊNH_CHO || '';
   const due = task.NGÀY_KẾT_THÚC || task.ĐẾN_HẠN || task.due || '';
-  return `- **${title}**${project ? ` (${project})` : ''}: ${status || 'chưa rõ'}${priority ? `, ưu tiên ${priority}` : ''}${assignee ? `, phụ trách ${assignee}` : ''}${due ? `, hạn ${due}` : ''}`;
+  return `- ${title}${project ? ` (${project})` : ''}: ${status || 'chưa rõ'}${priority ? `, ưu tiên ${priority}` : ''}${assignee ? `, phụ trách ${assignee}` : ''}${due ? `, hạn ${due}` : ''}`;
 }
 
 function formatRisk(risk) {
@@ -371,7 +384,7 @@ function formatRisk(risk) {
   const level = risk.MỨC_ĐỘ || risk.LEVEL || risk.level || risk.RISK_LEVEL || '';
   const status = risk.TRẠNG_THÁI || risk.STATUS || '';
   const action = risk.BIỆN_PHÁP || risk.ACTION || risk.GIẢI_PHÁP || '';
-  return `- **${text}**${level ? ` — mức ${level}` : ''}${status ? `, trạng thái ${status}` : ''}${action ? `, xử lý: ${action}` : ''}`;
+  return `- ${text}${level ? ` — mức ${level}` : ''}${status ? `, trạng thái ${status}` : ''}${action ? `, xử lý: ${action}` : ''}`;
 }
 
 function formatMilestone(row) {
@@ -380,7 +393,7 @@ function formatMilestone(row) {
   const actual = row.NGÀY_THỰC_TẾ || row.ACTUAL_DATE || row.THỰC_TẾ || '';
   const delay = row.DELAY || row.delay || '';
   const status = row.TRẠNG_THÁI || row.STATUS || '';
-  return `- **${name}**: kế hoạch **${plan || '-'}**, thực tế **${actual || '-'}**${delay !== '' ? `, delay **${delay}**` : ''}${status ? `, ${status}` : ''}`;
+  return `- ${name}: kế hoạch ${plan || '-'}, thực tế ${actual || '-'}${delay !== '' ? `, delay ${delay}` : ''}${status ? `, ${status}` : ''}`;
 }
 
 function formatConstruction(row) {
@@ -389,7 +402,7 @@ function formatConstruction(row) {
   const progress = row.TIẾN_ĐỘ_THỰC_TẾ ?? row.ACTUAL_PROGRESS ?? row.progress ?? '';
   const start = row.NGÀY_BẮT_ĐẦU || '';
   const end = row.NGÀY_KẾT_THÚC || row.NGÀY_HT_THỰC_TẾ || '';
-  return `- **${item}**${group ? ` (${group})` : ''}: tiến độ **${progress || '-'}**${start ? `, bắt đầu ${start}` : ''}${end ? `, kết thúc ${end}` : ''}`;
+  return `- ${item}${group ? ` (${group})` : ''}: tiến độ ${progress || '-'}${start ? `, bắt đầu ${start}` : ''}${end ? `, kết thúc ${end}` : ''}`;
 }
 
 function formatSiteLog(row) {
@@ -398,17 +411,17 @@ function formatSiteLog(row) {
   const engineers = row.ENGINEERS ?? row.KỸ_SƯ_GS ?? '';
   const weather = row.WEATHER || row.THỜI_TIẾT || '';
   const note = row.DAILY_NOTE || row.GHI_CHÚ_HIỆN_TRƯỜNG || '';
-  return `- **${date}**: nhân lực ${manpower || 0}, kỹ sư ${engineers || 0}${weather ? `, thời tiết ${weather}` : ''}${note ? ` — ${note}` : ''}`;
+  return `- ${date}: nhân lực ${manpower || 0}, kỹ sư ${engineers || 0}${weather ? `, thời tiết ${weather}` : ''}${note ? ` — ${note}` : ''}`;
 }
 
 function formatWebMapAnswer() {
   return [
-    '**Web có các phần chính:**',
-    '- **Tổng quan**: KPI, tiến độ dự án, rủi ro, task quan trọng.',
-    '- **Dự án**: danh sách dự án, lọc, xuất Excel, thêm/sửa dự án.',
-    '- **Chi tiết dự án**: tiến độ, milestone, S-Curve, site log, risk, permit, design, procurement, construction, handover.',
-    '- **Công việc**: task, trạng thái, ưu tiên, người phụ trách, hạn.',
-    '- **AI PXD**: hỏi dữ liệu web, cách dùng app, phân tích Solar EPC.',
+    'Web có các phần chính:',
+    '- Tổng quan: KPI, tiến độ dự án, rủi ro, task quan trọng.',
+    '- Dự án: danh sách dự án, lọc, xuất Excel, thêm/sửa dự án.',
+    '- Chi tiết dự án: tiến độ, milestone, S-Curve, site log, risk, permit, design, procurement, construction, handover.',
+    '- Công việc: task, trạng thái, ưu tiên, người phụ trách, hạn.',
+    '- AI PXD: hỏi dữ liệu web, cách dùng app, phân tích Solar EPC.',
   ].join('\n');
 }
 
@@ -566,8 +579,8 @@ function analyzeProjectRecovery({ project, projectName, procurements, milestones
     gap === null
       ? 'chưa đủ dữ liệu để kết luận trễ hay không'
       : gap < 0
-        ? `đang **trễ ${Math.abs(gap)}%** so với kế hoạch`
-        : `đang **đạt/vượt ${gap}%** so với kế hoạch`;
+        ? `đang trễ ${Math.abs(gap)}% so với kế hoạch`
+        : `đang đạt/vượt ${gap}% so với kế hoạch`;
 
   const blockers = [];
   if (delayedMilestones.length) blockers.push(`${delayedMilestones.length} milestone có dấu hiệu trễ`);
@@ -590,10 +603,10 @@ function analyzeProjectRecovery({ project, projectName, procurements, milestones
   if (!actions.length) actions.push('duy trì nhịp hiện tại, tiếp tục theo dõi milestone và S-Curve hằng ngày');
 
   return [
-    `**${projectName}** ${status}.`,
-    plan !== null || actual !== null ? `Kế hoạch: **${plan ?? '-'}%**, thực tế: **${actual ?? '-'}%**.` : '',
-    blockers.length ? `**Điểm nghẽn:** ${blockers.join('; ')}.` : '**Điểm nghẽn:** chưa thấy blocker rõ trong dữ liệu.',
-    `**Cách kéo lại:** ${actions.join('; ')}.`,
+    `${projectName} ${status}.`,
+    plan !== null || actual !== null ? `Kế hoạch: ${plan ?? '-'}%, thực tế: ${actual ?? '-'}%.` : '',
+    blockers.length ? `Điểm nghẽn: ${blockers.join('; ')}.` : 'Điểm nghẽn: chưa thấy blocker rõ trong dữ liệu.',
+    `Cách kéo lại: ${actions.join('; ')}.`,
   ].filter(Boolean).join('\n\n');
 }
 
@@ -651,103 +664,121 @@ export function getLocalDataAnswer(userMessage, context = {}, messages = []) {
       return gap !== null && gap < 0;
     });
     if (delayedProjects.length) {
-      return `Có **${delayedProjects.length}/${masterProjects.length}** dự án đang trễ tiến độ:\n\n${takeRows(delayedProjects, 5).map(formatProject).join('\n')}`;
+      return `Có ${delayedProjects.length}/${masterProjects.length} dự án đang trễ tiến độ:\n\n${takeRows(delayedProjects, 5).map(formatProject).join('\n')}`;
     }
     return `Chưa thấy dự án nào trễ theo chênh lệch tiến độ hiện có.`;
   }
 
   const isProcurementQuestion =
-    /vattu|muasam|hangmuc|toisite|datoi|dave|vengaynao|ngayvedukien|ngayvethucte|ngaynao|vechua|vedu|duchua|daydu|thieugi/.test(q);
+    /vattu|muasam|hangmuc|toisite|datoi|dave|vengaynao|ngayvedukien|ngayvethucte|ngaynao|vechua|vedu|duchua|daydu|thieugi|mayphantram|baonhieu%|chiebbaonhieu%/.test(q);
 
   if (isProcurementQuestion && selectedProject) {
     const procurements = mergedProcurements;
     const arrived = procurements.filter((item) =>
       normalizeFieldKey(item.tinh_trang).includes('datoisite')
     );
-    const noStatus = procurements.filter((item) => !String(item.tinh_trang || '').trim());
     const subject = findProcurementSubject(userMessage, messages, procurements);
     const asksComplete = /duchua|daydu|vechua|vedu|thieugi|duchua/.test(q);
 
     if (asksComplete) {
       const allArrived = procurements.length > 0 && arrived.length === procurements.length;
       const summary = allArrived
-        ? `**${projectName}**: vật tư đã về **đủ** — **${arrived.length}/${procurements.length}** hạng mục đã tới site.`
-        : `**${projectName}**: vật tư **chưa về đủ** — mới **${arrived.length}/${procurements.length}** hạng mục đã tới site.`;
+        ? formatProcurementSummary(projectName, arrived.length, procurements.length, { allArrived: true })
+        : `${formatProcurementSummary(projectName, arrived.length, procurements.length)} Vật tư chưa về đủ.`;
       const arrivedLines = arrived.length > 0
-        ? `\n\n**Đã tới site:**\n${arrived.map(formatProcurementLine).join('\n')}`
-        : '';
-      const pendingNames = noStatus.map((item) => item.hang_muc).join('; ') || 'Không có';
-      const pendingLines = noStatus.length
-        ? `\n\n**Chưa có trạng thái / chưa về:** ${pendingNames}`
-        : '';
-      return `${summary}${arrivedLines}${pendingLines}`;
+        ? `\n\nĐã tới site:\n${arrived.map(formatProcurementLine).join('\n')}`
+        : '\n\nChưa có hạng mục nào đã tới site.';
+      return `${summary}${arrivedLines}`;
     }
 
     if (wantsCount) {
-      return `${projectName} có **${arrived.length}/${procurements.length}** hạng mục vật tư đã tới site.`;
+      const pct = formatProcurementPercent(arrived.length, procurements.length);
+      return `${projectName} có ${arrived.length}/${procurements.length} hạng mục vật tư đã tới site (${pct}).`;
     }
 
     if (subject && /ngaynao|ngayve|vedukien|vethucte/.test(q)) {
-      return `**${projectName} — ${subject.hang_muc}**\n\n${formatProcurementLine(subject)}`;
+      return `${projectName} — ${subject.hang_muc}\n\n${formatProcurementLine(subject)}`;
     }
 
     if (/ngaynao|ngayve|vedukien|vethucte/.test(q)) {
       const lines = arrived.length > 0
         ? arrived.map(formatProcurementLine).join('\n')
-        : 'Chưa có hạng mục nào có trạng thái **Đã tới site**.';
-      return `**${projectName} — Ngày về vật tư đã tới site**\n\n${lines}`;
+        : 'Chưa có hạng mục nào có trạng thái Đã tới site.';
+      return `${projectName} — Ngày về vật tư đã tới site\n\n${lines}`;
     }
 
+    const summary = formatProcurementSummary(projectName, arrived.length, procurements.length);
     const arrivedLines = arrived.length > 0
-      ? arrived.map(formatProcurementLine).join('\n')
-      : 'Chưa có hạng mục nào có trạng thái **Đã tới site**.';
-    const pendingNames = noStatus.map((item) => item.hang_muc).join('; ') || 'Không có';
-    return `**${projectName} — Tình trạng vật tư**\n\nĐã tới site: **${arrived.length}/${procurements.length}** hạng mục.\n\n${arrivedLines}\n\n**Chưa có trạng thái:** ${pendingNames}`;
+      ? `\n\nĐã tới site:\n${arrived.map(formatProcurementLine).join('\n')}`
+      : '\n\nChưa có hạng mục nào đã tới site.';
+    return `${summary}${arrivedLines}`;
   }
 
   if (/task|congviec|tacvu|viec/.test(q)) {
     const rows = selectedProject ? projectTasks : allTasks;
     if (!rows.length) return `Không thấy task phù hợp trong dữ liệu hiện có.`;
-    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${rows.length}** task.`;
-    return `**Task${selectedProject ? ` của ${projectName}` : ''}** — ${rows.length} dòng\n\n${takeRows(rows).map(formatTask).join('\n')}`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có ${rows.length} task.`;
+    return `Task${selectedProject ? ` của ${projectName}` : ''} — ${rows.length} dòng\n\n${takeRows(rows).map(formatTask).join('\n')}`;
   }
 
   if (/ruiro|risk|vuongmac|vande/.test(q)) {
     if (!risks.length) return `Không thấy rủi ro/vướng mắc phù hợp trong dữ liệu hiện có.`;
-    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${risks.length}** rủi ro/vướng mắc.`;
-    return `**Rủi ro/Vướng mắc${selectedProject ? ` của ${projectName}` : ''}** — ${risks.length} dòng\n\n${takeRows(risks).map(formatRisk).join('\n')}`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có ${risks.length} rủi ro/vướng mắc.`;
+    return `Rủi ro/Vướng mắc${selectedProject ? ` của ${projectName}` : ''} — ${risks.length} dòng\n\n${takeRows(risks).map(formatRisk).join('\n')}`;
   }
 
   if (/milestone|moc|timeline|cod|kickoff/.test(q)) {
     if (!milestones.length) return `Không thấy milestone phù hợp trong dữ liệu hiện có.`;
-    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${milestones.length}** milestone.`;
-    return `**Milestone${selectedProject ? ` của ${projectName}` : ''}** — ${milestones.length} dòng\n\n${takeRows(milestones).map(formatMilestone).join('\n')}`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có ${milestones.length} milestone.`;
+    return `Milestone${selectedProject ? ` của ${projectName}` : ''} — ${milestones.length} dòng\n\n${takeRows(milestones).map(formatMilestone).join('\n')}`;
   }
 
   if (/thicong|construction|lapdat|maicong|tien do thi cong|tiendothicong/.test(q)) {
     if (!constructions.length) return `Không thấy dữ liệu thi công phù hợp trong bảng hiện có.`;
-    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${constructions.length}** hạng mục thi công.`;
-    return `**Thi công${selectedProject ? ` của ${projectName}` : ''}** — ${constructions.length} dòng\n\n${takeRows(constructions).map(formatConstruction).join('\n')}`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có ${constructions.length} hạng mục thi công.`;
+    return `Thi công${selectedProject ? ` của ${projectName}` : ''} — ${constructions.length} dòng\n\n${takeRows(constructions).map(formatConstruction).join('\n')}`;
   }
 
   if (/nhatky|sitelog|hientruong|site/.test(q)) {
     if (!siteLogs.length) return `Không thấy nhật ký site phù hợp trong dữ liệu hiện có.`;
-    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có **${siteLogs.length}** dòng nhật ký site.`;
-    return `**Nhật ký site${selectedProject ? ` của ${projectName}` : ''}** — ${siteLogs.length} dòng gần nhất\n\n${takeRows([...siteLogs].reverse()).map(formatSiteLog).join('\n')}`;
+    if (wantsCount) return `${selectedProject ? projectName : 'Hiện tại'} có ${siteLogs.length} dòng nhật ký site.`;
+    return `Nhật ký site${selectedProject ? ` của ${projectName}` : ''} — ${siteLogs.length} dòng gần nhất\n\n${takeRows([...siteLogs].reverse()).map(formatSiteLog).join('\n')}`;
   }
 
   if (/duan|project|tiendo|rasao|tongquan|status|trangthai|delay/.test(q)) {
     const rows = selectedProject ? [selectedProject] : masterProjects;
     if (!rows.length) return `Không thấy dự án phù hợp trong dữ liệu hiện có.`;
-    if (wantsCount && !selectedProject) return `Hiện tại có **${rows.length}** dự án.`;
+    if (wantsCount && !selectedProject) return `Hiện tại có ${rows.length} dự án.`;
     if (!selectedProject && isOnProjectDetailPath(context)) {
-      return `Mở đúng **chi tiết dự án** rồi hỏi lại, hoặc gọi tên dự án cụ thể (ví dụ OSAKA, VAL).`;
+      return `Mở đúng chi tiết dự án rồi hỏi lại, hoặc gọi tên dự án cụ thể (ví dụ OSAKA, VAL).`;
     }
-    if (wantsCount) return `Hiện tại có **${rows.length}** dự án.`;
-    return `**Dữ liệu dự án${selectedProject ? ` — ${projectName}` : ''}**\n\n${takeRows(rows).map(formatProject).join('\n')}`;
+    if (wantsCount) return `Hiện tại có ${rows.length} dự án.`;
+    return `Dữ liệu dự án${selectedProject ? ` — ${projectName}` : ''}\n\n${takeRows(rows).map(formatProject).join('\n')}`;
   }
 
+  if (/huongdantrang|trangnay|trangdangxem|trangnaylamgi|dungde/.test(q)) {
+    const pageHint = getCurrentPageHint(context);
+    if (pageHint) return pageHint;
+  }
+
+  const solarFaq = getSolarFaqAnswer(userMessage);
+  if (solarFaq) return solarFaq;
+
   return null;
+}
+
+const PAGE_HINTS = {
+  'Tổng quan': 'KPI tổng thể, top dự án, rủi ro, công việc quan trọng. Click dòng dự án để vào chi tiết.',
+  'Danh sách dự án': 'Tìm kiếm, lọc, + Thêm dự án, Xuất Excel. Click dòng để xem chi tiết.',
+  'Chi tiết dự án': 'Milestone, S-Curve, Site Log, module Risk/Permit/Design/Procurement/Construction/Handover.',
+  'Danh sách công việc': 'Tab Lưới/Kanban/Lịch/Biểu đồ. + Thêm tác vụ góc phải.',
+};
+
+function getCurrentPageHint(context) {
+  const page = context?.currentPage || '';
+  const hint = PAGE_HINTS[page];
+  if (!hint) return null;
+  return `Bạn đang ở ${page}.\n\n${hint}\n\nHỏi cụ thể hơn (vd: "vật tư về mấy %", "milestone trễ không", "thêm task thế nào").`;
 }
 
 export function buildSystemInstruction(context = {}) {
@@ -894,17 +925,6 @@ export function buildSystemInstruction(context = {}) {
 
   const dataJson = JSON.stringify(dataSnapshot, null, 0);
 
-  const solarKnowledge = `
-## Kiến thức Solar EPC
-- **Quy trình EPC**: Thiết kế → Mua sắm → Thi công → Commissioning → Bàn giao (COD).
-- **Tiêu chuẩn**: IEC 61215 (module), IEC 61730 (an toàn), IEC 62109 (inverter), TCVN 9207, NEC 690.
-- **Thành phần hệ thống**: Module PV, Inverter (string/central), Cáp DC/AC, Tủ điện (combiner box, MDB), Hệ thống giá đỡ (mounting), Đồng hồ đo đếm.
-- **Chỉ số quan trọng**: PR (Performance Ratio) > 75% là tốt; yield ~1200-1400 kWh/kWp/năm ở miền Nam VN; GHI ~1600-1900 kWh/m²/năm.
-- **Lỗi phổ biến**: Hot spot (module bị che), PID (điện thế cao), mismatch, dây lỏng, bụi bẩn.
-- **Commissioning**: Kiểm tra OCV, SCC, IV curve, đấu nối đúng cực, test bảo vệ chống sét, GFDI.
-- **Mua sắm EPC**: Lead time module 4-8 tuần, inverter 2-4 tuần, cáp/phụ kiện 1-2 tuần.
-- **Quản lý rủi ro**: Rủi ro cao = cần action plan ngay; Trung bình = theo dõi; Thấp = ghi nhận.`;
-
   return `Bạn là **AI PXD** — trợ lý thông minh của Phòng Xây Dựng VPEG-PXD, tích hợp trong Dashboard Solar EPC.
 
 ## Vai trò
@@ -912,30 +932,34 @@ export function buildSystemInstruction(context = {}) {
 2. **Hướng dẫn app**: Giải thích từng bước thao tác, đúng tên nút/menu tiếng Việt.
 3. **Chuyên gia Solar EPC**: Tư vấn kỹ thuật khi câu hỏi không phải dữ liệu/cách dùng web.
 
-## Quy tắc
-- Luôn trả lời **tiếng Việt**, thân thiện, chuyên nghiệp.
-- Số âm ở delay/COD = **TRỄ**. Không bịa số liệu.
-- Dùng **Markdown** (in đậm, danh sách) khi cần.
-- Mặc định trả lời **ngắn, đúng trọng tâm**. Chỉ phân tích dài khi người dùng hỏi "vì sao", "phân tích", "cách xử lý", "lấy lại tiến độ", "đề xuất".
-- Thứ tự ưu tiên bắt buộc: **(1) dữ liệu bảng/web**, **(2) cách sử dụng web**, **(3) kiến thức Solar EPC**, **(4) kiến thức chung**.
+## Phong cách trả lời (BẮT BUỘC)
+- **Một câu hỏi → một mục đích**: trả đúng thứ người dùng hỏi, không lan sang module khác.
+- **Mặc định ngắn**: 2–6 dòng hoặc bullet gọn. Không mở bài "Dựa trên dữ liệu..." / không kết bài "Nếu cần thêm...".
+- **Chỉ dài** khi user hỏi rõ: "phân tích", "vì sao", "đề xuất", "cách xử lý", "lấy lại tiến độ".
+- **Số liệu**: trả con số trước, giải thích sau (vd: **6/15 (40%)** rồi mới liệt kê).
+- **Danh sách**: tối đa 8 dòng trừ khi user yêu cầu "tất cả" / "chi tiết".
+- **Không lặp** câu hỏi, không nhắc lại quy tắc hệ thống cho user.
+
+## Quy tắc dữ liệu
+- Luôn trả lời tiếng Việt, thân thiện, chuyên nghiệp.
+- Số âm ở delay/COD = TRỄ. Không bịa số liệu.
+- Không dùng ** hay markdown in đậm. Chỉ plain text và bullet "-" khi cần.
+- Thứ tự ưu tiên: **(1) dữ liệu bảng/web**, **(2) cách dùng web**, **(3) kiến thức Solar EPC**, **(4) kiến thức chung**.
 - Nếu câu hỏi có thể trả lời từ dữ liệu bảng thì phải trả lời bằng số liệu/tên dòng cụ thể, không nói chung chung.
 - Nếu người dùng hỏi dạng **tổng / bao nhiêu / mấy / số lượng** thì chỉ trả lời con số và đơn vị, không liệt kê danh sách nếu chưa được hỏi thêm.
-- Nếu hỏi **tiến độ / trễ / lấy lại tiến độ / nhân sự yếu / vì sao chậm**: phải tự phân tích theo chuỗi EPC: Project gap → milestone → construction → procurement → risk → site log/nhân lực. Trả lời gồm: kết luận, điểm nghẽn, hành động đề xuất.
-- Khi phân tích phải đọc các trường ghi chú/nguyên nhân: GHI_CHÚ, DAILY_NOTE, WEEKLY_ASSESSMENT, THỜI_TIẾT/WEATHER, BIỆN_PHÁP/ACTION, VƯỚNG_MẮC. Nếu ghi chú nói mưa, vật tư chậm, NCC, thiếu nhân lực, bản vẽ/permit, phải nêu đúng nguyên nhân đó.
-- Với câu hỏi recovery, hành động phải cụ thể: tăng ca, bổ sung đội, ưu tiên vật tư blocking, owner/deadline cho risk, theo dõi sản lượng/ngày.
-- Nếu mưa ảnh hưởng tiến độ: đề xuất chuyển việc trong nhà/pre-assembly, che chắn khu vực làm được, cập nhật look-ahead 3 ngày, bù tiến độ bằng tăng ca khi thời tiết tốt.
-- Nếu vật tư chậm: đề xuất xác nhận ETA, tách giao hàng, ưu tiên vật tư blocking, NCC thay thế/vật tư tương đương đã duyệt, escalation mua hàng.
-- Khi hỏi dữ liệu nằm đâu: chỉ rõ trang/module trong web trước, rồi mới nói bảng dữ liệu nếu cần.
-- Nếu thiếu data → nói rõ thiếu bảng/cột nào và gợi ý mở đúng trang trong app.
-- Bạn chỉ nhận **dữ liệu app/Google Sheets**, hướng dẫn sử dụng và kiến thức Solar EPC. **Không có source code, API key, .env hoặc file hệ thống** trong context.
-- Nếu người dùng hỏi về source code/API key/file bí mật, nói rằng context AI không được cấp phần đó.
-- Khi hỏi "bảng có gì", "dự án nào", "task nào", "rủi ro nào", "thi công tới đâu": ưu tiên đọc mục "bang_du_lieu" vì đó là dữ liệu Google Sheets thật.
-- Mỗi bảng trong "bang_du_lieu" có dạng { so_dong, du_lieu }. Khi trả lời phải dựa vào du_lieu, không tự suy đoán từ kiến thức Solar EPC.
-- Khi hỏi về **vật tư**: đọc trường "vat_tu_mua_sam.chi_tiet", đếm dòng có tinh_trang = "Đã tới site". Dùng số "da_toi_site" trong summary — **không tự đếm tên thiết bị**.
-- Khi người dùng đang xem **chi tiết một dự án** (có "du_an_dang_xem"): chỉ trả lời về **dự án đó**, không liệt kê dự án khác trừ khi được hỏi rõ so sánh/tổng hợp.
-- Khi hỏi **"vật tư về đủ chưa"** / **"dự án này"**: dùng dữ liệu vật tư của dự án đang xem, so sánh số hạng mục "Đã tới site" với tổng hạng mục.
-- Khi hỏi **"vật tư về được gì"**: liệt kê chính xác hang_muc có tinh_trang = "Đã tới site", và hang_muc chưa có trạng thái.
-${solarKnowledge}
+- Nếu hỏi **tiến độ / trễ / lấy lại tiến độ**: phân tích theo chuỗi Project → milestone → construction → procurement → risk → site log. Trả lời: kết luận → điểm nghẽn → hành động (3 phần, không dài hơn).
+- Khi phân tích đọc ghi chú: GHI_CHÚ, DAILY_NOTE, THỜI_TIẾT, BIỆN_PHÁP, VƯỚNG_MẮC.
+- Thiếu data → nói rõ thiếu gì + gợi ý mở đúng trang app.
+- Không tiết lộ source code, API key, .env.
+- Khi hỏi "bảng có gì", "task nào": đọc "bang_du_lieu.du_lieu".
+- Khi hỏi **vật tư**: dùng "vat_tu_mua_sam", đếm tinh_trang = "Đã tới site".
+- Đang xem **chi tiết dự án** (có "du_an_dang_xem"): chỉ trả lời dự án đó.
+- **Vật tư đã về**: dạng **X/Y (Z%)**, chỉ liệt kê hạng mục đã tới site (tên, ngày về, đánh giá, ghi chú). Không liệt kê chưa về trừ khi hỏi rõ.
+
+## Hướng dẫn sử dụng app
+${APP_USAGE_GUIDE}
+
+${SOLAR_EPC_KNOWLEDGE}
 
 ## Dữ liệu thực tế (JSON):
 \`\`\`json
@@ -947,22 +971,22 @@ ${dataJson}
 export function getOfflineAppHint(userMessage) {
   const q = (userMessage || '').toLowerCase();
   if (/thêm.*dự án|tạo.*dự án|add project/.test(q)) {
-    return 'Vào menu **DỰ ÁN** (sidebar) → nút **"+ Thêm dự án"** màu tím ở góc phải header.';
+    return 'Vào menu DỰ ÁN (sidebar) → nút "+ Thêm dự án" màu tím ở góc phải header.';
   }
   if (/thêm.*(tác vụ|công việc|việc)|tạo.*việc/.test(q)) {
-    return 'Vào **CÔNG VIỆC** → **"+ Thêm tác vụ"** góc phải (cạnh ô tìm kiếm).';
+    return 'Vào CÔNG VIỆC → "+ Thêm tác vụ" góc phải (cạnh ô tìm kiếm).';
   }
   if (/s-curve|tiến độ|biểu đồ.*dự án/.test(q)) {
-    return 'Mở **chi tiết dự án** (click dòng trong bảng Dự án) → cuộn xuống khối **S-Curve**.';
+    return 'Mở chi tiết dự án (click dòng trong bảng Dự án) → cuộn xuống khối S-Curve.';
   }
   if (/nhật ký|site log|hiện trường/.test(q)) {
-    return 'Trong **chi tiết dự án** → **Nhật ký hiện trường** → chọn tab **Ngày/Tuần/Tháng**, nhập và đợi **Saved**.';
+    return 'Trong chi tiết dự án → Nhật ký hiện trường → chọn tab Ngày/Tuần/Tháng, nhập và đợi Saved.';
   }
   if (/xuất|export|excel|in /.test(q)) {
-    return '**Excel**: trang Dự án → **Xuất Excel**. **In/PDF**: chi tiết dự án → **Export**.';
+    return 'Excel: trang Dự án → Xuất Excel. In/PDF: chi tiết dự án → Export.';
   }
   if (/lọc|filter|tìm/.test(q)) {
-    return '**Dự án**: ô tìm kiếm + nút **Lọc** trên bảng. **Công việc**: ô **Tìm kiếm tác vụ** trên trang Công việc.';
+    return 'Dự án: ô tìm kiếm + nút Lọc trên bảng. Công việc: ô Tìm kiếm tác vụ trên trang Công việc.';
   }
   return null;
 }
