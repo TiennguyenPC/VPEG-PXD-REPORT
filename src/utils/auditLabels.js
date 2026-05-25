@@ -2,6 +2,7 @@
 export const AUDIT_ACTION_LABELS = {
   login: 'Đăng nhập',
   logout: 'Đăng xuất',
+  'account-locked': 'Khóa tài khoản',
   'add-user': 'Tạo user',
   'update-user': 'Sửa user',
   'deactivate-user': 'Vô hiệu user',
@@ -50,6 +51,7 @@ export function formatAuditTime(iso) {
 export function getAuditActionColor(action) {
   const a = String(action || '').toLowerCase();
   if (a === 'login') return 'text-emerald-400 bg-emerald-500/10';
+  if (a === 'account-locked') return 'text-red-400 bg-red-500/10';
   if (a === 'logout') return 'text-slate-400 bg-slate-500/10';
   if (a.indexOf('delete') >= 0) return 'text-red-400 bg-red-500/10';
   if (a.indexOf('add') >= 0) return 'text-blue-400 bg-blue-500/10';

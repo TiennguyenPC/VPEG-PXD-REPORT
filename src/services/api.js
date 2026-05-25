@@ -287,6 +287,10 @@ export const api = {
     const result = await postToGAS('deactivate-user', { userId, active: false });
     return result.data;
   },
+  unlockUser: async (userId) => {
+    const result = await postToGAS('update-user', { userId, unlock: true });
+    return result.data;
+  },
   changePassword: async ({ currentPassword, newPassword }) => {
     const result = await postToGAS('change-password', { currentPassword, newPassword });
     return result;

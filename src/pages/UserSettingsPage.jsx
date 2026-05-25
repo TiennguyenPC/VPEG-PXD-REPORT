@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Pencil, UserX, Loader2, Users } from 'lucide-react';
+import { Plus, Search, Pencil, UserX, Loader2, Users, LockOpen } from 'lucide-react';
 import SettingsLayout from '../components/settings/SettingsLayout';
 import UserFormModal from '../components/settings/UserFormModal';
 import { api } from '../services/api';
@@ -98,6 +98,19 @@ export default function UserSettingsPage() {
     }
   };
 
+  const handleUnlock = async (user) => {
+    if (!window.confirm(`Mở khóa tài khoản "${user.displayName}" (${user.username})?`)) return;
+    setActionLoading(user.userId);
+    try {
+      await api.unlockUser(user.userId);
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Mở khóa thất bại');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <SettingsLayout
       title="Quản lý tài khoản"
@@ -174,18 +187,40 @@ export default function UserSettingsPage() {
                             {typeof projectCount === 'number' ? `${projectCount} dự án` : projectCount}
                           </td>
                           <td className={tdCell}>
-                            <span
-                              className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
-                                user.active !== false
-                                  ? 'bg-emerald-500/10 text-emerald-400'
-                                  : 'bg-red-500/10 text-red-400'
-                              }`}
-                            >
-                              {user.active !== false ? 'Hoạt động' : 'Vô hiệu'}
-                            </span>
+                            {user.locked ? (
+                              <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400">
+                                Bị khóa
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-flex px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  user.active !== false
+                                    ? 'bg-emerald-500/10 text-emerald-400'
+                                    : 'bg-red-500/10 text-red-400'
+                                }`}
+                              >
+                                {user.active !== false ? 'Hoạt động' : 'Vô hiệu'}
+                              </span>
+                            )}
                           </td>
                           <td className={`${tdCell} text-right`}>
                             <div className="flex items-center justify-end gap-1">
+                              {user.locked && !isAdminUser && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUnlock(user)}
+                                  disabled={actionLoading === user.userId}
+                                  className="px-2 py-1 text-[10px] font-bold rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 disabled:opacity-50 flex items-center gap-1"
+                                  title="Mở khóa tài khoản"
+                                >
+                                  {actionLoading === user.userId ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <LockOpen className="w-3.5 h-3.5" />
+                                  )}
+                                  Mở khóa
+                                </button>
+                              )}
                               {!isAdminUser && (
                                 <>
                                   <button
@@ -244,7 +279,7 @@ export default function UserSettingsPage() {
           </div>
 
           <p className="text-[10px] text-[var(--text-muted)]">
-            {filteredUsers.length} tài khoản · Admin không thể sửa/xóa qua UI · Chỉ vô hiệu hóa, không xóa hẳn
+            {filteredUsers.length} tài khoản · Sai mật khẩu 3 lần → khóa · Admin mở khóa tại cột Thao tác
           </p>
       </div>
 

@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext';
 import { getAuditActionLabel, formatAuditTime, getAuditActionColor } from '../utils/auditLabels';
 
 const GAS_SCRIPT_EDITOR_URL = 'https://script.google.com/home/projects/1w-CZ9Dsq2BNelMochInJ6Kt2oCOWKtwckcMl1NVdrSNZAx9bd2PFDsNY/edit';
+const PRODUCTION_APP_URL = 'https://epc-solar-dashboard.vercel.app';
+const thCell = 'py-3 px-4 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider text-left';
 const tdCell = 'py-3 px-4 text-xs text-[var(--text-main)] align-top';
 
 const ACTION_FILTERS = [
@@ -69,10 +71,13 @@ export default function AuditLogPage() {
     try {
       const cfg = await api.getNotificationEmailConfig();
       setEmailCfg(cfg || { appUrl: '', enabled: false });
-      setEmailUrl(cfg?.appUrl || window.location.origin);
+      const fallback = window.location.hostname === 'localhost'
+        ? PRODUCTION_APP_URL
+        : window.location.origin;
+      setEmailUrl(cfg?.appUrl || fallback);
       setEmailEnabled(!!cfg?.enabled);
     } catch {
-      setEmailUrl(window.location.origin);
+      setEmailUrl(window.location.hostname === 'localhost' ? PRODUCTION_APP_URL : window.location.origin);
     }
   }, []);
 

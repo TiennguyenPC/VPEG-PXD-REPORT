@@ -1262,7 +1262,7 @@ function getDefaultHeaders(sheetName) {
     case 'PROJECT_TASKS':
       return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'TÁC_VỤ', 'NHÂN_SỰ', 'NGÀY_BẮT_ĐẦU', 'NGÀY_KẾT_THÚC', 'BỘ_CHỨA', 'TRẠNG_THÁI', 'ƯU_TIÊN', 'GHI_CHÚ'];
     case 'USERS':
-      return ['USER_ID', 'USERNAME', 'PASSWORD_HASH', 'SALT', 'EMAIL', 'EMPLOYEE_ID', 'DISPLAY_NAME', 'ROLE', 'ASSIGNED_PROJECTS', 'ACTIVE', 'LAST_LOGIN', 'CREATED_AT'];
+      return ['USER_ID', 'USERNAME', 'PASSWORD_HASH', 'SALT', 'EMAIL', 'EMPLOYEE_ID', 'DISPLAY_NAME', 'ROLE', 'ASSIGNED_PROJECTS', 'ACTIVE', 'FAILED_LOGIN_COUNT', 'LOCKED', 'LAST_LOGIN', 'CREATED_AT'];
     case 'AUDIT_LOG':
       return ['LOG_ID', 'TIMESTAMP', 'USER_ID', 'USERNAME', 'DISPLAY_NAME', 'ACTION', 'RESOURCE_TYPE', 'PROJECT_ID', 'SUMMARY', 'DETAILS'];
     case 'NOTIFICATIONS':
@@ -2003,6 +2003,7 @@ function authorizeMailApp_() {
 // ================= AUTH / USERS =================
 
 var AUTH_SESSION_TTL_SEC = 8 * 60 * 60;
+var MAX_FAILED_LOGINS_ = 3;
 
 function ensureUsersSheet_(ss) {
   ss = ss || getSpreadsheet();
@@ -2011,8 +2012,48 @@ function ensureUsersSheet_(ss) {
     sheet = ss.insertSheet('USERS');
   }
   initializeSheetIfEmpty(sheet, 'USERS');
+  ensureUserLockColumns_(sheet);
   seedAdminIfNeeded_(ss, sheet);
   return sheet;
+}
+
+function ensureUserLockColumns_(sheet) {
+  if (!sheet) return;
+  var lastCol = sheet.getLastColumn();
+  if (lastCol < 1) return;
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var needed = ['FAILED_LOGIN_COUNT', 'LOCKED'];
+  var toAdd = [];
+  for (var i = 0; i < needed.length; i++) {
+    if (findColumnIndex(headers, needed[i]) === -1) toAdd.push(needed[i]);
+  }
+  if (!toAdd.length) return;
+  for (var j = 0; j < toAdd.length; j++) {
+    sheet.getRange(1, lastCol + 1 + j).setValue(toAdd[j]);
+  }
+}
+
+function isUserLocked_(user) {
+  return String(user.LOCKED || '').trim().toUpperCase() === 'TRUE';
+}
+
+function getFailedLoginCount_(user) {
+  var n = parseInt(user.FAILED_LOGIN_COUNT, 10);
+  return isNaN(n) ? 0 : n;
+}
+
+function recordFailedLogin_(ss, user) {
+  var count = getFailedLoginCount_(user) + 1;
+  var updates = { FAILED_LOGIN_COUNT: count };
+  if (count >= MAX_FAILED_LOGINS_) {
+    updates.LOCKED = 'TRUE';
+  }
+  updateUserSheetRow_(ss, user, updates);
+  return count;
+}
+
+function resetLoginAttempts_(ss, user) {
+  updateUserSheetRow_(ss, user, { FAILED_LOGIN_COUNT: 0, LOCKED: 'FALSE' });
 }
 
 function seedAdminIfNeeded_(ss, sheet) {
@@ -2035,6 +2076,8 @@ function seedAdminIfNeeded_(ss, sheet) {
     ROLE: 'admin',
     ASSIGNED_PROJECTS: '',
     ACTIVE: 'TRUE',
+    FAILED_LOGIN_COUNT: 0,
+    LOCKED: 'FALSE',
     LAST_LOGIN: '',
     CREATED_AT: now
   });
@@ -2282,15 +2325,38 @@ function handleAuthLogin_(payload) {
   if (!user) {
     return createResponse({ status: 'error', message: 'Tên đăng nhập hoặc mật khẩu không đúng' }, 401);
   }
+  if (isUserLocked_(user)) {
+    return createResponse({
+      status: 'error',
+      message: 'Tài khoản đã bị khóa do nhập sai mật khẩu quá 3 lần. Liên hệ Admin để mở khóa.'
+    }, 403);
+  }
   if (!isUserActive_(user)) {
     return createResponse({ status: 'error', message: 'Tài khoản đã bị vô hiệu hóa' }, 403);
   }
 
   var hash = hashPassword_(password, user.SALT || '');
   if (hash !== String(user.PASSWORD_HASH || '')) {
-    return createResponse({ status: 'error', message: 'Tên đăng nhập hoặc mật khẩu không đúng' }, 401);
+    var fails = recordFailedLogin_(ss, user);
+    if (fails >= MAX_FAILED_LOGINS_) {
+      writeAuditLog_({
+        userId: String(user.USER_ID || ''),
+        username: String(user.USERNAME || username),
+        displayName: String(user.DISPLAY_NAME || user.USERNAME || username)
+      }, 'account-locked', { username: username, failedAttempts: fails });
+      return createResponse({
+        status: 'error',
+        message: 'Tài khoản đã bị khóa do nhập sai mật khẩu quá 3 lần. Liên hệ Admin để mở khóa.'
+      }, 403);
+    }
+    var left = MAX_FAILED_LOGINS_ - fails;
+    return createResponse({
+      status: 'error',
+      message: 'Tên đăng nhập hoặc mật khẩu không đúng. Còn ' + left + ' lần thử.'
+    }, 401);
   }
 
+  resetLoginAttempts_(ss, user);
   updateUserLastLogin_(ss, user);
   var session = createAuthSession_(user);
   writeAuditLog_(session.user, 'login', { username: username });
@@ -2393,6 +2459,8 @@ function normalizeUserRole_(role) {
 function sanitizeUserForAdminList_(user) {
   var base = sanitizeUserForClient_(user);
   base.active = isUserActive_(user);
+  base.locked = isUserLocked_(user);
+  base.failedLoginCount = getFailedLoginCount_(user);
   base.lastLogin = String(user.LAST_LOGIN || '');
   base.createdAt = String(user.CREATED_AT || '');
   base._rowIndex = user._rowIndex;
@@ -2520,6 +2588,8 @@ function handleAddUser_(payload) {
     ROLE: role,
     ASSIGNED_PROJECTS: assignedProjects,
     ACTIVE: 'TRUE',
+    FAILED_LOGIN_COUNT: 0,
+    LOCKED: 'FALSE',
     LAST_LOGIN: '',
     CREATED_AT: now
   });
@@ -2602,6 +2672,10 @@ function handleUpdateUser_(payload) {
       return createResponse({ status: 'error', message: 'Không thể vô hiệu hóa tài khoản Admin' }, 400);
     }
     updates.ACTIVE = willActive ? 'TRUE' : 'FALSE';
+  }
+  if (payload.unlock === true || payload.locked === false) {
+    updates.FAILED_LOGIN_COUNT = 0;
+    updates.LOCKED = 'FALSE';
   }
   if (payload.password) {
     var newPass = String(payload.password);
@@ -3658,11 +3732,16 @@ function buildAuditSummary_(action, payload) {
   switch (action) {
     case 'login':
       return 'Đăng nhập — ' + (payload.username || '');
+    case 'account-locked':
+      return 'Khóa tài khoản — ' + (payload.username || '');
     case 'logout':
       return 'Đăng xuất';
     case 'add-user':
       return 'Tạo tài khoản: ' + (payload.username || '');
     case 'update-user':
+      if (payload.unlock === true || payload.locked === false) {
+        return 'Mở khóa tài khoản: ' + (payload.userId || payload.username || '');
+      }
       if (payload.active === false || String(payload.active).toUpperCase() === 'FALSE') {
         return 'Vô hiệu hóa tài khoản: ' + (payload.userId || payload.username || '');
       }
