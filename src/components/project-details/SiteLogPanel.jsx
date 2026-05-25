@@ -12,6 +12,7 @@ import {
   mergePhotoLists,
   normalizePhotoDateKey,
   getLogNoteText,
+  getPhotoUrlsFromLog,
   canonicalPhotoPersistUrl,
   parseDailyNote,
   serializeDailyNote,
@@ -80,12 +81,13 @@ const urlsToPhotoItems = (urls) => urls.map((url) => ({
   status: 'ready',
 }));
 
-const buildPhotosForDate = (serverPhotos, cachedPhotos, prevPhotos) => {
+/** Ảnh hiển thị: Sheet là nguồn chính; localStorage chỉ giữ ảnh đang upload */
+const buildPhotosForDate = (serverPhotos, prevPhotos) => {
   const pending = (prevPhotos || []).filter((p) => {
     const item = normalizePhotoItem(p);
     return item.status === 'uploading' || item.preview?.startsWith('blob:');
   });
-  return mergePhotoLists(mergePhotoLists(serverPhotos, cachedPhotos), pending).slice(0, 4);
+  return mergePhotoLists(serverPhotos, pending).slice(0, 4);
 };
 
 const photosFromLogs = (logsList) => {
@@ -93,13 +95,9 @@ const photosFromLogs = (logsList) => {
   for (const log of logsList || []) {
     const dateKey = normalizePhotoDateKey(log.LOG_DATE || log.NGÀY);
     if (!dateKey) continue;
-    const parsedNote = parseDailyNote(getLogNoteText(log));
-    const imageUrls = parsedNote.images
-      ? parsedNote.images.split('\n').map((l) => l.trim()).filter(Boolean)
-      : [];
+    const imageUrls = getPhotoUrlsFromLog(log);
     if (!imageUrls.length) continue;
-    const items = urlsToPhotoItems(imageUrls.map(canonicalPhotoPersistUrl).filter(Boolean));
-    if (items.length) out[dateKey] = items;
+    out[dateKey] = urlsToPhotoItems(imageUrls);
   }
   return out;
 };
@@ -217,6 +215,7 @@ export default function SiteLogPanel({
   setSelectedMonth,
   activeLog,
   onUpdateLog,
+  onSaveLogImmediate,
   saveStatus,
   onSaveStatusChange
 }) {
@@ -227,22 +226,11 @@ export default function SiteLogPanel({
   const fileInputRef = useRef(null);
   const photosByDateRef = useRef({});
   const persistPhotosTimerRef = useRef(null);
+  const syncedPhotoDatesRef = useRef(new Set());
   const projectId = project?.PROJECT_ID || project?.id;
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(null);
-  const [photosByDate, setPhotosByDate] = useState(() => {
-    if (!projectId) return {};
-    const cached = readSitePhotosByProject(projectId);
-    const out = {};
-    for (const [date, photos] of Object.entries(cached)) {
-      const key = normalizePhotoDateKey(date);
-      out[key] = photos.map(normalizePhotoItem).map((p) => ({
-        ...p,
-        preview: toDisplayableImageUrl(p.remote || p.preview),
-      }));
-    }
-    return out;
-  });
+  const [photosByDate, setPhotosByDate] = useState({});
   const [liveWeather, setLiveWeather] = useState(null);
   const [uploadError, setUploadError] = useState('');
   const [needsDriveAuth, setNeedsDriveAuth] = useState(false);
@@ -303,7 +291,7 @@ export default function SiteLogPanel({
   const currentImages = currentPhotos;
   const bgUploadCount = currentPhotos.filter((p) => p.status === 'uploading').length;
 
-  const persistPhotosToLog = (photos) => {
+  const persistPhotosToLog = async (photos) => {
     if (!canEdit) return;
     const urls = photos.map(photoToPersistUrl).filter(Boolean);
     if (photos.length && !urls.length) return;
@@ -311,8 +299,20 @@ export default function SiteLogPanel({
     const parsedNote = parseDailyNote(getLogNoteText(activeLog));
     parsedNote.images = urls.join('\n');
     const serialized = serializeDailyNote(parsedNote);
-    onUpdateLog({ GHI_CHÚ_HIỆN_TRƯỜNG: serialized, DAILY_NOTE: serialized });
+    const noteUpdate = { GHI_CHÚ_HIỆN_TRƯỜNG: serialized, DAILY_NOTE: serialized };
+
+    onUpdateLog(noteUpdate);
     if (projectId) writeDateSitePhotos(projectId, selectedDate, photos);
+
+    if (onSaveLogImmediate) {
+      try {
+        await onSaveLogImmediate(noteUpdate);
+        setUploadError('');
+      } catch (err) {
+        console.error(err);
+        setUploadError('Ảnh đã lên Drive nhưng chưa lưu được vào nhật ký chung. Thử lại hoặc liên hệ admin.');
+      }
+    }
   };
 
   useEffect(() => {
@@ -323,11 +323,9 @@ export default function SiteLogPanel({
   useEffect(() => {
     if (!logs?.length && !projectId) return;
     const fromServer = photosFromLogs(logs);
-    const cachedAll = projectId ? readSitePhotosByProject(projectId) : {};
     setPhotosByDate((prev) => {
       const dateKeys = new Set([
         ...Object.keys(fromServer),
-        ...Object.keys(cachedAll).map(normalizePhotoDateKey),
         ...Object.keys(prev).map(normalizePhotoDateKey),
       ]);
       const next = { ...prev };
@@ -335,13 +333,9 @@ export default function SiteLogPanel({
       for (const rawDate of dateKeys) {
         const dateKey = normalizePhotoDateKey(rawDate);
         const serverPhotos = fromServer[dateKey] || [];
-        const cachedPhotos = (cachedAll[dateKey] || cachedAll[rawDate] || []).map(normalizePhotoItem).map((p) => ({
-          ...p,
-          preview: toDisplayableImageUrl(p.remote || p.preview),
-        }));
-        const merged = buildPhotosForDate(serverPhotos, cachedPhotos, prev[dateKey] || prev[rawDate] || []);
+        const merged = buildPhotosForDate(serverPhotos, prev[dateKey] || prev[rawDate] || []);
         const prevList = (prev[dateKey] || prev[rawDate] || []).map(normalizePhotoItem);
-        if (merged.length && JSON.stringify(merged) !== JSON.stringify(prevList)) {
+        if (JSON.stringify(merged) !== JSON.stringify(prevList)) {
           next[dateKey] = merged;
           changed = true;
         }
@@ -350,14 +344,27 @@ export default function SiteLogPanel({
     });
   }, [logs, projectId]);
 
+  // Đẩy ảnh còn trong cache trình duyệt lên Sheet (sửa dữ liệu cũ chỉ lưu local)
+  useEffect(() => {
+    if (!canEdit || !projectId || !selectedDate || !onSaveLogImmediate || !logs?.length) return;
+    const dateKey = normalizePhotoDateKey(selectedDate);
+    if (syncedPhotoDatesRef.current.has(dateKey)) return;
+
+    const serverCount = (photosFromLogs(logs)[dateKey] || []).length;
+    const cached = (readSitePhotosByProject(projectId)[dateKey] || [])
+      .map(normalizePhotoItem)
+      .filter((p) => photoToPersistUrl(p));
+    if (cached.length <= serverCount) return;
+
+    syncedPhotoDatesRef.current.add(dateKey);
+    void persistPhotosToLog(cached.slice(0, 4));
+  }, [logs, selectedDate, projectId, canEdit, onSaveLogImmediate]);
+
   // Load images when date changes — merge Sheet + localStorage, không ghi đè ảnh đang upload
   useEffect(() => {
     if (!selectedDate) return;
     const dateKey = normalizePhotoDateKey(selectedDate);
-    const parsedNote = activeLog ? parseDailyNote(getLogNoteText(activeLog)) : { images: '' };
-    const imageUrls = parsedNote.images
-      ? parsedNote.images.split('\n').map((l) => l.trim()).filter(Boolean)
-      : [];
+    const imageUrls = activeLog ? getPhotoUrlsFromLog(activeLog) : [];
 
     setPhotosByDate((prev) => {
       const local = prev[dateKey] || prev[selectedDate] || [];
@@ -367,15 +374,8 @@ export default function SiteLogPanel({
       });
       if (hasPending) return prev;
 
-      const serverPhotos = urlsToPhotoItems(imageUrls.map(canonicalPhotoPersistUrl).filter(Boolean));
-      const cachedLocal = projectId
-        ? (readSitePhotosByProject(projectId)[dateKey] || []).map(normalizePhotoItem).map((p) => ({
-            ...p,
-            preview: toDisplayableImageUrl(p.remote || p.preview),
-          }))
-        : local.filter((p) => photoToPersistUrl(normalizePhotoItem(p)));
-
-      const merged = buildPhotosForDate(serverPhotos, cachedLocal, local);
+      const serverPhotos = urlsToPhotoItems(imageUrls);
+      const merged = buildPhotosForDate(serverPhotos, local);
       const prevList = local.map(normalizePhotoItem);
       if (JSON.stringify(merged) === JSON.stringify(prevList)) return prev;
       return { ...prev, [dateKey]: merged };

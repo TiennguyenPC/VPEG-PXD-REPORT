@@ -453,6 +453,133 @@ export default function ProjectDetailPage() {
     });
   };
 
+  const buildSiteLogSavePayload = (toSave) => {
+    const existingInLogs = logsRef.current.find(
+      (l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(toSave.LOG_DATE)
+    );
+    let dailyNote = toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+    const cachedPhotoUrls = getCachedPhotoUrls(id, toSave.LOG_DATE);
+    const existingNoteText = existingInLogs ? getLogNoteText(existingInLogs) : '';
+    dailyNote = mergeDailyNotePreserveImages(existingNoteText, dailyNote, cachedPhotoUrls);
+
+    return {
+      PROJECT_ID: String(id),
+      LOG_DATE: toSave.LOG_DATE,
+      NGÀY: toSave.LOG_DATE,
+      MANPOWER: toSave.MANPOWER !== undefined ? Number(toSave.MANPOWER || 0) : Number(toSave.NHÂN_LỰC_SITE || 0),
+      NHÂN_LỰC_SITE: toSave.MANPOWER !== undefined ? Number(toSave.MANPOWER || 0) : Number(toSave.NHÂN_LỰC_SITE || 0),
+      ENGINEERS: toSave.ENGINEERS !== undefined ? Number(toSave.ENGINEERS || 0) : Number(toSave.KỸ_SƯ_GS || 0),
+      KỸ_SƯ_GS: toSave.ENGINEERS !== undefined ? Number(toSave.ENGINEERS || 0) : Number(toSave.KỸ_SƯ_GS || 0),
+      WEATHER: toSave.WEATHER !== undefined ? toSave.WEATHER : (toSave.THỜI_TIẾT || ''),
+      THỜI_TIẾT: toSave.WEATHER !== undefined ? toSave.WEATHER : (toSave.THỜI_TIẾT || ''),
+      INCIDENT_COUNT: toSave.INCIDENT_COUNT !== undefined ? Number(toSave.INCIDENT_COUNT || 0) : Number(parseInt(toSave.SỰ_CỐ) || 0),
+      SỰ_CỐ: `${toSave.INCIDENT_COUNT !== undefined ? Number(toSave.INCIDENT_COUNT || 0) : Number(parseInt(toSave.SỰ_CỐ) || 0)} vụ`,
+      DAILY_NOTE: dailyNote,
+      GHI_CHÚ_HIỆN_TRƯỜNG: dailyNote,
+      WEEKLY_ASSESSMENT: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
+      ĐÁNH_GIÁ_TUẦN: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
+      MONTHLY_REPORT: toSave.MONTHLY_REPORT !== undefined ? toSave.MONTHLY_REPORT : '',
+      STATUS: 'Saved',
+      UPDATED_BY: 'NV - GIÁM SÁT',
+      UPDATED_AT: new Date().toISOString(),
+      _rowIndex: toSave._rowIndex,
+    };
+  };
+
+  const applySiteLogApiResponse = (res, dailyRes, weeklyRes, monthlyRes) => {
+    if (res && res.dailyLogs) {
+      setLogs(res.dailyLogs);
+      if (res.weeklyLogs) setWeeklyLogs(res.weeklyLogs);
+      if (res.monthlyLogs) setMonthlyLogs(res.monthlyLogs);
+      setBundleData((prev) => {
+        const next = {
+          ...(prev || {}),
+          siteLogs: res.dailyLogs,
+          weeklyLogs: res.weeklyLogs || prev?.weeklyLogs,
+          monthlyLogs: res.monthlyLogs || prev?.monthlyLogs,
+        };
+        writeBundleCache(id, next);
+        return next;
+      });
+      return;
+    }
+    if (dailyRes) setLogs(dailyRes);
+    if (weeklyRes) setWeeklyLogs(weeklyRes);
+    if (monthlyRes) setMonthlyLogs(monthlyRes);
+    setBundleData((prev) => {
+      const next = {
+        ...(prev || {}),
+        siteLogs: dailyRes || prev?.siteLogs,
+        weeklyLogs: weeklyRes || prev?.weeklyLogs,
+        monthlyLogs: monthlyRes || prev?.monthlyLogs,
+      };
+      writeBundleCache(id, next);
+      return next;
+    });
+  };
+
+  const saveSiteLogImmediate = useCallback(async (noteUpdates) => {
+    if (!canEditProject(user, id)) {
+      throw new Error('Không có quyền lưu nhật ký');
+    }
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = null;
+    }
+    pendingSaveRef.current = null;
+
+    const existingLog = logsRef.current.find(
+      (l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(selectedDate)
+    ) || {
+      PROJECT_ID: id,
+      LOG_DATE: selectedDate,
+      NGÀY: selectedDate,
+      MANPOWER: 0,
+      ENGINEERS: 0,
+      WEATHER: '',
+      INCIDENT_COUNT: 0,
+      DAILY_NOTE: '',
+      WEEKLY_ASSESSMENT: '',
+      MONTHLY_REPORT: '',
+      STATUS: 'Draft',
+    };
+
+    const dailyNote = noteUpdates.DAILY_NOTE ?? noteUpdates.GHI_CHÚ_HIỆN_TRƯỜNG ?? existingLog.DAILY_NOTE ?? '';
+    const updatedLog = {
+      ...existingLog,
+      ...noteUpdates,
+      DAILY_NOTE: dailyNote,
+      GHI_CHÚ_HIỆN_TRƯỜNG: dailyNote,
+      LOG_DATE: selectedDate,
+      NGÀY: selectedDate,
+      UPDATED_BY: 'NV - GIÁM SÁT',
+      UPDATED_AT: new Date().toISOString(),
+    };
+
+    setLogs((prev) => {
+      const idx = prev.findIndex((l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(selectedDate));
+      if (idx !== -1) return prev.map((l, i) => (i === idx ? { ...l, ...updatedLog } : l));
+      return [...prev, updatedLog];
+    });
+
+    updateSaveStatus('Saving...');
+    const payload = buildSiteLogSavePayload(updatedLog);
+    const res = await api.updateSiteLog(payload);
+    updateSaveStatus('Saved');
+
+    if (res && res.dailyLogs) {
+      applySiteLogApiResponse(res);
+    } else {
+      const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
+        api.getSiteLogs(id),
+        api.getWeeklyLogs(id),
+        api.getMonthlyLogs(id),
+      ]);
+      applySiteLogApiResponse(null, dailyRes, weeklyRes, monthlyRes);
+    }
+  }, [id, user, selectedDate, updateSaveStatus]);
+
   const handleUpdateLog = (field, value) => {
     if (!canEditProject(user, id)) return;
 
@@ -580,73 +707,20 @@ export default function ProjectDetailPage() {
     pendingSaveRef.current = null;
 
     try {
-      const existingInLogs = logsRef.current.find(
-        (l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(toSave.LOG_DATE)
-      );
-      let dailyNote = toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || '');
-      const cachedPhotoUrls = getCachedPhotoUrls(id, toSave.LOG_DATE);
-      const existingNoteText = existingInLogs ? getLogNoteText(existingInLogs) : '';
-      dailyNote = mergeDailyNotePreserveImages(existingNoteText, dailyNote, cachedPhotoUrls);
-
-      const payload = {
-        PROJECT_ID: String(id),
-        LOG_DATE: toSave.LOG_DATE,
-        NGÀY: toSave.LOG_DATE,
-        MANPOWER: toSave.MANPOWER !== undefined ? Number(toSave.MANPOWER || 0) : Number(toSave.NHÂN_LỰC_SITE || 0),
-        NHÂN_LỰC_SITE: toSave.MANPOWER !== undefined ? Number(toSave.MANPOWER || 0) : Number(toSave.NHÂN_LỰC_SITE || 0),
-        ENGINEERS: toSave.ENGINEERS !== undefined ? Number(toSave.ENGINEERS || 0) : Number(toSave.KỸ_SƯ_GS || 0),
-        KỸ_SƯ_GS: toSave.ENGINEERS !== undefined ? Number(toSave.ENGINEERS || 0) : Number(toSave.KỸ_SƯ_GS || 0),
-        WEATHER: toSave.WEATHER !== undefined ? toSave.WEATHER : (toSave.THỜI_TIẾT || ''),
-        THỜI_TIẾT: toSave.WEATHER !== undefined ? toSave.WEATHER : (toSave.THỜI_TIẾT || ''),
-        INCIDENT_COUNT: toSave.INCIDENT_COUNT !== undefined ? Number(toSave.INCIDENT_COUNT || 0) : Number(parseInt(toSave.SỰ_CỐ) || 0),
-        SỰ_CỐ: `${toSave.INCIDENT_COUNT !== undefined ? Number(toSave.INCIDENT_COUNT || 0) : Number(parseInt(toSave.SỰ_CỐ) || 0)} vụ`,
-        DAILY_NOTE: dailyNote,
-        GHI_CHÚ_HIỆN_TRƯỜNG: dailyNote,
-        WEEKLY_ASSESSMENT: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
-        ĐÁNH_GIÁ_TUẦN: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
-        MONTHLY_REPORT: toSave.MONTHLY_REPORT !== undefined ? toSave.MONTHLY_REPORT : '',
-        STATUS: 'Saved',
-        UPDATED_BY: 'NV - GIÁM SÁT',
-        UPDATED_AT: new Date().toISOString(),
-        _rowIndex: toSave._rowIndex
-      };
+      const payload = buildSiteLogSavePayload(toSave);
 
       const res = await api.updateSiteLog(payload);
       updateSaveStatus('Saved');
 
       if (res && res.dailyLogs) {
-        setLogs(res.dailyLogs);
-        if (res.weeklyLogs) setWeeklyLogs(res.weeklyLogs);
-        if (res.monthlyLogs) setMonthlyLogs(res.monthlyLogs);
-        setBundleData((prev) => {
-          const next = {
-            ...(prev || {}),
-            siteLogs: res.dailyLogs,
-            weeklyLogs: res.weeklyLogs || prev?.weeklyLogs,
-            monthlyLogs: res.monthlyLogs || prev?.monthlyLogs,
-          };
-          writeBundleCache(id, next);
-          return next;
-        });
+        applySiteLogApiResponse(res);
       } else {
         const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
           api.getSiteLogs(id),
           api.getWeeklyLogs(id),
           api.getMonthlyLogs(id)
         ]);
-        if (dailyRes) setLogs(dailyRes);
-        if (weeklyRes) setWeeklyLogs(weeklyRes);
-        if (monthlyRes) setMonthlyLogs(monthlyRes);
-        setBundleData((prev) => {
-          const next = {
-            ...(prev || {}),
-            siteLogs: dailyRes || prev?.siteLogs,
-            weeklyLogs: weeklyRes || prev?.weeklyLogs,
-            monthlyLogs: monthlyRes || prev?.monthlyLogs,
-          };
-          writeBundleCache(id, next);
-          return next;
-        });
+        applySiteLogApiResponse(null, dailyRes, weeklyRes, monthlyRes);
       }
 
     } catch (error) {
@@ -741,6 +815,7 @@ export default function ProjectDetailPage() {
                 setSelectedMonth={setSelectedMonth}
                 activeLog={activeLog}
                 onUpdateLog={handleUpdateLog}
+                onSaveLogImmediate={saveSiteLogImmediate}
                 saveStatus={saveStatus}
                 onSaveStatusChange={updateSaveStatus}
               />
