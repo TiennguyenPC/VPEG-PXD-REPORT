@@ -660,15 +660,20 @@ export default function ProjectDetailPage() {
   const projectEditable = canEditProject(user, id);
 
   return (
-    <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans">
+    <div className="h-screen flex overflow-hidden bg-[var(--bg-main)] text-slate-100 font-sans">
 
       {/* LEFT SIDEBAR (Duplicated from App.jsx as requested) */}
       <Sidebar activeItem="project-detail" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto print:overflow-visible">
+      <main className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden print:overflow-visible">
         <ProjectEditProvider canEdit={projectEditable}>
-        <div className="p-4 md:p-5 space-y-4 max-w-7xl mx-auto w-full">
+        <div
+          id="project-detail-scroll"
+          className="flex-1 overflow-y-auto overflow-x-hidden print:overflow-visible"
+        >
+        <div className="max-w-7xl mx-auto w-full">
+          <div className="p-4 md:px-5 pt-4">
           <ProjectHeader
             project={enrichedProject} 
             milestones={bundleData?.milestones || []} 
@@ -677,21 +682,23 @@ export default function ProjectDetailPage() {
             isSidebarCollapsed={isCollapsed}
             shareMode={canShareProjectWithClient(user) ? 'public' : 'internal'}
           />
+          </div>
 
-          <ProjectSectionNav />
+          <ProjectSectionNav scrollContainerId="project-detail-scroll" />
 
+          <div className="p-4 md:p-5 pt-2 space-y-4">
           {/* SECTION 2 - KPI OVERVIEW */}
-          <section id="section-kpi" className="scroll-mt-20">
+          <section id="section-kpi" className="scroll-mt-16">
             <KPIOverview project={enrichedProject} milestones={bundleData?.milestones || []} />
           </section>
 
           {/* SECTION 3 - MILESTONE TIMELINE */}
-          <section id="section-timeline" className="scroll-mt-20">
+          <section id="section-timeline" className="scroll-mt-16">
             <MilestoneTimeline project={enrichedProject} moduleProgress={moduleProgress} milestonesData={bundleData?.milestones || []} />
           </section>
 
           {/* SECTION 4 - NHẬT KÝ & VẬN HÀNH (trước S-Curve để dễ thấy) */}
-          <section id="section-site-log" className="scroll-mt-20">
+          <section id="section-site-log" className="scroll-mt-16">
           <div className="grid grid-cols-1 lg:grid-cols-3 print:grid-cols-3 gap-6">
             <div className={selectedView === 'day' ? 'lg:col-span-3 print:col-span-3' : 'lg:col-span-2 print:col-span-2'}>
               <SiteLogPanel
@@ -734,7 +741,7 @@ export default function ProjectDetailPage() {
           </section>
 
           {/* SECTION 5 - S-CURVE CHART (FULL WIDTH) */}
-          <section id="section-scurve" className="scroll-mt-20">
+          <section id="section-scurve" className="scroll-mt-16">
             <SCurveChart
               project={enrichedProject}
               milestonesData={bundleData?.milestones || []}
@@ -744,7 +751,7 @@ export default function ProjectDetailPage() {
           </section>
 
           {/* SECTION 6 - MAIN ACCORDION MODULES */}
-          <section id="section-modules" className="scroll-mt-20 space-y-4 pt-4">
+          <section id="section-modules" className="scroll-mt-16 space-y-4 pt-4">
             <RiskModule project={enrichedProject} initialData={bundleData?.risks} />
             <PermitModule project={enrichedProject} initialData={bundleData?.permits} onProgressChange={(pct) => handleModuleProgressChange('permit', pct)} />
             <DesignModule project={enrichedProject} initialData={bundleData?.designs} onProgressChange={(pct) => handleModuleProgressChange('design', pct)} />
@@ -753,6 +760,8 @@ export default function ProjectDetailPage() {
             <HandoverModule project={enrichedProject} initialData={bundleData?.handovers} onProgressChange={(pct) => handleModuleProgressChange('handover', pct)} />
           </section>
 
+        </div>
+        </div>
         </div>
         </ProjectEditProvider>
       </main>
