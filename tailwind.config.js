@@ -28,7 +28,7 @@ export default {
         }
       },
       fontFamily: {
-        sans: ["Inter", "sans-serif"],
+        sans: ['"Be Vietnam Pro"', 'Inter', 'sans-serif'],
       },
       fontSize: {
         'xxs': '0.65rem',

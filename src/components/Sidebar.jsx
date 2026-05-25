@@ -136,7 +136,7 @@ export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
                 ${isCollapsed ? 'justify-center' : ''}`}
             >
               <Icon className={`w-4 h-4 shrink-0 ${activeItem === key ? 'text-[#5252ff]' : 'text-[var(--text-muted)]'}`} />
-              {!isCollapsed && <span className="truncate">{label}</span>}
+              {!isCollapsed && <span className="truncate [font-variant-ligatures:normal]">{label}</span>}
             </a>
           ))}
           {activeItem === 'project-detail' && (
