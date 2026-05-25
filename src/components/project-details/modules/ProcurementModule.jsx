@@ -304,7 +304,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
           <div className="w-8 h-8 rounded bg-[#f97316]/10 text-[#f97316] flex items-center justify-center">
             <Truck className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">{t('modules.procurement')}</h3>
+          <h3 className="text-sm font-bold text-[var(--text-strong)] uppercase tracking-wider">{t('modules.procurement')}</h3>
         </div>
         
         <div className="flex items-center gap-4">
@@ -389,7 +389,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={item.TÌNH_TRẠNG_VẬT_TƯ || '-'} colorClass={getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={item.TÌNH_TRẠNG_VẬT_TƯ || ''}
                             disabled={!canEdit}
                             onChange={(e) => handleUpdate(item.id, 'TÌNH_TRẠNG_VẬT_TƯ', e.target.value)}
@@ -405,7 +405,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={item.ĐÁNH_GIÁ_TIẾN_ĐỘ || '-'} colorClass={getProgressStyle(item.ĐÁNH_GIÁ_TIẾN_ĐỘ)} ts={ts}>
                           <select 
-                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getProgressStyle(item.ĐÁNH_GIÁ_TIẾN_ĐỘ)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={item.ĐÁNH_GIÁ_TIẾN_ĐỘ || ''}
                             disabled={!canEdit}
                             onChange={(e) => handleUpdate(item.id, 'ĐÁNH_GIÁ_TIẾN_ĐỘ', e.target.value)}

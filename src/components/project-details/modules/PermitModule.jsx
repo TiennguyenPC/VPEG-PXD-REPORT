@@ -208,44 +208,45 @@ export default function PermitModule({ project, initialData, onProgressChange })
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'Chưa làm': return 'text-slate-400';
-      case 'Đang chuẩn bị hồ sơ': return 'text-[#f59e0b]';
-      case 'Đã nộp hồ sơ': return 'text-[#3b82f6]';
-      case 'Đang xử lý': return 'text-[#f97316]';
-      case 'Chờ phản hồi': return 'text-[#f59e0b]';
-      case 'Đang bổ sung': return 'text-[#ef4444]';
-      case 'Tạm dừng': return 'text-rose-500';
-      default: return 'text-slate-300';
+      case 'Chưa làm': return 'text-slate-500 dark:text-slate-400';
+      case 'Đang chuẩn bị hồ sơ': return 'text-amber-600 dark:text-[#f59e0b]';
+      case 'Đã nộp hồ sơ': return 'text-blue-600 dark:text-[#3b82f6]';
+      case 'Đang xử lý': return 'text-orange-600 dark:text-[#f97316]';
+      case 'Chờ phản hồi': return 'text-amber-600 dark:text-[#f59e0b]';
+      case 'Đang bổ sung': return 'text-red-600 dark:text-[#ef4444]';
+      case 'Tạm dừng': return 'text-rose-600 dark:text-rose-500';
+      default: return 'text-slate-600 dark:text-slate-300';
     }
   };
 
   const getResultColor = (result) => {
     switch (result) {
-      case 'Chưa có phản hồi': return 'text-slate-400';
-      case 'Đã tiếp nhận': return 'text-[#3b82f6]';
-      case 'Đã có biên nhận': return 'text-[#3b82f6]';
-      case 'Đang xử lý': return 'text-[#f97316]';
-      case 'Yêu cầu bổ sung': return 'text-red-400';
-      case 'Đã duyệt': return 'text-[#10b981]';
-      case 'Bị từ chối': return 'text-rose-500';
-      default: return 'text-slate-300';
+      case 'Chưa có phản hồi': return 'text-slate-500 dark:text-slate-400';
+      case 'Đã tiếp nhận': return 'text-blue-600 dark:text-[#3b82f6]';
+      case 'Đã có biên nhận': return 'text-blue-600 dark:text-[#3b82f6]';
+      case 'Đang xử lý': return 'text-orange-600 dark:text-[#f97316]';
+      case 'Yêu cầu bổ sung': return 'text-red-600 dark:text-red-400';
+      case 'Đã duyệt': return 'text-emerald-600 dark:text-[#10b981]';
+      case 'Bị từ chối': return 'text-rose-600 dark:text-rose-500';
+      default: return 'text-slate-600 dark:text-slate-300';
     }
   };
 
   const getNextStepColor = (step) => {
     switch (step) {
-      case 'Nộp hồ sơ': return 'text-[#3b82f6]';
-      case 'Bổ sung hồ sơ': return 'text-[#f59e0b]';
-      case 'Theo dõi': return 'text-[#eab308]';
-      case 'Lấy kết quả': return 'text-[#10b981] font-semibold';
-      case 'Mời nghiệm thu': return 'text-[#10b981] font-semibold';
-      default: return 'text-slate-300';
+      case 'Nộp hồ sơ': return 'text-blue-600 dark:text-[#3b82f6]';
+      case 'Bổ sung hồ sơ': return 'text-amber-600 dark:text-[#f59e0b]';
+      case 'Theo dõi': return 'text-yellow-700 dark:text-[#eab308]';
+      case 'Gọi thúc': return 'text-slate-700 dark:text-slate-300';
+      case 'Lấy kết quả': return 'text-emerald-600 dark:text-[#10b981] font-semibold';
+      case 'Mời nghiệm thu': return 'text-emerald-600 dark:text-[#10b981] font-semibold';
+      default: return 'text-slate-600 dark:text-slate-300';
     }
   };
 
   const getFinalResultColor = (res) => {
-    if (res && res !== '-' && res !== 'N/A') return 'text-[#10b981] font-semibold';
-    return 'text-slate-500';
+    if (res && res !== '-' && res !== 'N/A') return 'text-emerald-600 dark:text-[#10b981] font-semibold';
+    return 'text-slate-500 dark:text-slate-500';
   };
 
   const getPermitIcon = (name) => {
@@ -270,7 +271,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
           <div className="w-8 h-8 rounded bg-[#6366f1]/10 text-[#6366f1] flex items-center justify-center">
             <FileText className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">{t('modules.permit')}</h3>
+          <h3 className="text-sm font-bold text-[var(--text-strong)] uppercase tracking-wider">{t('modules.permit')}</h3>
         </div>
 
         <div className="flex items-center gap-4">
@@ -334,14 +335,16 @@ export default function PermitModule({ project, initialData, onProgressChange })
 
                       return (
                         <tr key={p.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
-                          <td className="p-3 font-semibold text-slate-200 flex items-center gap-2">
+                          <td className="p-3 font-semibold text-[var(--text-main)]">
+                            <span className="flex items-center gap-2">
                             {getPermitIcon(p.HẠNG_MỤC)}
                             <span>{ts(p.HẠNG_MỤC)}</span>
+                            </span>
                           </td>
                           <td className="p-3">
                             <ModuleCell canEdit={canEdit} value={p.TÌNH_TRẠNG} colorClass={getStatusColor(p.TÌNH_TRẠNG)} ts={ts}>
                             <select
-                              className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(p.TÌNH_TRẠNG)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                              className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                               value={p.TÌNH_TRẠNG || ''}
                               disabled={!canEdit}
                               onChange={(e) => handleUpdate(p.id, 'TÌNH_TRẠNG', e.target.value)}
@@ -358,7 +361,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
                           <td className="p-3">
                             <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_PHẢN_HỒI} colorClass={getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)} ts={ts}>
                             <select
-                              className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                              className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                               value={p.KẾT_QUẢ_PHẢN_HỒI || ''}
                               disabled={!canEdit}
                               onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_PHẢN_HỒI', e.target.value)}
@@ -375,7 +378,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
                           <td className="p-3">
                             <ModuleCell canEdit={canEdit} value={p.BƯỚC_TIẾP_THEO} colorClass={getNextStepColor(p.BƯỚC_TIẾP_THEO)} ts={ts}>
                             <select
-                              className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(p.BƯỚC_TIẾP_THEO)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                              className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                               value={p.BƯỚC_TIẾP_THEO || ''}
                               disabled={!canEdit}
                               onChange={(e) => handleUpdate(p.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
@@ -392,7 +395,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
                           <td className="p-3">
                             <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_CUỐI} colorClass={getFinalResultColor(p.KẾT_QUẢ_CUỐI)} ts={ts}>
                             <select
-                              className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(p.KẾT_QUẢ_CUỐI)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                              className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                               value={p.KẾT_QUẢ_CUỐI || ''}
                               disabled={!canEdit}
                               onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_CUỐI', e.target.value)}

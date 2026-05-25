@@ -339,6 +339,12 @@
   border-color: transparent !important;
 }
 
+[data-theme='light'] select.module-field-select {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  color: inherit !important;
+}
+
 /* Print optimization to avoid splitting charts across pages */
 @media print {
   body {

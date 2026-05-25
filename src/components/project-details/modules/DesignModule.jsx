@@ -257,7 +257,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
           <div className="w-8 h-8 rounded bg-[#a855f7]/10 text-[#a855f7] flex items-center justify-center">
             <PenTool className="w-4 h-4" />
           </div>
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">{t('modules.design')}</h3>
+          <h3 className="text-sm font-bold text-[var(--text-strong)] uppercase tracking-wider">{t('modules.design')}</h3>
         </div>
         
         <div className="flex items-center gap-4">
@@ -315,14 +315,16 @@ export default function DesignModule({ project, initialData, onProgressChange })
                   <tbody className="divide-y divide-[var(--border-main)]">
                     {designs.map(d => (
                       <tr key={d.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
-                        <td className="p-3 font-semibold text-slate-200 flex items-center gap-2">
+                        <td className="p-3 font-semibold text-[var(--text-main)]">
+                          <span className="flex items-center gap-2">
                           <Compass className="w-3.5 h-3.5 text-slate-400" />
                           <span>{ts(d.HẠNG_MỤC)}</span>
+                          </span>
                         </td>
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={d.TÌNH_TRẠNG} colorClass={getStatusColor(d.TÌNH_TRẠNG)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getStatusColor(d.TÌNH_TRẠNG)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={d.TÌNH_TRẠNG || ''}
                             disabled={!canEdit}
                             onChange={(e) => handleUpdate(d.id, 'TÌNH_TRẠNG', e.target.value)}
@@ -338,7 +340,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={d.PHÊ_DUYỆT} colorClass={getApprovalColor(d.PHÊ_DUYỆT)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getApprovalColor(d.PHÊ_DUYỆT)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={d.PHÊ_DUYỆT || ''}
                             disabled={!canEdit}
                             onChange={(e) => handleUpdate(d.id, 'PHÊ_DUYỆT', e.target.value)}
@@ -354,7 +356,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={d.BƯỚC_TIẾP_THEO} colorClass={getNextStepColor(d.BƯỚC_TIẾP_THEO)} ts={ts}>
                           <select 
-                            className={`bg-transparent font-bold focus:outline-none appearance-none cursor-pointer ${getNextStepColor(d.BƯỚC_TIẾP_THEO)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={d.BƯỚC_TIẾP_THEO || ''}
                             disabled={!canEdit}
                             onChange={(e) => handleUpdate(d.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
@@ -372,7 +374,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={d.KẾT_QUẢ_CUỐI} colorClass={getFinalResultColor(d.KẾT_QUẢ_CUỐI)} ts={ts}>
                           <select 
-                            className={`bg-transparent focus:outline-none appearance-none cursor-pointer ${getFinalResultColor(d.KẾT_QUẢ_CUỐI)} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
                             value={d.KẾT_QUẢ_CUỐI || ''}
                             disabled={!canEdit}
                             onChange={(e) => handleUpdate(d.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
