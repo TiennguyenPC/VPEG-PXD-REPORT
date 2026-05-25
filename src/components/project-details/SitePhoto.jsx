@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2, AlertCircle, X, ZoomIn } from 'lucide-react';
 import { getImageFallbackUrls } from '../../utils/siteImageUrl';
 
@@ -98,10 +99,10 @@ export default function SitePhoto({ src, status = 'ready', onRemove, alt = 'Ản
       )}
     </div>
 
-    {lightboxOpen && (
+    {lightboxOpen && createPortal(
       <div
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4"
-        style={{ minHeight: '100dvh' }}
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/90 p-4 sm:p-6"
+        style={{ minHeight: '100dvh', minWidth: '100vw' }}
         onClick={() => setLightboxOpen(false)}
         role="dialog"
         aria-modal="true"
@@ -122,9 +123,10 @@ export default function SitePhoto({ src, status = 'ready', onRemove, alt = 'Ản
           decoding="async"
           draggable={false}
           onClick={(e) => e.stopPropagation()}
-          className="max-w-[min(100%,1200px)] max-h-[min(90dvh,900px)] w-auto h-auto object-contain rounded-lg shadow-2xl"
+          className="block max-w-[min(calc(100vw-2rem),1200px)] max-h-[min(calc(100dvh-2rem),calc(100vh-2rem),900px)] w-auto h-auto object-contain rounded-lg shadow-2xl mx-auto"
         />
-      </div>
+      </div>,
+      document.body
     )}
     </>
   );
