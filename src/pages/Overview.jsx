@@ -19,7 +19,7 @@ import Sidebar from '../components/Sidebar';
 import { useSidebar } from '../hooks/useSidebar';
 import { api, OVERVIEW_REFRESH_EVENT } from '../services/api';
 import { updateDashboardContext } from '../utils/dashboardContext';
-import { getTaskDescription } from '../utils/taskFields';
+import { getTaskDescription, enrichTaskForUI } from '../utils/taskFields';
 import { enrichProjectsProgress } from '../utils/projectProgress';
 import { buildOverviewRiskRows } from '../utils/riskHelpers';
 
@@ -121,14 +121,7 @@ export default function Overview() {
   const [projects, setProjects] = useState(() => readCachedArray('epc_projects_cache'));
   const [tasks, setTasks] = useState(() => readCachedArray('epc_tasks_cache'));
   const [allRisks, setAllRisks] = useState(() => readCachedArray('epc_risks_cache'));
-  // Don't show blocking loader if localStorage cache exists
-  const [isLoading, setIsLoading] = useState(() => {
-    try {
-      const hasProjCache = !!localStorage.getItem('epc_projects_cache');
-      const hasTaskCache = !!localStorage.getItem('epc_tasks_cache');
-      return !(hasProjCache && hasTaskCache);
-    } catch { return true; }
-  });
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [progressTick, setProgressTick] = useState(0);
 
   useEffect(() => {
@@ -157,13 +150,18 @@ export default function Overview() {
     };
 
     const load = async () => {
+      const hasCachedData =
+        readCachedArray('epc_projects_cache').length > 0 ||
+        readCachedArray('epc_tasks_cache').length > 0 ||
+        readCachedArray('epc_risks_cache').length > 0;
+      if (!hasCachedData) setIsRefreshing(true);
       try {
         const bundle = await api.getOverviewData();
         applyBundle(bundle);
       } catch (error) {
         console.error('Error fetching overview data', error);
       } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) setIsRefreshing(false);
       }
     };
 
@@ -191,27 +189,38 @@ export default function Overview() {
     updateDashboardContext({ projects: enrichedProjects, tasks });
   }, [enrichedProjects, tasks]);
 
-  const totalCapacity = enrichedProjects.reduce((sum, p) => sum + (Number(p.capacity) || 0), 0);
+  const enrichedTasks = useMemo(() => tasks.map(enrichTaskForUI), [tasks]);
 
-  const activeProjects = enrichedProjects.filter((p) => {
+  const totalCapacity = useMemo(
+    () => enrichedProjects.reduce((sum, p) => sum + (Number(p.capacity) || 0), 0),
+    [enrichedProjects]
+  );
+
+  const activeProjects = useMemo(() => enrichedProjects.filter((p) => {
     const s = (p.status || '').toUpperCase();
     return s !== 'ĐÃ HOÀN THÀNH' && s !== 'HOÀN THÀNH' && s !== 'COMPLETED';
-  });
+  }), [enrichedProjects]);
 
-  const overviewRisks = buildOverviewRiskRows(allRisks, enrichedProjects);
+  const overviewRisks = useMemo(
+    () => buildOverviewRiskRows(allRisks, enrichedProjects),
+    [allRisks, enrichedProjects]
+  );
+
   const riskCount = overviewRisks.length;
-  const riskList = overviewRisks.slice(0, 5);
+  const riskList = useMemo(() => overviewRisks.slice(0, 5), [overviewRisks]);
 
-  const importantTasks = tasks
-    .filter((t) => {
-      const p = (t.ƯU_TIÊN || '').toUpperCase();
-      return p !== 'THẤP' && p !== 'LOW' && p !== '';
-    })
-    .filter((t) => t.TRẠNG_THÁI !== 'Đã hoàn thành');
+  const importantTasks = useMemo(() => enrichedTasks.filter((t) => {
+    if (t.computedStatus === 'Đã hoàn thành') return false;
+    const p = (t.ƯU_TIÊN || '').toUpperCase();
+    return p !== 'THẤP' && p !== 'LOW' && p !== '';
+  }), [enrichedTasks]);
 
-  const progressProjects = [...activeProjects].sort((a, b) => b.capacity - a.capacity).slice(0, 5);
+  const progressProjects = useMemo(
+    () => [...activeProjects].sort((a, b) => b.capacity - a.capacity).slice(0, 5),
+    [activeProjects]
+  );
 
-  const priorityWeight = {
+  const priorityWeight = useMemo(() => ({
     'KHẨN CẤP': 4,
     IMPORTANT: 4,
     'QUAN TRỌNG': 3,
@@ -219,23 +228,23 @@ export default function Overview() {
     MEDIUM: 2,
     THẤP: 1,
     LOW: 1,
-  };
+  }), []);
 
-  const sortedTasks = [...tasks]
-    .filter((t) => t.TRẠNG_THÁI !== 'Đã hoàn thành')
+  const sortedTasks = useMemo(() => [...enrichedTasks]
+    .filter((t) => t.computedStatus !== 'Đã hoàn thành')
     .sort((a, b) => {
       const pA = priorityWeight[(a.ƯU_TIÊN || '').toUpperCase()] || 0;
       const pB = priorityWeight[(b.ƯU_TIÊN || '').toUpperCase()] || 0;
       return pB - pA;
     })
-    .slice(0, 6);
+    .slice(0, 6), [enrichedTasks, priorityWeight]);
 
-  const kpiValues = {
+  const kpiValues = useMemo(() => ({
     capacity: { value: totalCapacity.toLocaleString(), unit: 'kWp' },
     active: { value: activeProjects.length, unit: 'Dự án' },
     risk: { value: riskCount, unit: 'Vấn đề' },
     tasks: { value: importantTasks.length, unit: 'Công việc' },
-  };
+  }), [totalCapacity, activeProjects.length, riskCount, importantTasks.length]);
 
   const todayLabel = new Date().toLocaleDateString('vi-VN', {
     weekday: 'long',
@@ -255,12 +264,10 @@ export default function Overview() {
           <div className="absolute bottom-0 left-1/3 w-[360px] h-[360px] bg-teal-500/5 rounded-full blur-[90px]" />
         </div>
 
-        {isLoading && (
-          <div className="absolute inset-0 z-50 bg-[var(--bg-main)]/85 backdrop-blur-md flex items-center justify-center">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-10 h-10 border-4 border-[#5252ff]/30 border-t-[#5252ff] rounded-full animate-spin" />
-              <span className="text-xs text-slate-400 font-medium">Đang tải tổng quan...</span>
-            </div>
+        {isRefreshing && (
+          <div className="absolute top-3 right-6 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-panel)]/90 border border-[var(--border-main)] text-[10px] text-[var(--text-muted)] shadow-sm">
+            <div className="w-3 h-3 border-2 border-[#5252ff]/30 border-t-[#5252ff] rounded-full animate-spin" />
+            Đang cập nhật...
           </div>
         )}
 
@@ -522,13 +529,8 @@ export default function Overview() {
                   </tr>
                 </thead>
                 <tbody>
-                  {sortedTasks.map((t, idx) => {
-                    const statusStr = (t.TRẠNG_THÁI || '').toUpperCase();
-                    let computedStatus = 'Chưa bắt đầu';
-                    if (statusStr === 'ĐÃ HOÀN THÀNH' || statusStr === 'COMPLETED' || statusStr === 'HOÀN THÀNH')
-                      computedStatus = 'Đã hoàn thành';
-                    else if (statusStr === 'ĐANG DIỄN RA' || statusStr === 'IN PROGRESS') computedStatus = 'Đang diễn ra';
-                    else if (statusStr === 'TRỄ HẠN' || statusStr === 'TRỄ' || statusStr === 'OVERDUE') computedStatus = 'Trễ';
+                  {sortedTasks.map((t) => {
+                    const computedStatus = t.computedStatus || 'Chưa bắt đầu';
 
                     const priorityStr = (t.ƯU_TIÊN || '').toUpperCase();
                     let priorityLabel = 'Trung bình';
@@ -538,7 +540,7 @@ export default function Overview() {
 
                     return (
                       <tr
-                        key={idx}
+                        key={t._rowIndex ?? `${t.TÁC_VỤ}-${t.PROJECT_ID}-${t.NGÀY_BẮT_ĐẦU}`}
                         className="border-t border-[var(--border-main)]/40 hover:bg-[var(--bg-hover)] transition-colors cursor-pointer"
                         onClick={() => navigate('/tasks')}
                       >
@@ -568,14 +570,14 @@ export default function Overview() {
                           <AssigneeCell name={t.NHÂN_SỰ} fallback="Chưa phân công" />
                         </td>
                         <td className={`${tdBase} text-center text-slate-500 tabular-nums whitespace-nowrap`}>
-                          {t.NGÀY_BẮT_ĐẦU || '—'}
+                          {t.NGÀY_BẮT_ĐẦU_LOCAL || t.NGÀY_BẮT_ĐẦU || '—'}
                         </td>
                         <td
                           className={`${tdBase} text-center font-semibold tabular-nums whitespace-nowrap ${
                             computedStatus === 'Trễ' ? 'text-red-400' : 'text-emerald-400'
                           }`}
                         >
-                          {t.NGÀY_KẾT_THÚC || '—'}
+                          {t.NGÀY_KẾT_THÚC_LOCAL || t.NGÀY_KẾT_THÚC || '—'}
                         </td>
                         <td className={`${tdBase} text-center`}>
                           <span

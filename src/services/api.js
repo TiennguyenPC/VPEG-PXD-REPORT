@@ -243,8 +243,30 @@ function dispatchOverviewRefresh(bundle) {
   }
 }
 
+function isOverviewCacheUsable(cached) {
+  return (
+    (cached?.projects?.length > 0) ||
+    (cached?.tasks?.length > 0) ||
+    (cached?.risks?.length > 0)
+  );
+}
+
+function isOverviewCacheComplete(cached) {
+  return (cached?.projects?.length > 0) && (cached?.tasks?.length > 0);
+}
+
 async function fetchOverviewFromNetwork() {
   return fetchFromGAS('overview', {}, true);
+}
+
+async function refreshOverviewInBackground() {
+  try {
+    const raw = await fetchOverviewFromNetwork();
+    const bundle = applyOverviewBundle(raw);
+    dispatchOverviewRefresh(bundle);
+  } catch (e) {
+    console.warn('Overview background refresh failed', e);
+  }
 }
 
 export { OVERVIEW_REFRESH_EVENT };
@@ -415,36 +437,36 @@ export const api = {
     localStorage.setItem('epc_risks_cache', JSON.stringify(data || []));
     return data || [];
   },
-  /** Một request GAS thay vì 3 — cache hiện ngay, refresh nền */
+  /** Một request GAS thay vì 3 — cache hiện ngay, refresh nền khi đủ dữ liệu */
   getOverviewData: async (forceRefresh = false) => {
     const cached = {
       projects: projectsCache ?? readLocalJson('epc_projects_cache'),
       tasks: tasksCache ?? readLocalJson('epc_tasks_cache'),
       risks: readLocalJson('epc_risks_cache'),
     };
-    const hasCache = !forceRefresh && (
-      localStorage.getItem('epc_projects_cache') ||
-      localStorage.getItem('epc_tasks_cache') ||
-      (projectsCache && projectsCache.length > 0)
-    );
 
-    if (hasCache) {
-      if (projectsCache == null && cached.projects.length) projectsCache = cached.projects;
-      if (tasksCache == null && cached.tasks.length) tasksCache = cached.tasks;
-      setTimeout(async () => {
-        try {
-          const raw = await fetchOverviewFromNetwork();
-          const bundle = applyOverviewBundle(raw);
-          dispatchOverviewRefresh(bundle);
-        } catch (e) {
-          console.warn('Overview background refresh failed', e);
-        }
-      }, 0);
-      return cached;
+    if (projectsCache == null && cached.projects.length) projectsCache = cached.projects;
+    if (tasksCache == null && cached.tasks.length) tasksCache = cached.tasks;
+
+    if (forceRefresh || !isOverviewCacheUsable(cached)) {
+      const raw = await fetchOverviewFromNetwork();
+      return applyOverviewBundle(raw);
     }
 
-    const raw = await fetchOverviewFromNetwork();
-    return applyOverviewBundle(raw);
+    // Cache thiếu tasks/projects — fetch ngay thay vì chờ refresh nền
+    if (!isOverviewCacheComplete(cached)) {
+      try {
+        const raw = await fetchOverviewFromNetwork();
+        return applyOverviewBundle(raw);
+      } catch (e) {
+        console.warn('Overview fetch failed, using partial cache', e);
+        setTimeout(refreshOverviewInBackground, 0);
+        return cached;
+      }
+    }
+
+    setTimeout(refreshOverviewInBackground, 0);
+    return cached;
   },
   getPermits: (id) => fetchFromGAS('permit', { id }),
   getDesigns: (id) => fetchFromGAS('design', { id }),

@@ -17,6 +17,7 @@ export function AuthProvider({ children }) {
     try {
       const sessionUser = await api.authMe();
       setUser(sessionUser);
+      api.getOverviewData().catch(() => {});
     } catch {
       setAuthToken(null);
       setUser(null);
@@ -33,6 +34,7 @@ export function AuthProvider({ children }) {
     const { token, user: sessionUser } = await api.login(username, password);
     setAuthToken(token);
     setUser(sessionUser);
+    api.getOverviewData().catch(() => {});
     return sessionUser;
   }, []);
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LogIn, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import VuPhongLogo from '../components/VuPhongLogo';
 
 export default function LoginPage() {
   const { user, login, loading: authLoading } = useAuth();
@@ -45,15 +46,15 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[var(--bg-main)] px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-tr from-blue-500 via-[#5252ff] to-[#8080ff] shadow-[0_0_20px_rgba(82,82,255,0.5)] mb-4">
-            <div className="w-5 h-5 rounded-full bg-white/20" />
+          <div className="mb-5">
+            <VuPhongLogo responsive />
           </div>
-          <h1 className="text-xl font-bold text-[var(--text-strong)] tracking-wide">VPEG-PXD</h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1">Đăng nhập để truy cập dashboard</p>
+          <p className="text-sm text-[var(--text-muted)]">Đăng nhập để truy cập dashboard</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
+          autoComplete="off"
           className="bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-xl p-6 shadow-xl space-y-5"
         >
           {error && (
@@ -62,33 +63,35 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-              Username
-            </label>
+          {/* Input ẩn chặn trình duyệt tự điền username cũ */}
+          <input type="text" name="fake_user" autoComplete="username" className="hidden" tabIndex={-1} aria-hidden="true" />
+
+          <div>
             <input
               type="text"
-              autoComplete="username"
+              name="vuphong_login_id"
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-[var(--text-main)] px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#5252ff] transition-colors"
-              placeholder="tien.nguyen"
+              className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-[var(--text-main)] px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#5252ff] transition-colors placeholder:text-[var(--text-muted)]/50"
+              placeholder="Tên đăng nhập"
               required
             />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-              Mật khẩu
-            </label>
+          <div>
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
-                autoComplete="current-password"
+                name="vuphong_login_secret"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-[var(--text-main)] px-3 py-2.5 pr-10 rounded-lg text-sm focus:outline-none focus:border-[#5252ff] transition-colors"
-                placeholder="••••••••"
+                className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-[var(--text-main)] px-3 py-2.5 pr-10 rounded-lg text-sm focus:outline-none focus:border-[#5252ff] transition-colors placeholder:text-[var(--text-muted)]/50"
+                placeholder="Mật khẩu"
                 required
               />
               <button

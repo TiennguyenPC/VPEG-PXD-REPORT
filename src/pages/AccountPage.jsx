@@ -1,10 +1,80 @@
 import React, { useState } from 'react';
-import { KeyRound, Eye, EyeOff, Loader2, CheckCircle2, User } from 'lucide-react';
+import {
+  KeyRound,
+  Eye,
+  EyeOff,
+  Loader2,
+  CheckCircle2,
+  User,
+  Mail,
+  FolderKanban,
+  Shield,
+} from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { useSidebar } from '../hooks/useSidebar';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { getRoleLabel, getUserInitials } from '../utils/permissions';
+
+function InfoRow({ icon: Icon, label, value }) {
+  return (
+    <div className="flex items-center gap-4 py-3.5 border-b border-[var(--border-main)]/50 last:border-0">
+      <div className="w-9 h-9 rounded-lg bg-[var(--bg-main)] border border-[var(--border-main)] flex items-center justify-center shrink-0">
+        <Icon className="w-4 h-4 text-[var(--text-muted)]" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] text-[var(--text-muted)] font-medium">{label}</p>
+        <p className="text-sm font-semibold text-[var(--text-strong)] truncate mt-0.5">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function PasswordInput({ label, value, onChange, show, onToggleShow, placeholder, autoComplete }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={onChange}
+          className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-[var(--text-main)] px-3.5 py-2.5 pr-10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5252ff]/25 focus:border-[#5252ff] placeholder:text-[var(--text-muted)]/60 transition-shadow"
+          placeholder={placeholder}
+        />
+        <button
+          type="button"
+          onClick={onToggleShow}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-main)] transition-colors"
+          tabIndex={-1}
+          aria-label={show ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+        >
+          {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function SectionCard({ title, description, icon: Icon, children }) {
+  return (
+    <div className="rounded-2xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] overflow-hidden shadow-lg shadow-black/5">
+      <div className="px-6 py-4 border-b border-[var(--border-main)]/50 flex items-start gap-3">
+        <div className="p-2 rounded-lg bg-[#5252ff]/10 text-[#7373ff] shrink-0">
+          <Icon className="w-4 h-4" />
+        </div>
+        <div>
+          <h2 className="text-sm font-bold text-[var(--text-strong)]">{title}</h2>
+          {description && (
+            <p className="text-xs text-[var(--text-muted)] mt-0.5">{description}</p>
+          )}
+        </div>
+      </div>
+      <div className="px-6 py-2">{children}</div>
+    </div>
+  );
+}
 
 export default function AccountPage() {
   const { isCollapsed, toggleSidebar } = useSidebar();
@@ -13,7 +83,9 @@ export default function AccountPage() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPasswords, setShowPasswords] = useState(false);
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -60,118 +132,114 @@ export default function AccountPage() {
       <Sidebar activeItem="account" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
       <main className="flex-1 min-w-0 overflow-y-auto">
-        <header className="px-8 pt-6 pb-4 border-b border-[var(--border-main)]/30 bg-[var(--bg-panel)]/60 backdrop-blur-md">
+        <header className="sticky top-0 z-20 bg-[var(--bg-panel)]/95 backdrop-blur border-b border-[var(--border-main)] px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-[#5252ff]/10 text-[#7373ff]">
               <User className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-[var(--text-strong)] tracking-tight">TÀI KHOẢN CỦA TÔI</h1>
-              <p className="text-[11px] text-[var(--text-muted)] mt-1 font-medium">Quản lý thông tin và bảo mật tài khoản</p>
+              <h1 className="text-lg font-bold text-[var(--text-strong)]">Tài khoản của tôi</h1>
+              <p className="text-xs text-[var(--text-muted)]">Quản lý thông tin cá nhân và bảo mật</p>
             </div>
           </div>
         </header>
 
-        <div className="p-8 max-w-2xl">
-          {/* Profile summary */}
-          <div className="glass-panel rounded-xl border border-[var(--border-main)] p-5 mb-6 flex items-center gap-4">
-            <div className="w-14 h-14 shrink-0 rounded-full bg-[var(--bg-hover)] flex items-center justify-center text-lg font-bold text-[var(--text-main)] border border-[var(--border-main)]">
-              {initials}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-[var(--text-strong)] truncate">{displayName}</p>
-              <p className="text-xs text-[#3b82f6] font-bold mt-0.5">{roleLabel}</p>
-              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[11px] text-[var(--text-muted)]">
-                <span>Tên đăng nhập: <strong className="text-[var(--text-main)]">{user?.username || '—'}</strong></span>
-                {user?.email && (
-                  <span>Email: <strong className="text-[var(--text-main)]">{user.email}</strong></span>
-                )}
-                <span>Dự án được gán: <strong className="text-[var(--text-main)]">{projectCount}</strong></span>
+        <div className="p-6 max-w-4xl mx-auto space-y-6">
+          {/* Profile hero */}
+          <div className="rounded-2xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] overflow-hidden shadow-lg shadow-black/5">
+            <div className="h-28 bg-gradient-to-r from-[#5252ff]/25 via-[#3b82f6]/15 to-transparent" />
+            <div className="px-6 pb-6">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-4 -mt-12">
+                <div className="w-20 h-20 shrink-0 rounded-2xl bg-gradient-to-br from-[#5252ff] to-[#6366f1] flex items-center justify-center text-2xl font-bold text-white shadow-xl ring-4 ring-[var(--bg-panel)]">
+                  {initials}
+                </div>
+                <div className="flex-1 min-w-0 pb-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="text-xl font-bold text-[var(--text-strong)] truncate">{displayName}</h2>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#5252ff]/10 text-[#7373ff] border border-[#5252ff]/20">
+                      <Shield className="w-3 h-3" />
+                      {roleLabel}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Change password */}
-          <div className="glass-panel rounded-xl border border-[var(--border-main)] p-6">
-            <div className="flex items-center gap-2 mb-5">
-              <KeyRound className="w-4 h-4 text-[#5252ff]" />
-              <h2 className="text-sm font-bold text-[var(--text-strong)] uppercase tracking-wider">Đổi mật khẩu</h2>
-            </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Account info */}
+            <SectionCard
+              title="Thông tin tài khoản"
+              description="Thông tin cơ bản của bạn trên hệ thống"
+              icon={User}
+            >
+              <InfoRow icon={Mail} label="Email" value={user?.email || 'Chưa cập nhật'} />
+              <InfoRow
+                icon={FolderKanban}
+                label="Dự án được gán"
+                value={`${projectCount} dự án`}
+              />
+            </SectionCard>
 
-            {error && (
-              <div className="mb-4 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-xs text-red-400">
-                {error}
-              </div>
-            )}
-            {success && (
-              <div className="mb-4 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs text-emerald-400 flex items-center gap-2">
-                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
-                {success}
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
-                  Mật khẩu hiện tại
-                </label>
-                <div className="relative">
-                  <input
-                    type={showPasswords ? 'text' : 'password'}
-                    autoComplete="current-password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2.5 pr-10 rounded-lg text-sm focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
-                    placeholder="Nhập mật khẩu đang dùng"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPasswords((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-main)]"
-                    tabIndex={-1}
-                  >
-                    {showPasswords ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
+            {/* Change password */}
+            <SectionCard
+              title="Bảo mật"
+              description="Cập nhật mật khẩu để bảo vệ tài khoản"
+              icon={KeyRound}
+            >
+              {error && (
+                <div className="mb-4 mt-2 px-3.5 py-2.5 rounded-xl bg-red-500/10 border border-red-500/25 text-xs text-red-400">
+                  {error}
                 </div>
-              </div>
+              )}
+              {success && (
+                <div className="mb-4 mt-2 px-3.5 py-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-xs text-emerald-400 flex items-center gap-2">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  {success}
+                </div>
+              )}
 
-              <div>
-                <label className="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
-                  Mật khẩu mới
-                </label>
-                <input
-                  type={showPasswords ? 'text' : 'password'}
-                  autoComplete="new-password"
+              <form onSubmit={handleSubmit} className="space-y-4 py-2">
+                <PasswordInput
+                  label="Mật khẩu hiện tại"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  show={showCurrent}
+                  onToggleShow={() => setShowCurrent((v) => !v)}
+                  placeholder="Nhập mật khẩu đang dùng"
+                  autoComplete="current-password"
+                />
+                <PasswordInput
+                  label="Mật khẩu mới"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
+                  show={showNew}
+                  onToggleShow={() => setShowNew((v) => !v)}
                   placeholder="Tối thiểu 6 ký tự"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
-                  Xác nhận mật khẩu mới
-                </label>
-                <input
-                  type={showPasswords ? 'text' : 'password'}
                   autoComplete="new-password"
+                />
+                <PasswordInput
+                  label="Xác nhận mật khẩu mới"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#5252ff] placeholder-[#4d5e7a]"
+                  show={showConfirm}
+                  onToggleShow={() => setShowConfirm((v) => !v)}
                   placeholder="Nhập lại mật khẩu mới"
+                  autoComplete="new-password"
                 />
-              </div>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#5252ff] hover:bg-[#4141d6] disabled:opacity-50 text-white text-xs font-semibold px-5 py-2.5 rounded-lg transition-all mt-2"
-              >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
-                {submitting ? 'Đang lưu...' : 'Cập nhật mật khẩu'}
-              </button>
-            </form>
+                <div className="pt-2 pb-4">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full flex items-center justify-center gap-2 bg-[#5252ff] hover:bg-[#4343ee] disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold px-5 py-2.5 rounded-xl transition-colors"
+                  >
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <KeyRound className="w-4 h-4" />}
+                    {submitting ? 'Đang lưu...' : 'Cập nhật mật khẩu'}
+                  </button>
+                </div>
+              </form>
+            </SectionCard>
           </div>
         </div>
       </main>
