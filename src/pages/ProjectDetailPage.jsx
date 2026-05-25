@@ -32,7 +32,7 @@ import {
   getTodayDMY,
   normalizeToDMY,
 } from "../utils/timelineDates";
-import { getLogNoteText, mergeDailyNotePreserveImages, getCachedPhotoUrls } from "../utils/sitePhotoCache";
+import { getLogNoteText, mergeDailyNotePreserveImages, getCachedPhotoUrls, getPhotoUrlsFromLog } from "../utils/sitePhotoCache";
 
 const getTodayStr = getTodayDMY;
 
@@ -159,6 +159,9 @@ export default function ProjectDetailPage() {
     if (!nextHasNote) {
       if (prev.DAILY_NOTE !== undefined) merged.DAILY_NOTE = prev.DAILY_NOTE;
       if (prev.GHI_CHÚ_HIỆN_TRƯỜNG !== undefined) merged.GHI_CHÚ_HIỆN_TRƯỜNG = prev.GHI_CHÚ_HIỆN_TRƯỜNG;
+    }
+    if (next.SITE_PHOTOS === undefined && prev.SITE_PHOTOS !== undefined) {
+      merged.SITE_PHOTOS = prev.SITE_PHOTOS;
     }
     return merged;
   };
@@ -461,6 +464,10 @@ export default function ProjectDetailPage() {
     const cachedPhotoUrls = getCachedPhotoUrls(id, toSave.LOG_DATE);
     const existingNoteText = existingInLogs ? getLogNoteText(existingInLogs) : '';
     dailyNote = mergeDailyNotePreserveImages(existingNoteText, dailyNote, cachedPhotoUrls);
+    const existingPhotos = existingInLogs ? getPhotoUrlsFromLog(existingInLogs).join('\n') : '';
+    const sitePhotos = toSave.SITE_PHOTOS !== undefined
+      ? toSave.SITE_PHOTOS
+      : (cachedPhotoUrls.length ? cachedPhotoUrls.join('\n') : existingPhotos);
 
     return {
       PROJECT_ID: String(id),
@@ -476,6 +483,8 @@ export default function ProjectDetailPage() {
       SỰ_CỐ: `${toSave.INCIDENT_COUNT !== undefined ? Number(toSave.INCIDENT_COUNT || 0) : Number(parseInt(toSave.SỰ_CỐ) || 0)} vụ`,
       DAILY_NOTE: dailyNote,
       GHI_CHÚ_HIỆN_TRƯỜNG: dailyNote,
+      SITE_PHOTOS: sitePhotos,
+      ẢNH_HIỆN_TRƯỜNG: sitePhotos,
       WEEKLY_ASSESSMENT: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
       ĐÁNH_GIÁ_TUẦN: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
       MONTHLY_REPORT: toSave.MONTHLY_REPORT !== undefined ? toSave.MONTHLY_REPORT : '',
@@ -517,6 +526,23 @@ export default function ProjectDetailPage() {
       return next;
     });
   };
+
+  const saveSitePhotosToServer = useCallback(async (urls, logDate, rowIndex) => {
+    if (!canEditProject(user, id)) {
+      throw new Error('Không có quyền lưu ảnh');
+    }
+
+    updateSaveStatus('Saving...');
+    const res = await api.saveSitePhotos({
+      PROJECT_ID: String(id),
+      LOG_DATE: logDate,
+      NGÀY: logDate,
+      SITE_PHOTOS: urls.join('\n'),
+      _rowIndex: rowIndex,
+    });
+    updateSaveStatus('Saved');
+    applySiteLogApiResponse(res);
+  }, [id, user, updateSaveStatus]);
 
   const saveSiteLogImmediate = useCallback(async (noteUpdates) => {
     if (!canEditProject(user, id)) {
@@ -815,7 +841,7 @@ export default function ProjectDetailPage() {
                 setSelectedMonth={setSelectedMonth}
                 activeLog={activeLog}
                 onUpdateLog={handleUpdateLog}
-                onSaveLogImmediate={saveSiteLogImmediate}
+                onSaveSitePhotos={saveSitePhotosToServer}
                 saveStatus={saveStatus}
                 onSaveStatusChange={updateSaveStatus}
               />

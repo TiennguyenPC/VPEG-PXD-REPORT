@@ -152,9 +152,13 @@ export function getCachedPhotoUrls(projectId, logDate) {
   return photoUrlsFromCacheItems(cached);
 }
 
-/** URL ảnh từ nhật ký Sheet — gom cả DAILY_NOTE và GHI_CHÚ_HIỆN_TRƯỜNG */
+/** URL ảnh từ nhật ký Sheet — ưu tiên cột SITE_PHOTOS, fallback ghi chú cũ */
 export function getPhotoUrlsFromLog(log) {
   if (!log) return [];
+  const direct = String(log.SITE_PHOTOS || log.ẢNH_HIỆN_TRƯỜNG || log.ANH_HIEN_TRUONG || '').trim();
+  if (direct) {
+    return unionPhotoUrls(direct.split('\n').map((l) => l.trim()).filter(Boolean));
+  }
   const daily = String(log.DAILY_NOTE || '').trim();
   const fieldNote = String(log.GHI_CHÚ_HIỆN_TRƯỜNG || '').trim();
   return unionPhotoUrls(

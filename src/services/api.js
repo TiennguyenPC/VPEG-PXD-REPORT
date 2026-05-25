@@ -514,6 +514,7 @@ export const api = {
   updateConstruction: (data) => postToGAS('update-construction', data),
   updateHandover: (data) => postToGAS('update-handover', data),
   updateSiteLog: (data) => postToGAS('update-site-log', data),
+  saveSitePhotos: (data) => postToGAS('save-site-photos', data),
   uploadSiteImage: async (data) => {
     let base64 = String(data.base64 || '');
     if (base64.includes('base64,')) {
@@ -602,7 +603,6 @@ export const api = {
     return syncTasksFromResponse(result);
   },
   createTask: async (task) => {
-    invalidateTasksCache();
     const result = await postToGAS('add-task', buildTaskPayload(task));
     refreshNotificationsBell();
     return syncTasksFromResponse(result);

@@ -369,6 +369,20 @@ function doPost(e) {
         const uploadedUrl = uploadSiteImageToDrive_(payload);
         auditMutation_('upload-site-image', payload);
         return createResponse({ status: 'success', data: { url: uploadedUrl } });
+      case 'save-site-photos':
+        saveSitePhotosForLog_(ss, payload);
+        auditMutation_('save-site-photos', payload);
+        var pidPhotos = payload.PROJECT_ID || payload.id;
+        var dailyLogsPhotos = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(function(row) {
+          return String(row.PROJECT_ID || row.projectId) === String(pidPhotos);
+        });
+        return createResponse({
+          status: 'success',
+          message: 'Site photos saved',
+          dailyLogs: dailyLogsPhotos,
+          weeklyLogs: getWeeklyAggregates(ss, pidPhotos, dailyLogsPhotos),
+          monthlyLogs: getMonthlyAggregates(ss, pidPhotos, dailyLogsPhotos)
+        });
       case 'upload-image-chunk':
         storeSiteImageChunk_(payload);
         return createResponse({ status: 'success', data: { ok: true } });
@@ -576,6 +590,8 @@ const STANDARD_KEYS_MAP = {
   'incidentcount': 'SỰ_CỐ',
   'ghichuhientruong': 'GHI_CHÚ_HIỆN_TRƯỜNG',
   'dailynote': 'DAILY_NOTE',
+  'sitephotos': 'SITE_PHOTOS',
+  'anhhientruong': 'SITE_PHOTOS',
   'danhgiatuan': 'ĐÁNH_GIÁ_TUẦN',
   'weeklyassessment': 'ĐÁNH_GIÁ_TUẦN',
   'monthlyreport': 'MONTHLY_REPORT',
@@ -780,6 +796,8 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
     'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
     'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
+    'SITE_PHOTOS':           ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
+    'ẢNH_HIỆN_TRƯỜNG':     ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
     'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT'],
     'GHI_CHÚ':               ['GHI_CHÚ', 'GHI_CHU', 'ghichu', 'NOTES']
   };
@@ -1223,6 +1241,8 @@ function appendRow(ss, sheetName, payload) {
     'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
     'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
     'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
+    'SITE_PHOTOS':           ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
+    'ẢNH_HIỆN_TRƯỜNG':     ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
     'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT']
   };
   
@@ -1291,7 +1311,7 @@ function getDefaultHeaders(sheetName) {
     case 'PROJECT_MILESTONE':
       return ['PROJECT_ID', 'MILESTONE', 'NGÀY_KẾ_HOẠCH', 'NGÀY_THỰC_TẾ', 'STATUS'];
     case 'DAILY_SITE_LOG':
-      return ['PROJECT_ID', 'LOG_DATE', 'NGÀY', 'MANPOWER', 'NHÂN_LỰC_SITE', 'ENGINEERS', 'KỸ_SƯ_GS', 'WEATHER', 'THỜI_TIẾT', 'INCIDENT_COUNT', 'SỰ_CỐ', 'DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG', 'WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN', 'MONTHLY_REPORT', 'STATUS', 'UPDATED_BY', 'UPDATED_AT'];
+      return ['PROJECT_ID', 'LOG_DATE', 'NGÀY', 'MANPOWER', 'NHÂN_LỰC_SITE', 'ENGINEERS', 'KỸ_SƯ_GS', 'WEATHER', 'THỜI_TIẾT', 'INCIDENT_COUNT', 'SỰ_CỐ', 'DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG', 'SITE_PHOTOS', 'WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN', 'MONTHLY_REPORT', 'STATUS', 'UPDATED_BY', 'UPDATED_AT'];
     case 'PROJECT_TASKS':
       return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'TÁC_VỤ', 'NHÂN_SỰ', 'NGÀY_BẮT_ĐẦU', 'NGÀY_KẾT_THÚC', 'BỘ_CHỨA', 'TRẠNG_THÁI', 'ƯU_TIÊN', 'GHI_CHÚ'];
     case 'USERS':
@@ -1473,6 +1493,8 @@ function batchAppendRows(ss, sheetName, rowsData) {
     'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
     'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
     'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
+    'SITE_PHOTOS':           ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
+    'ẢNH_HIỆN_TRƯỜNG':     ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
     'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT']
   };
 
@@ -1775,6 +1797,86 @@ function cleanupOrphanedProjects(ss) {
 var SITE_IMAGE_FOLDER_ID_PREF = '1iUk7SQ8iqsjTkjGwtI0fVJuaoxQeLRo_';
 var SITE_IMAGE_FOLDER_NAME = 'VPEG-PXD-BAO-CAO-HINH-ANH';
 var SITE_IMAGE_CHUNK_TTL = 600;
+
+function ensureDailySiteLogPhotoColumn_(ss) {
+  var sheet = ss.getSheetByName('DAILY_SITE_LOG');
+  if (!sheet) return -1;
+  var lastCol = Math.max(sheet.getLastColumn(), 1);
+  var headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+  var colIndex = findColumnIndex(headers, ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG']);
+  if (colIndex === -1) {
+    sheet.getRange(1, lastCol + 1).setValue('SITE_PHOTOS');
+    colIndex = lastCol;
+  }
+  return colIndex;
+}
+
+function formatLogDateCellValue_(val) {
+  if (val instanceof Date) {
+    return formatDateString(val);
+  }
+  return String(val || '').trim().replace(/^'/, '');
+}
+
+/** Ghi URL ảnh hiện trường vào cột SITE_PHOTOS — mọi tài khoản đọc chung */
+function saveSitePhotosForLog_(ss, payload) {
+  payload = payload || {};
+  var projectId = String(payload.PROJECT_ID || payload.id || '').trim();
+  var logDate = String(payload.LOG_DATE || payload.NGÀY || '').trim();
+  var urls = String(payload.SITE_PHOTOS || payload.urls || '').trim();
+  if (!projectId || !logDate) {
+    throw new Error('Thiếu PROJECT_ID hoặc LOG_DATE');
+  }
+
+  ensureDailySiteLogPhotoColumn_(ss);
+  var sheet = ss.getSheetByName('DAILY_SITE_LOG');
+  var data = sheet.getDataRange().getValues();
+  var headers = data[0];
+  var photoCol = findColumnIndex(headers, ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG']);
+  var idCol = findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']);
+  var dateCol = findColumnIndex(headers, ['LOG_DATE', 'NGÀY', 'NGAY']);
+
+  var targetRowIndex = -1;
+  if (payload._rowIndex && Number(payload._rowIndex) > 1 && Number(payload._rowIndex) <= data.length) {
+    targetRowIndex = Number(payload._rowIndex);
+  } else if (idCol !== -1 && dateCol !== -1) {
+    for (var i = 1; i < data.length; i++) {
+      if (String(data[i][idCol]) == projectId) {
+        var rowDateStr = formatLogDateCellValue_(data[i][dateCol]);
+        if (rowDateStr === logDate) {
+          targetRowIndex = i + 1;
+          break;
+        }
+      }
+    }
+  }
+
+  if (targetRowIndex === -1) {
+    appendRow(ss, 'DAILY_SITE_LOG', {
+      PROJECT_ID: projectId,
+      LOG_DATE: logDate,
+      NGÀY: logDate,
+      SITE_PHOTOS: urls,
+      MANPOWER: 0,
+      ENGINEERS: 0,
+      WEATHER: '',
+      INCIDENT_COUNT: 0,
+      SỰ_CỐ: '0 vụ',
+      STATUS: 'Saved'
+    });
+    SpreadsheetApp.flush();
+    return;
+  }
+
+  if (photoCol === -1) {
+    photoCol = ensureDailySiteLogPhotoColumn_(ss);
+    headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    photoCol = findColumnIndex(headers, ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG']);
+  }
+
+  sheet.getRange(targetRowIndex, photoCol + 1).setValue(urls);
+  SpreadsheetApp.flush();
+}
 
 function buildDriveImageViewUrl_(fileId) {
   return 'https://drive.google.com/uc?export=view&id=' + fileId;
@@ -2329,7 +2431,7 @@ function checkMutationPermission_(action, payload, session) {
     'update-design', 'add-design',
     'update-procurement', 'add-procurement',
     'update-construction', 'update-handover',
-    'update-site-log', 'update-module-dates', 'upload-site-image'
+    'update-site-log', 'update-module-dates', 'upload-site-image', 'save-site-photos'
   ];
 
   if (projectMutations.indexOf(action) >= 0) {

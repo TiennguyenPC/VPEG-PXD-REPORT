@@ -215,7 +215,7 @@ export default function SiteLogPanel({
   setSelectedMonth,
   activeLog,
   onUpdateLog,
-  onSaveLogImmediate,
+  onSaveSitePhotos,
   saveStatus,
   onSaveStatusChange
 }) {
@@ -299,14 +299,18 @@ export default function SiteLogPanel({
     const parsedNote = parseDailyNote(getLogNoteText(activeLog));
     parsedNote.images = urls.join('\n');
     const serialized = serializeDailyNote(parsedNote);
-    const noteUpdate = { GHI_CHÚ_HIỆN_TRƯỜNG: serialized, DAILY_NOTE: serialized };
+    const noteUpdate = {
+      GHI_CHÚ_HIỆN_TRƯỜNG: serialized,
+      DAILY_NOTE: serialized,
+      SITE_PHOTOS: urls.join('\n'),
+    };
 
     onUpdateLog(noteUpdate);
     if (projectId) writeDateSitePhotos(projectId, selectedDate, photos);
 
-    if (onSaveLogImmediate) {
+    if (onSaveSitePhotos) {
       try {
-        await onSaveLogImmediate(noteUpdate);
+        await onSaveSitePhotos(urls, selectedDate, activeLog?._rowIndex);
         setUploadError('');
       } catch (err) {
         console.error(err);
@@ -346,7 +350,7 @@ export default function SiteLogPanel({
 
   // Đẩy ảnh còn trong cache trình duyệt lên Sheet (sửa dữ liệu cũ chỉ lưu local)
   useEffect(() => {
-    if (!canEdit || !projectId || !selectedDate || !onSaveLogImmediate || !logs?.length) return;
+    if (!canEdit || !projectId || !selectedDate || !onSaveSitePhotos || !logs?.length) return;
     const dateKey = normalizePhotoDateKey(selectedDate);
     if (syncedPhotoDatesRef.current.has(dateKey)) return;
 
@@ -358,7 +362,7 @@ export default function SiteLogPanel({
 
     syncedPhotoDatesRef.current.add(dateKey);
     void persistPhotosToLog(cached.slice(0, 4));
-  }, [logs, selectedDate, projectId, canEdit, onSaveLogImmediate]);
+  }, [logs, selectedDate, projectId, canEdit, onSaveSitePhotos]);
 
   // Load images when date changes — merge Sheet + localStorage, không ghi đè ảnh đang upload
   useEffect(() => {
