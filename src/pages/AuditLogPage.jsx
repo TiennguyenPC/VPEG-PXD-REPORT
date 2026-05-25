@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { getAuditActionLabel, formatAuditTime, getAuditActionColor } from '../utils/auditLabels';
 
 const GAS_SCRIPT_EDITOR_URL = 'https://script.google.com/home/projects/1w-CZ9Dsq2BNelMochInJ6Kt2oCOWKtwckcMl1NVdrSNZAx9bd2PFDsNY/edit';
-const PRODUCTION_APP_URL = 'https://epc-solar-dashboard.vercel.app';
+const PRODUCTION_APP_URL = 'https://vpeg-pxd-dashboard.vercel.app';
 const thCell = 'py-3 px-4 text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider text-left';
 const tdCell = 'py-3 px-4 text-xs text-[var(--text-main)] align-top';
 

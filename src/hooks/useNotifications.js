@@ -77,12 +77,24 @@ export function useNotifications(pollMs = 30000) {
   }, [user, pollMs, refresh]);
 
   const markRead = useCallback(async (notifId) => {
-    const data = await api.markNotificationRead(notifId);
-    setItems(data?.items || []);
-    const next = data?.unreadCount ?? 0;
-    setUnreadCount(next);
-    prevUnreadRef.current = next;
-  }, []);
+    setItems((prev) => {
+      const target = prev.find((n) => n.notifId === notifId);
+      if (target && !target.read) {
+        setUnreadCount((c) => Math.max(0, c - 1));
+      }
+      return prev.map((n) => (n.notifId === notifId ? { ...n, read: true } : n));
+    });
+    try {
+      const data = await api.markNotificationRead(notifId);
+      setItems(data?.items || []);
+      const next = data?.unreadCount ?? 0;
+      setUnreadCount(next);
+      prevUnreadRef.current = next;
+    } catch (err) {
+      console.warn('markNotificationRead failed:', err);
+      refresh();
+    }
+  }, [refresh]);
 
   const markAllRead = useCallback(async () => {
     const data = await api.markAllNotificationsRead();

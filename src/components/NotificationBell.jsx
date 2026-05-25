@@ -114,22 +114,65 @@ export default function NotificationBell({ compact = false, sidebarPlacement = f
     setOpen((v) => !v);
   };
 
-  const navigateLink = (rawLink) => {
-    if (!rawLink) return;
-    const link = rawLink.split('#n:')[0];
-    setOpen(false);
-    navigate(link);
+  const parseNotifLink = (rawLink) => {
+    if (!rawLink) return null;
+    let clean = String(rawLink);
+    const fpIdx = clean.indexOf('#n:');
+    if (fpIdx >= 0) clean = clean.slice(0, fpIdx);
+    try {
+      const url = new URL(clean, window.location.origin);
+      return {
+        pathname: url.pathname,
+        search: url.search,
+        hash: url.hash,
+      };
+    } catch {
+      return null;
+    }
   };
 
-  const handleItemClick = async (item) => {
-    if (!item.read) {
-      try {
-        await markRead(item.notifId);
-      } catch {
-        /* ignore */
-      }
+  const scrollToHash = (hash) => {
+    const id = hash?.replace(/^#/, '');
+    if (!id) return;
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const scroller = document.getElementById('project-detail-scroll');
+        const navHeight = document.querySelector('[data-section-nav]')?.offsetHeight ?? 44;
+        if (scroller) {
+          const elTop = el.getBoundingClientRect().top;
+          const scrollerTop = scroller.getBoundingClientRect().top;
+          scroller.scrollTo({
+            top: Math.max(0, scroller.scrollTop + (elTop - scrollerTop) - navHeight - 8),
+            behavior: 'smooth',
+          });
+          return;
+        }
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 400);
+    });
+  };
+
+  const navigateLink = (rawLink) => {
+    const parsed = parseNotifLink(rawLink);
+    if (!parsed) return;
+    const dest = parsed.pathname + parsed.search + parsed.hash;
+    setOpen(false);
+    const current = location.pathname + location.search + location.hash;
+    if (current === dest) {
+      scrollToHash(parsed.hash);
+      return;
     }
+    navigate(dest);
+    if (parsed.hash) scrollToHash(parsed.hash);
+  };
+
+  const handleItemClick = (item) => {
     navigateLink(item.link);
+    if (!item.read) {
+      markRead(item.notifId).catch(() => {});
+    }
   };
 
   const badge = unreadCount > 0 ? (unreadCount > 9 ? '9+' : String(unreadCount)) : null;
