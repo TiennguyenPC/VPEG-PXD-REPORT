@@ -31,11 +31,11 @@ export function getRiskSeverityStyle(level) {
   const n = normalizeRiskSeverity(level);
   switch (n) {
     case 'Cao':
-      return 'text-red-800 bg-red-200 border-red-400 dark:text-red-300 dark:bg-red-500/20 dark:border-red-500/40';
+      return 'text-rose-700 bg-rose-50 border-rose-200 dark:text-red-300 dark:bg-red-500/20 dark:border-red-500/40';
     case 'Trung bình':
-      return 'text-amber-900 bg-amber-200 border-amber-400 dark:text-orange-300 dark:bg-orange-500/20 dark:border-orange-500/40';
+      return 'text-amber-800 bg-amber-50 border-amber-200 dark:text-orange-300 dark:bg-orange-500/20 dark:border-orange-500/40';
     case 'Thấp':
-      return 'text-emerald-900 bg-emerald-200 border-emerald-400 dark:text-emerald-300 dark:bg-emerald-500/20 dark:border-emerald-500/40';
+      return 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-500/20 dark:border-emerald-500/40';
     default:
       return 'text-slate-600 bg-slate-100 border-slate-300 dark:text-slate-400 dark:bg-slate-500/10 dark:border-slate-500/25';
   }
@@ -65,7 +65,7 @@ export function getRiskStatusStyle(status) {
   const n = normalizeRiskStatus(status);
   switch (n) {
     case 'Open':
-      return 'text-red-700 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/25';
+      return 'text-rose-700 bg-rose-50 border-rose-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/25';
     case 'Đang xử lý':
       return 'text-blue-700 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/25';
     case 'Theo dõi':

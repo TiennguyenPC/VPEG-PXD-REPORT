@@ -334,6 +334,11 @@
   border-color: var(--border-main);
 }
 
+[data-theme='light'] select.risk-field-select {
+  background-color: transparent !important;
+  border-color: transparent !important;
+}
+
 /* Print optimization to avoid splitting charts across pages */
 @media print {
   body {

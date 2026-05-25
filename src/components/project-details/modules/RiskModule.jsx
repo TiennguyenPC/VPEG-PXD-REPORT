@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 import DateInputDMY from '../../DateInputDMY';
 import { getTodayDMY } from '../../../utils/timelineDates';
 import { useProjectCanEdit } from '../../../context/ProjectEditContext';
+import { getEmployeeName } from '../../../utils/permissions';
 import {
   normalizeRiskSeverity,
   normalizeRiskStatus,
@@ -21,6 +22,14 @@ export default function RiskModule({ project, initialData }) {
   const [risks, setRisks] = useState(initialData || []);
   const [isLoading, setIsLoading] = useState(!initialData);
   const [saveHint, setSaveHint] = useState('');
+  const [employees, setEmployees] = useState(() => {
+    try {
+      const cached = localStorage.getItem('epc_employees_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
   const pendingSaveRef = useRef(new Map());
   const saveTimerRef = useRef(null);
   const isSavingRef = useRef(false);
@@ -77,6 +86,19 @@ export default function RiskModule({ project, initialData }) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(flushSaves, 450);
   }, [canEdit, flushSaves]);
+
+  useEffect(() => {
+    api.getEmployees()
+      .then((data) => {
+        if (data?.length) setEmployees(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const employeeNames = useMemo(() => {
+    const names = employees.map(getEmployeeName).filter(Boolean);
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b, 'vi'));
+  }, [employees]);
 
   useEffect(() => {
     if (initialData) {
@@ -248,9 +270,9 @@ export default function RiskModule({ project, initialData }) {
                             className={`hover:bg-[var(--bg-panel)]/60 transition-colors ${isClosed ? 'opacity-70' : ''}`}
                           >
                             <td className="p-3">
-                              <div className={`relative inline-flex items-center rounded-md border ${getRiskSeverityStyle(severity)}`}>
+                              <div className={`relative inline-flex w-full min-w-[6.5rem] items-center rounded-full border ${getRiskSeverityStyle(severity)}`}>
                                 <select
-                                  className={`relative z-10 min-w-[6.5rem] appearance-none bg-transparent text-inherit text-xs font-bold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
+                                  className={`risk-field-select relative z-10 w-full min-w-0 appearance-none bg-transparent text-inherit text-[10px] font-semibold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
                                   value={severity}
                                   onChange={(e) => scheduleSave(r._rowIndex || r.id, 'MỨC_ĐỘ', e.target.value)}
                                 >
@@ -286,9 +308,9 @@ export default function RiskModule({ project, initialData }) {
                               />
                             </td>
                             <td className="p-3">
-                              <div className={`relative inline-flex items-center rounded-md border ${getRiskStatusStyle(status)}`}>
+                              <div className={`relative inline-flex w-full min-w-[6.5rem] items-center rounded-full border ${getRiskStatusStyle(status)}`}>
                                 <select
-                                  className={`relative z-10 min-w-[6.5rem] appearance-none bg-transparent text-inherit text-xs font-bold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
+                                  className={`risk-field-select relative z-10 w-full min-w-0 appearance-none bg-transparent text-inherit text-[10px] font-semibold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
                                   value={status}
                                   onChange={(e) => scheduleSave(r._rowIndex || r.id, 'TRẠNG_THÁI', e.target.value)}
                                 >
@@ -302,15 +324,24 @@ export default function RiskModule({ project, initialData }) {
                               </div>
                             </td>
                             <td className="p-3">
-                              <input
-                                type="text"
-                                className={`${inputClass} font-medium`}
-                                value={r.PHỤ_TRÁCH || ''}
-                                placeholder="Nhập người phụ trách..."
-                                onChange={(e) => {
-                                  scheduleSave(r._rowIndex || r.id, 'PHỤ_TRÁCH', e.target.value);
-                                }}
-                              />
+                              {(() => {
+                                const current = r.PHỤ_TRÁCH || '';
+                                const options = current && !employeeNames.includes(current)
+                                  ? [current, ...employeeNames]
+                                  : employeeNames;
+                                return (
+                                  <select
+                                    className={`${inputClass} font-medium cursor-pointer rounded-md border border-[var(--border-main)] bg-[var(--bg-panel)] px-2 py-1 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
+                                    value={current}
+                                    onChange={(e) => scheduleSave(r._rowIndex || r.id, 'PHỤ_TRÁCH', e.target.value)}
+                                  >
+                                    <option value="">-- Chọn nhân sự --</option>
+                                    {options.map((name) => (
+                                      <option key={name} value={name}>{name}</option>
+                                    ))}
+                                  </select>
+                                );
+                              })()}
                             </td>
                             <td className="p-3">
                               <DateInputDMY
