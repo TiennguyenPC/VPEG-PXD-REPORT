@@ -82,20 +82,20 @@ export default function ModuleDateHeader({ projectId, moduleKey, syncStatus, ini
   };
 
   return (
-    <div className="hidden lg:flex items-center bg-[var(--bg-main)]/60 border border-[var(--border-main)] rounded-md overflow-hidden shadow-sm" onClick={e => e.stopPropagation()}>
-      <div className="flex items-center px-3 py-1.5 border-r border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors group">
-        <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-2">{t('moduleDate.start')}</span>
+    <div className="hidden lg:flex items-center shrink-0 bg-[var(--bg-main)]/60 border border-[var(--border-main)] rounded-md overflow-hidden shadow-sm" onClick={e => e.stopPropagation()}>
+      <div className="flex items-center shrink-0 px-3 py-1.5 border-r border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors group">
+        <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-2 shrink-0">{t('moduleDate.start')}</span>
         <DateInputDMY
           value={dateInfo.start}
           onChange={(val) => updateDateInfo('start', val)}
           onBlur={handleBlur}
           disabled={!canEdit}
-          className={`bg-transparent text-[11px] font-semibold text-[var(--text-main)] focus:outline-none w-[82px] ${canEdit ? 'cursor-text' : 'cursor-default opacity-70'}`}
+          className={`bg-transparent text-[11px] font-semibold tabular-nums whitespace-nowrap text-[var(--text-main)] focus:outline-none min-w-[5.75rem] w-[5.75rem] box-border ${canEdit ? 'cursor-text' : 'cursor-default opacity-70'}`}
         />
       </div>
       
-      <div className="flex items-center px-3 py-1.5 border-r border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors group">
-        <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-2">{t('moduleDate.days')}</span>
+      <div className="flex items-center shrink-0 px-3 py-1.5 border-r border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors group">
+        <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-2 shrink-0">{t('moduleDate.days')}</span>
         <input 
           type="number" 
           min="0"
@@ -103,14 +103,14 @@ export default function ModuleDateHeader({ projectId, moduleKey, syncStatus, ini
           onChange={e => updateDateInfo('days', e.target.value)}
           onBlur={handleBlur}
           disabled={!canEdit}
-          className={`bg-transparent text-[11px] font-semibold text-[#5252ff] focus:outline-none w-8 text-center placeholder-[var(--text-muted)] ${!canEdit ? 'opacity-70 cursor-default' : ''}`}
+          className={`bg-transparent text-[11px] font-semibold tabular-nums text-[#5252ff] focus:outline-none min-w-[2.25rem] w-10 text-center placeholder-[var(--text-muted)] box-border ${!canEdit ? 'opacity-70 cursor-default' : ''}`}
           placeholder="-"
         />
       </div>
       
-      <div className="flex items-center px-3 py-1.5 bg-[var(--bg-panel)]">
-        <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-2">{t('moduleDate.end')}</span>
-        <span className="text-[11px] font-bold text-[#059669] w-[70px] text-center bg-[#10b981]/10 rounded border border-[#10b981]/30 py-0.5">
+      <div className="flex items-center shrink-0 px-3 py-1.5 bg-[var(--bg-panel)]">
+        <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-2 shrink-0">{t('moduleDate.end')}</span>
+        <span className="inline-flex items-center justify-center min-w-[5.75rem] px-2 box-border text-[11px] font-bold tabular-nums whitespace-nowrap text-[#059669] bg-[#10b981]/10 rounded border border-[#10b981]/30 py-0.5">
           {calculateEndDate(dateInfo.start, dateInfo.days)}
         </span>
       </div>
