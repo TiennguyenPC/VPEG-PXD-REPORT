@@ -15,7 +15,8 @@ import Sidebar from '../components/Sidebar';
 import { useSidebar } from '../hooks/useSidebar';
 import { api, OVERVIEW_REFRESH_EVENT } from '../services/api';
 import { updateDashboardContext } from '../utils/dashboardContext';
-import { enrichTaskForUI } from '../utils/taskFields';
+import { enrichTaskForUI, formatAssigneeDisplay, parseAssignees } from '../utils/taskFields';
+import AssigneeDisplay from '../components/AssigneeDisplay';
 import { enrichProjectsProgress } from '../utils/projectProgress';
 import { buildOverviewRiskRows } from '../utils/riskHelpers';
 import { parseFlexibleDate } from '../utils/timelineDates';
@@ -94,21 +95,6 @@ function readCachedArray(key) {
   }
 }
 
-function AssigneeCell({ name, fallback = 'Chưa rõ' }) {
-  const display = (name || '').trim() || fallback;
-  const initials = display.length >= 2 ? display.substring(0, 2).toUpperCase() : display.substring(0, 1).toUpperCase();
-  return (
-    <div className="flex items-start gap-2 min-w-[100px]">
-      <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-[9px] font-bold shrink-0">
-        {initials || '?'}
-      </div>
-      <span className={`${textWrap} font-medium text-[var(--text-main)] flex-1 min-w-0`} title={display}>
-        {display}
-      </span>
-    </div>
-  );
-}
-
 function CellText({ children, className = '', title }) {
   const label = title ?? (typeof children === 'string' ? children : undefined);
   return (
@@ -132,15 +118,6 @@ function formatShortDueDate(dateStr) {
   return dateStr;
 }
 
-function getAssigneeFirstName(fullName) {
-  const name = (fullName || '').trim();
-  if (!name) return null;
-  const parts = name.split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return null;
-  const given = parts[parts.length - 1];
-  return given.charAt(0).toUpperCase() + given.slice(1).toLowerCase();
-}
-
 function categorizeTaskByDue(task, today) {
   const status = task.computedStatus || task.TRẠNG_THÁI || '';
   if (status === 'Đã hoàn thành') return 'completed';
@@ -156,7 +133,10 @@ function TaskKanbanCard({ task, column, onClick }) {
   const isCompleted = column.key === 'completed';
   const projectLabel = (task.TÊN_DỰ_ÁN || task.PROJECT_ID || '').trim() || '—';
   const assigneeFull = (task.NHÂN_SỰ || '').trim();
-  const assigneeLabel = getAssigneeFirstName(assigneeFull);
+  const assigneeList = parseAssignees(assigneeFull);
+  const assigneeLabel = assigneeList.length <= 1
+    ? (assigneeList[0] || null)
+    : formatAssigneeDisplay(assigneeFull);
   const dueLabel = formatShortDueDate(task.NGÀY_KẾT_THÚC_LOCAL || task.NGÀY_KẾT_THÚC);
   const metaLine = assigneeLabel ? `${projectLabel} - ${assigneeLabel}` : projectLabel;
 
@@ -603,7 +583,7 @@ export default function Overview() {
                             </CellText>
                           </td>
                           <td className={tdBase}>
-                            <AssigneeCell name={r.assignee} />
+                            <AssigneeDisplay assignees={r.assignee} variant="overview" fallback="Chưa rõ" />
                           </td>
                           <td className={`${tdBase} text-center`}>
                             <span

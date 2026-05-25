@@ -1,5 +1,30 @@
 import { normalizeToDMY, parseFlexibleDate } from './timelineDates';
 
+/** Tách chuỗi NHÂN_SỰ thành danh sách (hỗ trợ phân cách , ; | /) */
+export function parseAssignees(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(/[,;|/]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Lấy tên (từ cuối) từ họ tên đầy đủ — VD: NGUYỄN ĐỨC TIẾN → Tiến */
+export function getAssigneeGivenName(fullName) {
+  const parts = String(fullName || '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '';
+  const given = parts[parts.length - 1];
+  return given.charAt(0).toUpperCase() + given.slice(1).toLowerCase();
+}
+
+/** 1 người → họ tên đủ; từ 2 người → chỉ tên, cách nhau dấu phẩy */
+export function formatAssigneeDisplay(raw, fallback = 'Chưa chỉ định') {
+  const list = parseAssignees(raw);
+  if (list.length === 0) return fallback;
+  if (list.length === 1) return list[0];
+  return list.map(getAssigneeGivenName).join(', ');
+}
+
 /** Mô tả công việc — đồng bộ tên cột Sheet (GHI_CHÚ) và alias UI (MÔ_TẢ) */
 export function getTaskDescription(task) {
   if (!task) return '';

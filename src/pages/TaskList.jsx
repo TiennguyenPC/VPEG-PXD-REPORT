@@ -15,9 +15,10 @@ import Sidebar from '../components/Sidebar';
 import DateInputDMY from '../components/DateInputDMY';
 import { updateDashboardContext } from '../utils/dashboardContext';
 import { getTaskDescription, isSameTask, UI_ONLY_TASK_FIELDS, enrichTaskForUI, applyTaskFieldUpdate } from '../utils/taskFields';
+import AssigneeDisplay from '../components/AssigneeDisplay';
 import { compareDateStrings, normalizeToDMY } from '../utils/timelineDates';
 import { useAuth } from '../context/AuthContext';
-import { canEditTask, canCreateTask, canDeleteTask, getUserInitials } from '../utils/permissions';
+import { canEditTask, canCreateTask, canDeleteTask } from '../utils/permissions';
 
 const thCell = 'py-2 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider align-middle';
 const tdCell = 'py-2 px-2.5 text-xs align-middle overflow-hidden';
@@ -567,12 +568,7 @@ export default function TaskList() {
                           </span>
                         </td>
                         <td className={tdCell}>
-                          <div className="flex items-start gap-1.5 min-w-0">
-                            <div className="w-6 h-6 rounded-full bg-[#f59e0b] text-white flex items-center justify-center text-[8px] font-bold shrink-0 mt-0.5">
-                              {getUserInitials(task.NHÂN_SỰ)}
-                            </div>
-                            <span className="text-slate-300 leading-snug break-words min-w-0" title={task.NHÂN_SỰ}>{task.NHÂN_SỰ || 'Chưa chỉ định'}</span>
-                          </div>
+                          <AssigneeDisplay assignees={task.NHÂN_SỰ} variant="dark" />
                         </td>
                         <td className={`${tdCell} text-center text-slate-400 tabular-nums whitespace-nowrap`}>{task.NGÀY_BẮT_ĐẦU_LOCAL || normalizeToDMY(task.NGÀY_BẮT_ĐẦU) || '—'}</td>
                         <td className={`${tdCell} text-center font-semibold tabular-nums whitespace-nowrap ${task.computedStatus === 'Trễ' ? 'text-red-400' : 'text-emerald-400'}`}>
@@ -694,9 +690,7 @@ export default function TaskList() {
                               <Calendar className="w-3 h-3" />
                               {task.NGÀY_KẾT_THÚC ? task.NGÀY_KẾT_THÚC.substring(0, 5) : 'N/A'}
                             </div>
-                            <div className="w-5 h-5 rounded-full bg-[#18183c] text-[#a0a0ff] flex items-center justify-center text-[8px] font-bold border border-[#2d2db3]/20" title={task.NHÂN_SỰ}>
-                              {task.NHÂN_SỰ ? task.NHÂN_SỰ.substring(0,2).toUpperCase() : 'NV'}
-                            </div>
+                            <AssigneeDisplay assignees={task.NHÂN_SỰ} variant="board" showLabel={false} />
                           </div>
                         </div>
                       );})}
@@ -1279,10 +1273,7 @@ export default function TaskList() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-slate-400"><LayoutGrid className="w-4 h-4" /></span>
-                  <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold ring-2 ring-white" title={draftTask.NHÂN_SỰ}>
-                    {getUserInitials(draftTask.NHÂN_SỰ)}
-                  </div>
-                  <span className="text-sm text-slate-600 font-medium">{draftTask.NHÂN_SỰ || 'Chưa chỉ định'}</span>
+                  <AssigneeDisplay assignees={draftTask.NHÂN_SỰ} variant="light" />
                 </div>
               </div>
 
