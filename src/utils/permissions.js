@@ -55,11 +55,65 @@ export function canEditProject(user, projectId) {
   return isAssignedToProject(user, projectId);
 }
 
-/** Chỉ người được phân công (NHÂN_SỰ) hoặc Admin mới sửa task */
-export function canEditTask(user, task) {
+function parseAssigneeNames(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(/[,;|/]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function normalizeContainer(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .toUpperCase();
+}
+
+export function resolveTaskProjectId(task, projects = []) {
+  const pid = String(task?.PROJECT_ID || '').trim();
+  if (pid) return pid;
+  const name = String(task?.TÊN_DỰ_ÁN || '').trim();
+  if (!name || !Array.isArray(projects)) return '';
+  const proj = projects.find(
+    (p) =>
+      String(p.name || p.TÊN_DỰ_ÁN || '').trim() === name ||
+      String(p.id || p.PROJECT_ID || '').trim() === name
+  );
+  return proj ? String(proj.id || proj.PROJECT_ID || '').trim() : '';
+}
+
+function isOfficeTask(task, projects = []) {
+  const container = normalizeContainer(task?.BỘ_CHỨA);
+  const projectName = normalizeContainer(task?.TÊN_DỰ_ÁN);
+  const projectId = resolveTaskProjectId(task, projects);
+  const hasProject = Boolean(String(task?.PROJECT_ID || '').trim() || projectId);
+  return container.includes('VAN PHONG') || projectName.includes('VAN PHONG') || !hasProject;
+}
+
+/** Mọi user đăng nhập đều xem được chi tiết task */
+export function canViewTaskDetail(user, task) {
+  return Boolean(user && task);
+}
+
+/** Admin, người được gán, hoặc PM/SM của dự án / văn phòng */
+export function canEditTask(user, task, context = {}) {
   if (isAdmin(user)) return true;
   if (!task) return false;
-  return namesMatch(user?.displayName, task.NHÂN_SỰ);
+
+  const assignees = parseAssigneeNames(task.NHÂN_SỰ);
+  if (assignees.some((name) => namesMatch(user?.displayName, name))) return true;
+  if (namesMatch(user?.displayName, task.NHÂN_SỰ)) return true;
+
+  if (isProjectEditorRole(user?.role)) {
+    const { projects = [] } = context;
+    const projectId = resolveTaskProjectId(task, projects);
+    if (projectId && isAssignedToProject(user, projectId)) return true;
+    if (isOfficeTask(task, projects) && canCreateTask(user)) return true;
+  }
+
+  return false;
 }
 
 export function canCreateTask(user) {
@@ -67,8 +121,8 @@ export function canCreateTask(user) {
   return isProjectEditorRole(user?.role);
 }
 
-export function canDeleteTask(user, task) {
-  return canEditTask(user, task);
+export function canDeleteTask(user, task, context = {}) {
+  return canEditTask(user, task, context);
 }
 
 export function getRoleLabel(role) {

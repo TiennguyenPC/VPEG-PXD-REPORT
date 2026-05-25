@@ -16,9 +16,10 @@ import DateInputDMY from '../components/DateInputDMY';
 import { updateDashboardContext } from '../utils/dashboardContext';
 import { getTaskDescription, isSameTask, UI_ONLY_TASK_FIELDS, enrichTaskForUI, applyTaskFieldUpdate } from '../utils/taskFields';
 import AssigneeDisplay from '../components/AssigneeDisplay';
+import AssigneeSelect from '../components/AssigneeSelect';
 import { compareDateStrings, normalizeToDMY } from '../utils/timelineDates';
 import { useAuth } from '../context/AuthContext';
-import { canEditTask, canCreateTask, canDeleteTask } from '../utils/permissions';
+import { canEditTask, canCreateTask, canDeleteTask, canViewTaskDetail } from '../utils/permissions';
 
 const thCell = 'py-2 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider align-middle';
 const tdCell = 'py-2 px-2.5 text-xs align-middle overflow-hidden';
@@ -187,9 +188,16 @@ export default function TaskList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
 
+  const taskContext = useMemo(() => ({ projects }), [projects]);
+
   const isDraftEditable = draftTask
-    ? canEditTask(user, taskMatchRef.current || draftTask)
+    ? canEditTask(user, taskMatchRef.current || draftTask, taskContext)
     : false;
+
+  const canEditTaskRow = useCallback(
+    (task) => canEditTask(user, task, taskContext),
+    [user, taskContext]
+  );
 
   const handleAddTask = async (e) => {
     e.preventDefault();
@@ -222,8 +230,7 @@ export default function TaskList() {
   };
 
   const openTaskDetail = useCallback((task) => {
-    if (modalClosingRef.current) return;
-    if (!canEditTask(user, task)) return;
+    if (modalClosingRef.current || !canViewTaskDetail(user, task)) return;
     const enriched = enrichTaskForUI(task);
     setDraftTask(enriched);
     taskMatchRef.current = { ...enriched };
@@ -287,7 +294,7 @@ export default function TaskList() {
   }, [persistTaskUpdate]);
 
   const handleTaskUpdate = (task, field, value) => {
-    if (!canEditTask(user, taskMatchRef.current || task)) return;
+    if (!canEditTask(user, taskMatchRef.current || task, taskContext)) return;
 
     const updatedTask = applyTaskFieldUpdate(task, field, value);
 
@@ -309,7 +316,7 @@ export default function TaskList() {
   };
 
   const handleTaskDelete = async (task) => {
-    if (!canDeleteTask(user, taskMatchRef.current || task)) {
+    if (!canDeleteTask(user, taskMatchRef.current || task, taskContext)) {
       alert('Bạn chỉ được xóa công việc được phân công cho mình');
       return;
     }
@@ -540,13 +547,14 @@ export default function TaskList() {
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]/50 bg-[#0e1628]">
                     {processedTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((task) => {
-                      const taskEditable = canEditTask(user, task);
+                      const taskEditable = canEditTaskRow(task);
+                      const canOpenTask = canViewTaskDetail(user, task);
                       return (
-                      <tr key={task._rowIndex ?? `${task.TÁC_VỤ}-${task.PROJECT_ID}`} className={`hover:bg-[#141c2f] transition-colors group ${taskEditable ? 'cursor-pointer' : ''}`} onClick={taskEditable ? () => openTaskDetail(task) : undefined}>
+                      <tr key={task._rowIndex ?? `${task.TÁC_VỤ}-${task.PROJECT_ID}`} className={`hover:bg-[#141c2f] transition-colors group ${canOpenTask ? 'cursor-pointer' : ''}`} onClick={canOpenTask ? () => openTaskDetail(task) : undefined}>
                         <td className={tdClip}>
                           <div className="flex items-center gap-1.5 min-w-0">
                             <button 
-                              className={`shrink-0 transition-colors ${task.PINNED ? 'text-yellow-400' : 'text-slate-500 hover:text-yellow-400'} ${!canEditTask(user, task) ? 'opacity-40 pointer-events-none' : ''}`}
+                              className={`shrink-0 transition-colors ${task.PINNED ? 'text-yellow-400' : 'text-slate-500 hover:text-yellow-400'} ${!taskEditable ? 'opacity-40 pointer-events-none' : ''}`}
                               onClick={e => { e.stopPropagation(); handleTaskUpdate(task, 'PINNED', !task.PINNED); }}
                             >
                               <Star className={`w-3.5 h-3.5 ${task.PINNED ? 'fill-current' : ''}`} />
@@ -567,8 +575,17 @@ export default function TaskList() {
                             {task.TÊN_DỰ_ÁN || '—'}
                           </span>
                         </td>
-                        <td className={tdCell}>
-                          <AssigneeDisplay assignees={task.NHÂN_SỰ} variant="dark" />
+                        <td className={tdCell} onClick={(e) => e.stopPropagation()}>
+                          {taskEditable ? (
+                            <AssigneeSelect
+                              value={task.NHÂN_SỰ}
+                              onChange={(val) => handleTaskUpdate(task, 'NHÂN_SỰ', val)}
+                              employees={employees}
+                              variant="dark"
+                            />
+                          ) : (
+                            <AssigneeDisplay assignees={task.NHÂN_SỰ} variant="dark" />
+                          )}
                         </td>
                         <td className={`${tdCell} text-center text-slate-400 tabular-nums whitespace-nowrap`}>{task.NGÀY_BẮT_ĐẦU_LOCAL || normalizeToDMY(task.NGÀY_BẮT_ĐẦU) || '—'}</td>
                         <td className={`${tdCell} text-center font-semibold tabular-nums whitespace-nowrap ${task.computedStatus === 'Trễ' ? 'text-red-400' : 'text-emerald-400'}`}>
@@ -655,9 +672,10 @@ export default function TaskList() {
                   <div key={container} className="bg-[var(--bg-panel)] rounded-xl border border-[var(--border-main)] flex flex-col min-h-[calc(100vh-200px)] shadow-sm">
                     <div className="p-2.5 space-y-2">
                       {processedTasks.filter(t => t.BỘ_CHỨA === container).map((task, idx) => {
-                        const taskEditable = canEditTask(user, task);
+                        const taskEditable = canEditTaskRow(task);
+                        const canOpenTask = canViewTaskDetail(user, task);
                         return (
-                        <div key={idx} className={`bg-[var(--bg-panel)] p-2.5 rounded-lg border border-[var(--border-main)] shadow-sm transition-all group ${taskEditable ? 'hover:border-[#5252ff]/50 cursor-pointer' : ''}`} onClick={taskEditable ? () => openTaskDetail(task) : undefined}>
+                        <div key={idx} className={`bg-[var(--bg-panel)] p-2.5 rounded-lg border border-[var(--border-main)] shadow-sm transition-all group ${canOpenTask ? 'hover:border-[#5252ff]/50 cursor-pointer' : ''}`} onClick={canOpenTask ? () => openTaskDetail(task) : undefined}>
                           <div className="flex items-start gap-2 mb-2">
                             <button
                               className={!taskEditable ? 'opacity-40 pointer-events-none' : ''}
@@ -816,15 +834,16 @@ export default function TaskList() {
                                   else if (t.computedStatus === 'Đang diễn ra') { bgClass='bg-[#3b82f6]/10'; borderClass='border-[#3b82f6]/30'; textClass='text-[#3b82f6]'; }
                                   else { bgClass='bg-[#1e293b]/50'; borderClass='border-[#263554]'; textClass='text-slate-300'; }
 
-                                  const taskEditable = canEditTask(user, t);
+                                  const taskEditable = canEditTaskRow(t);
+                                  const canOpenTask = canViewTaskDetail(user, t);
 
                                   return (
                                     <div 
                                       key={tIdx} 
-                                      className={`absolute h-full border ${bgClass} ${borderClass} rounded-md px-2 flex items-center transition-all shadow-sm ${taskEditable ? 'cursor-pointer hover:opacity-80 hover:shadow-md hover:z-20' : ''}`}
+                                      className={`absolute h-full border ${bgClass} ${borderClass} rounded-md px-2 flex items-center transition-all shadow-sm ${canOpenTask ? 'cursor-pointer hover:opacity-80 hover:shadow-md hover:z-20' : ''}`}
                                       style={{ left: `calc(${leftPercent}% + 4px)`, width: `calc(${widthPercent}% - 8px)` }}
                                       title={`${t.TÁC_VỤ}\nBắt đầu: ${tStart}\nKết thúc: ${tEnd}`}
-                                      onClick={taskEditable ? () => openTaskDetail(t) : undefined}
+                                      onClick={canOpenTask ? () => openTaskDetail(t) : undefined}
                                     >
                                       <div className={`text-[10px] font-semibold truncate ${textClass} flex items-center gap-1.5`}>
                                         {t.computedStatus === 'Đã hoàn thành' ? <CheckCircle2 className="w-3 h-3 shrink-0" /> : <Circle className="w-3 h-3 shrink-0" />}
@@ -1271,9 +1290,19 @@ export default function TaskList() {
                     {draftTask.BỘ_CHỨA || 'VĂN PHÒNG'}
                   </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400"><LayoutGrid className="w-4 h-4" /></span>
-                  <AssigneeDisplay assignees={draftTask.NHÂN_SỰ} variant="light" />
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-slate-400 shrink-0"><LayoutGrid className="w-4 h-4" /></span>
+                  {isDraftEditable ? (
+                    <AssigneeSelect
+                      value={draftTask.NHÂN_SỰ}
+                      onChange={(val) => handleTaskUpdate(draftTask, 'NHÂN_SỰ', val)}
+                      employees={employees}
+                      variant="light"
+                      className="flex-1"
+                    />
+                  ) : (
+                    <AssigneeDisplay assignees={draftTask.NHÂN_SỰ} variant="light" />
+                  )}
                 </div>
               </div>
 
@@ -1352,6 +1381,21 @@ export default function TaskList() {
                     </select>
                     <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phân công</label>
+                  {isDraftEditable ? (
+                    <AssigneeSelect
+                      value={draftTask.NHÂN_SỰ}
+                      onChange={(val) => handleTaskUpdate(draftTask, 'NHÂN_SỰ', val)}
+                      employees={employees}
+                      variant="light"
+                    />
+                  ) : (
+                    <div className="py-2 px-3 rounded border border-slate-200 bg-slate-50">
+                      <AssigneeDisplay assignees={draftTask.NHÂN_SỰ} variant="light" />
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1">Bộ chứa <AlertTriangle className="w-3 h-3 text-slate-400" /></label>
