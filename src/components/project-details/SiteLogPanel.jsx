@@ -743,28 +743,24 @@ export default function SiteLogPanel({
     switch (saveStatus) {
       case 'Saving...':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 animate-pulse">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-500 animate-pulse transition-opacity duration-300">
             ● {t('siteLog.statusSaving')}
           </span>
         );
       case 'Saved':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-500">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-500 transition-opacity duration-300">
             ● {t('siteLog.statusSaved')}
           </span>
         );
       case 'Error':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-500">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/10 text-red-500 transition-opacity duration-300">
             ● {t('siteLog.statusError')}
           </span>
         );
       default:
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-500/10 text-slate-400">
-            ● {t('siteLog.statusDraft')}
-          </span>
-        );
+        return null;
     }
   };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Activity, Briefcase, Folder, Sun, Moon
@@ -125,11 +125,30 @@ export default function ProjectDetailPage() {
   const [selectedDate, setSelectedDate] = useState(cachedSelections.selectedDate);
   const [selectedWeek, setSelectedWeek] = useState(cachedSelections.selectedWeek);
   const [selectedMonth, setSelectedMonth] = useState(cachedSelections.selectedMonth);
-  const [saveStatus, setSaveStatus] = useState('Saved'); // 'Draft' | 'Saving...' | 'Saved' | 'Error'
+  const [saveStatus, setSaveStatus] = useState('');
+  const saveStatusHideRef = useRef(null);
+
+  const updateSaveStatus = useCallback((status) => {
+    if (saveStatusHideRef.current) {
+      clearTimeout(saveStatusHideRef.current);
+      saveStatusHideRef.current = null;
+    }
+    setSaveStatus(status);
+    if (status === 'Saved' || status === 'Error') {
+      saveStatusHideRef.current = setTimeout(() => {
+        setSaveStatus('');
+        saveStatusHideRef.current = null;
+      }, 2200);
+    }
+  }, []);
 
   const saveTimeoutRef = useRef(null);
   const isSavingRef = useRef(false);
   const pendingSaveRef = useRef(null);
+
+  useEffect(() => () => {
+    if (saveStatusHideRef.current) clearTimeout(saveStatusHideRef.current);
+  }, []);
 
   const [bundleData, setBundleData] = useState(cachedBundle);
 
@@ -505,7 +524,7 @@ export default function ProjectDetailPage() {
     if (isPhotoSave) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       pendingSaveRef.current = updatedLog;
-      setSaveStatus('Saving...');
+      updateSaveStatus('Saving...');
       saveTimeoutRef.current = setTimeout(async () => {
         await performSave();
       }, 500);
@@ -515,7 +534,7 @@ export default function ProjectDetailPage() {
   };
 
   const triggerSave = (payload) => {
-    setSaveStatus('Saving...');
+    updateSaveStatus('Saving...');
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
@@ -529,18 +548,18 @@ export default function ProjectDetailPage() {
   const performSave = async () => {
     if (!canEditProject(user, id)) {
       pendingSaveRef.current = null;
-      setSaveStatus('Saved');
+      updateSaveStatus('Saved');
       return;
     }
 
     const toSave = pendingSaveRef.current;
     if (!toSave) {
-      setSaveStatus('Saved');
+      updateSaveStatus('Saved');
       return;
     }
 
     isSavingRef.current = true;
-    setSaveStatus('Saving...');
+    updateSaveStatus('Saving...');
     pendingSaveRef.current = null;
 
     try {
@@ -568,7 +587,7 @@ export default function ProjectDetailPage() {
       };
 
       const res = await api.updateSiteLog(payload);
-      setSaveStatus('Saved');
+      updateSaveStatus('Saved');
 
       if (res && res.dailyLogs) {
         setLogs(res.dailyLogs);
@@ -607,7 +626,7 @@ export default function ProjectDetailPage() {
 
     } catch (error) {
       console.error("Autosave error:", error);
-      setSaveStatus('Error');
+      updateSaveStatus('Error');
       pendingSaveRef.current = toSave;
     } finally {
       isSavingRef.current = false;
@@ -691,7 +710,7 @@ export default function ProjectDetailPage() {
                 activeLog={activeLog}
                 onUpdateLog={handleUpdateLog}
                 saveStatus={saveStatus}
-                onSaveStatusChange={setSaveStatus}
+                onSaveStatusChange={updateSaveStatus}
               />
             </div>
             {selectedView !== 'day' && (
