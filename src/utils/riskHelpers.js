@@ -26,6 +26,57 @@ export function isRiskActive(status) {
   return s !== 'DA DONG' && s !== 'CLOSED' && s !== 'ĐÃ ĐÓNG';
 }
 
+/** Badge mức độ — đủ tương phản trên light + dark */
+export function getRiskSeverityStyle(level) {
+  const n = normalizeRiskSeverity(level);
+  switch (n) {
+    case 'Cao':
+      return 'text-red-700 bg-red-100 border-red-300 dark:text-red-300 dark:bg-red-500/15 dark:border-red-500/40';
+    case 'Trung bình':
+      return 'text-amber-800 bg-amber-100 border-amber-300 dark:text-orange-300 dark:bg-orange-500/15 dark:border-orange-500/40';
+    case 'Thấp':
+      return 'text-emerald-800 bg-emerald-100 border-emerald-300 dark:text-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/40';
+    default:
+      return 'text-slate-600 bg-slate-100 border-slate-300 dark:text-slate-400 dark:bg-slate-500/10 dark:border-slate-500/25';
+  }
+}
+
+export function getRiskSeverityRowAccent(level) {
+  const n = normalizeRiskSeverity(level);
+  switch (n) {
+    case 'Cao': return 'border-l-red-500';
+    case 'Trung bình': return 'border-l-amber-500';
+    case 'Thấp': return 'border-l-emerald-500';
+    default: return 'border-l-slate-300';
+  }
+}
+
+export function normalizeRiskStatus(status) {
+  const raw = String(status || '').trim();
+  const upper = raw.toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (upper === 'OPEN') return 'Open';
+  if (upper === 'DANG XU LY' || upper === 'IN PROGRESS') return 'Đang xử lý';
+  if (upper === 'THEO DOI' || upper === 'WATCH') return 'Theo dõi';
+  if (upper === 'DA DONG' || upper === 'CLOSED') return 'Đã đóng';
+  return raw || 'Open';
+}
+
+export function getRiskStatusStyle(status) {
+  const n = normalizeRiskStatus(status);
+  switch (n) {
+    case 'Open':
+      return 'text-red-700 bg-red-50 border-red-200 dark:text-red-400 dark:bg-red-500/10 dark:border-red-500/25';
+    case 'Đang xử lý':
+      return 'text-blue-700 bg-blue-50 border-blue-200 dark:text-blue-400 dark:bg-blue-500/10 dark:border-blue-500/25';
+    case 'Theo dõi':
+      return 'text-amber-800 bg-amber-50 border-amber-200 dark:text-orange-400 dark:bg-orange-500/10 dark:border-orange-500/25';
+    case 'Đã đóng':
+      return 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-400 dark:bg-emerald-500/10 dark:border-emerald-500/25';
+    default:
+      return 'text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-400 dark:bg-slate-500/10 dark:border-slate-500/25';
+  }
+}
+
 export function buildOverviewRiskRows(allRisks, projects = []) {
   const projectById = new Map();
   (projects || []).forEach((p) => {
