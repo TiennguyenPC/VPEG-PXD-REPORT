@@ -4,7 +4,7 @@ import { Bot, Send, User, Sparkles } from 'lucide-react';
 import { buildSystemInstruction, getLocalDataAnswer, getOfflineAppHint } from '../data/aiKnowledge';
 import { sendGeminiChat, hasGeminiApiKey } from '../services/geminiChat';
 import { api } from '../services/api';
-import { getPageLabel, updateDashboardContext } from '../utils/dashboardContext';
+import { getPageLabel, updateDashboardContext, resolveProjectFromPath } from '../utils/dashboardContext';
 import AIMessageContent from './AIMessageContent';
 
 const WELCOME =
@@ -70,6 +70,11 @@ export default function AIAssistant() {
   const buildContext = useCallback(() => {
     const data = typeof window !== 'undefined' ? window.__DASHBOARD_DATA__ || {} : {};
     const fallbackTables = buildFallbackTables(data);
+    const projects = data.projects || fallbackTables.PROJECT_MASTER;
+    const pathResolved = resolveProjectFromPath(location.pathname, projects);
+    const projectId = data.projectId || pathResolved.projectId;
+    const currentProject = data.currentProject || pathResolved.project;
+
     return {
       currentPath: location.pathname,
       currentPage: getPageLabel(location.pathname),
@@ -81,10 +86,10 @@ export default function AIAssistant() {
         hour: '2-digit',
         minute: '2-digit',
       }),
-      projects: data.projects || fallbackTables.PROJECT_MASTER,
+      projects,
       tasks: data.tasks || fallbackTables.PROJECT_TASKS,
-      currentProject: data.currentProject,
-      projectId: data.projectId,
+      currentProject,
+      projectId,
       milestones: data.milestones,
       risks: data.risks,
       procurements: data.procurements,
@@ -319,7 +324,7 @@ export default function AIAssistant() {
             </button>
           </div>
           <p className="text-center mt-1.5 text-[9px] text-[var(--text-muted)]">
-            {getPageLabel(location.pathname)} · by Tien Nguyen
+            {getPageLabel(location.pathname)}
           </p>
         </div>
       </div>

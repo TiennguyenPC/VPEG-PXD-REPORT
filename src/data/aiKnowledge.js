@@ -303,17 +303,42 @@ function rowBelongsToProject(row, project) {
   return rowValues.some((value) => identities.includes(value));
 }
 
+function findProjectById(projectId, candidates) {
+  if (!projectId) return null;
+  const wanted = normalizeFieldKey(projectId);
+  return candidates.find((project) =>
+    getProjectIdentity(project).some((identity) => identity === wanted)
+  ) || null;
+}
+
+function isOnProjectDetailPath(context) {
+  return /^\/projects\/[^/]+/.test(context.currentPath || '');
+}
+
+function refersToCurrentProject(q) {
+  return /duannay|projectnay|dangxem|trangnay|hientai|dangmo|nay/.test(q);
+}
+
 function findMentionedProject(context, userMessage) {
-  if (context.currentProject) return context.currentProject;
   const q = normalizeFieldKey(userMessage);
   const candidates = [
     ...(Array.isArray(context.projects) ? context.projects : []),
     ...getTableRows(context, 'PROJECT_MASTER'),
   ];
-  return candidates.find((project) => {
+
+  const named = candidates.find((project) => {
     const identities = getProjectIdentity(project);
     return identities.some((identity) => identity && q.includes(identity));
-  }) || null;
+  });
+  if (named) return named;
+
+  if (refersToCurrentProject(q) || isOnProjectDetailPath(context)) {
+    if (context.currentProject) return context.currentProject;
+    const fromId = findProjectById(context.projectId, candidates);
+    if (fromId) return fromId;
+  }
+
+  return context.currentProject || findProjectById(context.projectId, candidates) || null;
 }
 
 function takeRows(rows, limit = 8) {
@@ -632,7 +657,7 @@ export function getLocalDataAnswer(userMessage, context = {}, messages = []) {
   }
 
   const isProcurementQuestion =
-    /vattu|muasam|hangmuc|toisite|datoi|dave|vengaynao|ngayvedukien|ngayvethucte|ngaynao/.test(q);
+    /vattu|muasam|hangmuc|toisite|datoi|dave|vengaynao|ngayvedukien|ngayvethucte|ngaynao|vechua|vedu|duchua|daydu|thieugi/.test(q);
 
   if (isProcurementQuestion && selectedProject) {
     const procurements = mergedProcurements;
@@ -641,6 +666,22 @@ export function getLocalDataAnswer(userMessage, context = {}, messages = []) {
     );
     const noStatus = procurements.filter((item) => !String(item.tinh_trang || '').trim());
     const subject = findProcurementSubject(userMessage, messages, procurements);
+    const asksComplete = /duchua|daydu|vechua|vedu|thieugi|duchua/.test(q);
+
+    if (asksComplete) {
+      const allArrived = procurements.length > 0 && arrived.length === procurements.length;
+      const summary = allArrived
+        ? `**${projectName}**: vật tư đã về **đủ** — **${arrived.length}/${procurements.length}** hạng mục đã tới site.`
+        : `**${projectName}**: vật tư **chưa về đủ** — mới **${arrived.length}/${procurements.length}** hạng mục đã tới site.`;
+      const arrivedLines = arrived.length > 0
+        ? `\n\n**Đã tới site:**\n${arrived.map(formatProcurementLine).join('\n')}`
+        : '';
+      const pendingNames = noStatus.map((item) => item.hang_muc).join('; ') || 'Không có';
+      const pendingLines = noStatus.length
+        ? `\n\n**Chưa có trạng thái / chưa về:** ${pendingNames}`
+        : '';
+      return `${summary}${arrivedLines}${pendingLines}`;
+    }
 
     if (wantsCount) {
       return `${projectName} có **${arrived.length}/${procurements.length}** hạng mục vật tư đã tới site.`;
@@ -698,6 +739,10 @@ export function getLocalDataAnswer(userMessage, context = {}, messages = []) {
   if (/duan|project|tiendo|rasao|tongquan|status|trangthai|delay/.test(q)) {
     const rows = selectedProject ? [selectedProject] : masterProjects;
     if (!rows.length) return `Không thấy dự án phù hợp trong dữ liệu hiện có.`;
+    if (wantsCount && !selectedProject) return `Hiện tại có **${rows.length}** dự án.`;
+    if (!selectedProject && isOnProjectDetailPath(context)) {
+      return `Mở đúng **chi tiết dự án** rồi hỏi lại, hoặc gọi tên dự án cụ thể (ví dụ OSAKA, VAL).`;
+    }
     if (wantsCount) return `Hiện tại có **${rows.length}** dự án.`;
     return `**Dữ liệu dự án${selectedProject ? ` — ${projectName}` : ''}**\n\n${takeRows(rows).map(formatProject).join('\n')}`;
   }
@@ -725,8 +770,16 @@ export function buildSystemInstruction(context = {}) {
     tables,
   } = context;
 
-  // Gửi toàn bộ, không giới hạn
-  const allProjects = Array.isArray(projects) ? projects.map((p) => ({
+  // Gửi dự án đang xem nếu có; không trộn toàn bộ danh sách khi đang ở chi tiết dự án
+  const projectSource = Array.isArray(projects) ? projects : [];
+  const scopedProjects = currentProject
+    ? projectSource.filter((p) => rowBelongsToProject(p, currentProject))
+    : projectSource;
+  const projectsForPrompt = (currentProject && scopedProjects.length === 0)
+    ? [currentProject]
+    : (currentProject ? scopedProjects : projectSource);
+
+  const allProjects = projectsForPrompt.map((p) => ({
     id: p.id,
     name: p.name,
     client: p.client,
@@ -739,9 +792,14 @@ export function buildSystemInstruction(context = {}) {
     risk: p.risk,
     issue: p.issue,
     cod: p.cod,
-  })) : [];
+  }));
 
-  const allTasks = Array.isArray(tasks) ? tasks.map((t) => ({
+  const taskSource = Array.isArray(tasks) ? tasks : [];
+  const scopedTasks = currentProject
+    ? taskSource.filter((t) => rowBelongsToProject(t, currentProject))
+    : taskSource;
+
+  const allTasks = scopedTasks.map((t) => ({
     title: t.TÁC_VỤ || t.title,
     description: t.GHI_CHÚ || t.MÔ_TẢ || '',
     project: t.TÊN_DỰ_ÁN || t.PROJECT_ID,
@@ -750,7 +808,7 @@ export function buildSystemInstruction(context = {}) {
     assignee: t.NHÂN_SỰ || t.assignee,
     start: t.NGÀY_BẮT_ĐẦU,
     due: t.NGÀY_KẾT_THÚC,
-  })) : [];
+  }));
 
   // Merge procurement với danh sách chuẩn 15 mục — đếm đúng theo TÌNH_TRẠNG_VẬT_TƯ
   let procurementSummary = null;
@@ -795,6 +853,13 @@ export function buildSystemInstruction(context = {}) {
   };
 
   const tableSnapshot = buildTableSnapshot(tables);
+  if (tableSnapshot && currentProject) {
+    ['PROJECT_MASTER', 'PROJECT_TASKS', 'PROJECT_RISK', 'PROJECT_MILESTONE', 'PROJECT_PROCUREMENT', 'PROJECT_CONSTRUCTION', 'DAILY_SITE_LOG', 'PROJECT_PERMIT', 'PROJECT_DESIGN'].forEach((tableName) => {
+      if (!Array.isArray(tableSnapshot[tableName]?.du_lieu)) return;
+      tableSnapshot[tableName].du_lieu = tableSnapshot[tableName].du_lieu.filter((row) => rowBelongsToProject(row, currentProject));
+      tableSnapshot[tableName].so_dong = tableSnapshot[tableName].du_lieu.length;
+    });
+  }
   if (tableSnapshot) {
     dataSnapshot.bang_du_lieu = tableSnapshot;
   }
@@ -867,6 +932,8 @@ export function buildSystemInstruction(context = {}) {
 - Khi hỏi "bảng có gì", "dự án nào", "task nào", "rủi ro nào", "thi công tới đâu": ưu tiên đọc mục "bang_du_lieu" vì đó là dữ liệu Google Sheets thật.
 - Mỗi bảng trong "bang_du_lieu" có dạng { so_dong, du_lieu }. Khi trả lời phải dựa vào du_lieu, không tự suy đoán từ kiến thức Solar EPC.
 - Khi hỏi về **vật tư**: đọc trường "vat_tu_mua_sam.chi_tiet", đếm dòng có tinh_trang = "Đã tới site". Dùng số "da_toi_site" trong summary — **không tự đếm tên thiết bị**.
+- Khi người dùng đang xem **chi tiết một dự án** (có "du_an_dang_xem"): chỉ trả lời về **dự án đó**, không liệt kê dự án khác trừ khi được hỏi rõ so sánh/tổng hợp.
+- Khi hỏi **"vật tư về đủ chưa"** / **"dự án này"**: dùng dữ liệu vật tư của dự án đang xem, so sánh số hạng mục "Đã tới site" với tổng hạng mục.
 - Khi hỏi **"vật tư về được gì"**: liệt kê chính xác hang_muc có tinh_trang = "Đã tới site", và hang_muc chưa có trạng thái.
 ${solarKnowledge}
 

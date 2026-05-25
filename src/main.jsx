@@ -1,6 +1,6 @@
 import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import './index.css'
 import AIAssistant from './components/AIAssistant.jsx'
 import { ErrorBoundary } from './ErrorBoundary.jsx'
@@ -21,7 +21,8 @@ const ShareProjectPage = lazy(() => import('./pages/ShareProjectPage.jsx'))
 
 function AuthenticatedAssistant() {
   const { user } = useAuth();
-  if (!user) return null;
+  const location = useLocation();
+  if (!user || location.pathname.startsWith('/share/')) return null;
   return <AIAssistant />;
 }
 
