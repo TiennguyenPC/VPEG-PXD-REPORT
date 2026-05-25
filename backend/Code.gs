@@ -2180,8 +2180,60 @@ function canEditTask_(session, payload) {
   if (!session) return false;
   if (String(session.role || '').toLowerCase() === 'admin') return true;
   payload = payload || {};
+
   var assignee = resolveTaskAssigneeForPermission_(payload);
-  return namesMatch_(session.displayName, assignee);
+  var assignees = parseAssigneeNames_(assignee);
+  for (var a = 0; a < assignees.length; a++) {
+    if (namesMatch_(session.displayName, assignees[a])) return true;
+  }
+  if (namesMatch_(session.displayName, assignee)) return true;
+
+  if (isProjectEditorRole_(session.role)) {
+    var ss = getSpreadsheet();
+    var projectId = resolveTaskProjectId_(payload, ss);
+    if (projectId && isAssignedToProject_(session, projectId)) return true;
+    if (isOfficeTask_(payload, ss)) return true;
+  }
+
+  return false;
+}
+
+function parseAssigneeNames_(raw) {
+  if (!raw) return [];
+  return String(raw)
+    .split(/[,;|/]+/)
+    .map(function(s) { return String(s).trim(); })
+    .filter(function(s) { return s.length > 0; });
+}
+
+function normalizeContainer_(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .toUpperCase();
+}
+
+function resolveTaskProjectId_(payload, ss) {
+  var pid = String(payload.PROJECT_ID || '').trim();
+  if (pid) return pid;
+  var name = String(payload.TÊN_DỰ_ÁN || '').trim();
+  if (!name || !ss) return '';
+  var projects = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
+  for (var i = 0; i < projects.length; i++) {
+    if (String(projects[i].TÊN_DỰ_ÁN || '') === name || String(projects[i].PROJECT_ID || '') === name) {
+      return String(projects[i].PROJECT_ID || '');
+    }
+  }
+  return '';
+}
+
+function isOfficeTask_(payload, ss) {
+  var container = normalizeContainer_(payload.BỘ_CHỨA);
+  var projectName = normalizeContainer_(payload.TÊN_DỰ_ÁN);
+  var projectId = resolveTaskProjectId_(payload, ss);
+  var hasProject = Boolean(String(payload.PROJECT_ID || '').trim() || projectId);
+  return container.indexOf('VAN PHONG') >= 0 || projectName.indexOf('VAN PHONG') >= 0 || !hasProject;
 }
 
 function resolveTaskAssigneeForPermission_(payload) {
