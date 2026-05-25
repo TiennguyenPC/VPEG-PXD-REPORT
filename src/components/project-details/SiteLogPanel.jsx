@@ -13,6 +13,8 @@ import {
   normalizePhotoDateKey,
   getLogNoteText,
   canonicalPhotoPersistUrl,
+  parseDailyNote,
+  serializeDailyNote,
 } from '../../utils/sitePhotoCache';
 import SitePhoto from './SitePhoto';
 import {
@@ -114,61 +116,6 @@ const getDayOfWeek = (dateStr, weekdays) => {
   const date = parseDateStr(dateStr);
   if (!date || !weekdays) return '';
   return weekdays[date.getDay()];
-};
-
-const parseDailyNote = (noteText) => {
-  const defaults = {
-    ghiChu: '',
-    congViecChinh: '',
-    congViecNgayMai: '',
-    vanDeRuiRo: '',
-    progressActual: '',
-    progressPlanned: '',
-    dayStatus: 'Bình thường',
-    dayStatusSubtext: '',
-    images: ''
-  };
-
-  if (!noteText) return defaults;
-
-  const result = { ...defaults };
-  
-  const extractSection = (text, heading) => {
-    const regex = new RegExp(`### ${heading}\\n([\\s\\S]*?)(?=###|$)`, 'i');
-    const match = text.match(regex);
-    return match ? match[1].trim() : null;
-  };
-
-  const ghiChu = extractSection(noteText, 'GHI CHÚ HIỆN TRƯỜNG');
-  const congViecChinh = extractSection(noteText, 'CÔNG VIỆC CHÍNH');
-  const congViecNgayMai = extractSection(noteText, 'CÔNG VIỆC NGÀY MAI');
-  const vanDeRuiRo = extractSection(noteText, 'VẤN ĐỀ / RỦI RO');
-  const progressActual = extractSection(noteText, 'TIẾN ĐỘ THỰC TẾ');
-  const progressPlanned = extractSection(noteText, 'TIẾN ĐỘ KẾ HOẠCH');
-  const dayStatus = extractSection(noteText, 'TRẠNG THÁI NGÀY');
-  const dayStatusSubtext = extractSection(noteText, 'ẢNH HƯỞNG');
-  const images = extractSection(noteText, 'HÌNH ẢNH');
-
-  if (ghiChu !== null) result.ghiChu = ghiChu;
-  if (congViecChinh !== null) result.congViecChinh = congViecChinh;
-  if (congViecNgayMai !== null) result.congViecNgayMai = congViecNgayMai;
-  if (vanDeRuiRo !== null) result.vanDeRuiRo = vanDeRuiRo;
-  if (progressActual !== null) result.progressActual = progressActual;
-  if (progressPlanned !== null) result.progressPlanned = progressPlanned;
-  if (dayStatus !== null) result.dayStatus = dayStatus;
-  if (dayStatusSubtext !== null) result.dayStatusSubtext = dayStatusSubtext;
-  if (images !== null) result.images = images;
-
-  // Fallback if legacy notes
-  if (ghiChu === null && congViecChinh === null && congViecNgayMai === null && vanDeRuiRo === null) {
-    result.ghiChu = noteText.trim();
-  }
-
-  return result;
-};
-
-const serializeDailyNote = (sections) => {
-  return `### GHI CHÚ HIỆN TRƯỜNG\n${sections.ghiChu}\n\n### CÔNG VIỆC CHÍNH\n${sections.congViecChinh}\n\n### CÔNG VIỆC NGÀY MAI\n${sections.congViecNgayMai}\n\n### VẤN ĐỀ / RỦI RO\n${sections.vanDeRuiRo}\n\n### TIẾN ĐỘ THỰC TẾ\n${sections.progressActual}\n\n### TIẾN ĐỘ KẾ HOẠCH\n${sections.progressPlanned}\n\n### TRẠNG THÁI NGÀY\n${sections.dayStatus}\n\n### ẢNH HƯỞNG\n${sections.dayStatusSubtext}\n\n### HÌNH ẢNH\n${sections.images || ''}`;
 };
 
 const parseWeather = (weatherText) => {
@@ -359,6 +306,8 @@ export default function SiteLogPanel({
   const persistPhotosToLog = (photos) => {
     if (!canEdit) return;
     const urls = photos.map(photoToPersistUrl).filter(Boolean);
+    if (photos.length && !urls.length) return;
+
     const parsedNote = parseDailyNote(getLogNoteText(activeLog));
     parsedNote.images = urls.join('\n');
     const serialized = serializeDailyNote(parsedNote);
@@ -392,9 +341,8 @@ export default function SiteLogPanel({
         }));
         const merged = buildPhotosForDate(serverPhotos, cachedPhotos, prev[dateKey] || prev[rawDate] || []);
         const prevList = (prev[dateKey] || prev[rawDate] || []).map(normalizePhotoItem);
-        if (JSON.stringify(merged) !== JSON.stringify(prevList)) {
-          if (merged.length) next[dateKey] = merged;
-          else delete next[dateKey];
+        if (merged.length && JSON.stringify(merged) !== JSON.stringify(prevList)) {
+          next[dateKey] = merged;
           changed = true;
         }
       }
@@ -404,9 +352,9 @@ export default function SiteLogPanel({
 
   // Load images when date changes — merge Sheet + localStorage, không ghi đè ảnh đang upload
   useEffect(() => {
-    if (!activeLog || !selectedDate) return;
+    if (!selectedDate) return;
     const dateKey = normalizePhotoDateKey(selectedDate);
-    const parsedNote = parseDailyNote(getLogNoteText(activeLog));
+    const parsedNote = activeLog ? parseDailyNote(getLogNoteText(activeLog)) : { images: '' };
     const imageUrls = parsedNote.images
       ? parsedNote.images.split('\n').map((l) => l.trim()).filter(Boolean)
       : [];
@@ -554,8 +502,7 @@ export default function SiteLogPanel({
         setEditData(prev => ({
           ...prev,
           weatherCondition: condition,
-          weatherTempHumid: `${t}°C • 80%`,
-          weatherDetail: "Đã cập nhật tự động"
+          weatherDetail: `${t}°C — đã cập nhật tự động`,
         }));
       }
     } catch (error) {
@@ -578,7 +525,6 @@ export default function SiteLogPanel({
       engineers: activeLog?.ENGINEERS !== undefined ? activeLog?.ENGINEERS : (activeLog?.KỸ_SƯ_GS || 0),
       incidentCount: activeLog?.INCIDENT_COUNT !== undefined ? activeLog?.INCIDENT_COUNT : (parseInt(activeLog?.SỰ_CỐ) || 0),
       weatherCondition: parsedW.condition,
-      weatherTempHumid: parsedW.tempHumid,
       weatherDetail: parsedW.detail,
       ghiChu: parsedNote.ghiChu,
       congViecChinh: parsedNote.congViecChinh,
@@ -609,10 +555,11 @@ export default function SiteLogPanel({
         : '')
     });
 
+    const existingWeather = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
     const serializedW = serializeWeather({
       condition: editData.weatherCondition,
-      tempHumid: editData.weatherTempHumid,
-      detail: editData.weatherDetail
+      tempHumid: existingWeather.tempHumid || '-',
+      detail: editData.weatherDetail,
     });
 
     onUpdateLog({
@@ -884,7 +831,6 @@ export default function SiteLogPanel({
             const engineers = activeLog?.ENGINEERS !== undefined ? activeLog?.ENGINEERS : (activeLog?.KỸ_SƯ_GS || 0);
             
             const weatherCond = ts(parsedW.condition || liveWeather?.condition || 'Nắng đẹp');
-            const weatherTemp = parsedW.tempHumid || liveWeather?.tempHumid || 'N/A';
             const weatherDetail = ts(parsedW.detail || liveWeather?.detail || 'Chưa có thông tin');
             
             const incidents = activeLog?.INCIDENT_COUNT !== undefined ? activeLog?.INCIDENT_COUNT : (parseInt(activeLog?.SỰ_CỐ) || 0);
@@ -969,16 +915,6 @@ export default function SiteLogPanel({
                         <option value="Mưa lớn">Mưa lớn</option>
                         <option value="Có dông bão">Có dông bão</option>
                       </select>
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Nhiệt độ & Độ ẩm</label>
-                      <input
-                        type="text"
-                        placeholder="28°C • 80%"
-                        value={editData.weatherTempHumid}
-                        onChange={(e) => setEditData(prev => ({ ...prev, weatherTempHumid: e.target.value }))}
-                        className="w-full bg-[#141d30] border border-[var(--border-main)] rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#5252ff]"
-                      />
                     </div>
                     <div>
                       <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Thời tiết chi tiết</label>
@@ -1123,7 +1059,6 @@ export default function SiteLogPanel({
                     <div className="min-w-0 flex-1">
                       <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">{t('siteLog.weather')}</p>
                       <p className="text-xs font-bold text-white leading-tight">{weatherCond}</p>
-                      <p className="text-[9px] text-[#3b82f6] mt-0.5 font-medium">{weatherTemp}</p>
                       <p className="text-[9px] text-slate-400 mt-0.5 leading-tight truncate" title={weatherDetail}>{weatherDetail}</p>
                     </div>
                   </div>

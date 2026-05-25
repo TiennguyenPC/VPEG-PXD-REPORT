@@ -32,6 +32,7 @@ import {
   getTodayDMY,
   normalizeToDMY,
 } from "../utils/timelineDates";
+import { getLogNoteText, mergeDailyNotePreserveImages, getCachedPhotoUrls } from "../utils/sitePhotoCache";
 
 const getTodayStr = getTodayDMY;
 
@@ -145,6 +146,22 @@ export default function ProjectDetailPage() {
   const saveTimeoutRef = useRef(null);
   const isSavingRef = useRef(false);
   const pendingSaveRef = useRef(null);
+  const logsRef = useRef(logs);
+
+  useEffect(() => {
+    logsRef.current = logs;
+  }, [logs]);
+
+  const mergePendingLog = (prev, next) => {
+    if (!prev) return next;
+    const merged = { ...prev, ...next };
+    const nextHasNote = next.DAILY_NOTE !== undefined || next.GHI_CHÚ_HIỆN_TRƯỜNG !== undefined;
+    if (!nextHasNote) {
+      if (prev.DAILY_NOTE !== undefined) merged.DAILY_NOTE = prev.DAILY_NOTE;
+      if (prev.GHI_CHÚ_HIỆN_TRƯỜNG !== undefined) merged.GHI_CHÚ_HIỆN_TRƯỜNG = prev.GHI_CHÚ_HIỆN_TRƯỜNG;
+    }
+    return merged;
+  };
 
   useEffect(() => () => {
     if (saveStatusHideRef.current) clearTimeout(saveStatusHideRef.current);
@@ -523,7 +540,7 @@ export default function ProjectDetailPage() {
     const isPhotoSave = updates.GHI_CHÚ_HIỆN_TRƯỜNG !== undefined || updates.DAILY_NOTE !== undefined;
     if (isPhotoSave) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      pendingSaveRef.current = updatedLog;
+      pendingSaveRef.current = mergePendingLog(pendingSaveRef.current, updatedLog);
       updateSaveStatus('Saving...');
       saveTimeoutRef.current = setTimeout(async () => {
         await performSave();
@@ -538,7 +555,7 @@ export default function ProjectDetailPage() {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
-    pendingSaveRef.current = payload;
+    pendingSaveRef.current = mergePendingLog(pendingSaveRef.current, payload);
     saveTimeoutRef.current = setTimeout(async () => {
       if (isSavingRef.current) return;
       await performSave();
@@ -563,6 +580,14 @@ export default function ProjectDetailPage() {
     pendingSaveRef.current = null;
 
     try {
+      const existingInLogs = logsRef.current.find(
+        (l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(toSave.LOG_DATE)
+      );
+      let dailyNote = toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+      const cachedPhotoUrls = getCachedPhotoUrls(id, toSave.LOG_DATE);
+      const existingNoteText = existingInLogs ? getLogNoteText(existingInLogs) : '';
+      dailyNote = mergeDailyNotePreserveImages(existingNoteText, dailyNote, cachedPhotoUrls);
+
       const payload = {
         PROJECT_ID: String(id),
         LOG_DATE: toSave.LOG_DATE,
@@ -575,8 +600,8 @@ export default function ProjectDetailPage() {
         THỜI_TIẾT: toSave.WEATHER !== undefined ? toSave.WEATHER : (toSave.THỜI_TIẾT || ''),
         INCIDENT_COUNT: toSave.INCIDENT_COUNT !== undefined ? Number(toSave.INCIDENT_COUNT || 0) : Number(parseInt(toSave.SỰ_CỐ) || 0),
         SỰ_CỐ: `${toSave.INCIDENT_COUNT !== undefined ? Number(toSave.INCIDENT_COUNT || 0) : Number(parseInt(toSave.SỰ_CỐ) || 0)} vụ`,
-        DAILY_NOTE: toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || ''),
-        GHI_CHÚ_HIỆN_TRƯỜNG: toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || ''),
+        DAILY_NOTE: dailyNote,
+        GHI_CHÚ_HIỆN_TRƯỜNG: dailyNote,
         WEEKLY_ASSESSMENT: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
         ĐÁNH_GIÁ_TUẦN: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
         MONTHLY_REPORT: toSave.MONTHLY_REPORT !== undefined ? toSave.MONTHLY_REPORT : '',
@@ -666,14 +691,14 @@ export default function ProjectDetailPage() {
       <Sidebar activeItem="project-detail" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden print:overflow-visible">
+      <main className="flex-1 flex flex-col min-h-0 min-w-0 overflow-hidden print:overflow-visible pb-mobile-nav">
         <ProjectEditProvider canEdit={projectEditable}>
         <div
           id="project-detail-scroll"
           className="flex-1 overflow-y-auto overflow-x-hidden print:overflow-visible"
         >
         <div className="max-w-7xl mx-auto w-full">
-          <div className="p-4 md:px-5 pt-4">
+          <div className="p-4 md:px-5 pt-2 md:pt-4">
           <ProjectHeader
             project={enrichedProject} 
             milestones={bundleData?.milestones || []} 
@@ -686,7 +711,7 @@ export default function ProjectDetailPage() {
 
           <ProjectSectionNav scrollContainerId="project-detail-scroll" />
 
-          <div className="p-4 md:p-5 pt-2 space-y-4">
+          <div className="p-4 md:p-5 pt-2 space-y-4 mobile-content-compact">
           {/* SECTION 2 - KPI OVERVIEW */}
           <section id="section-kpi" className="scroll-mt-16">
             <KPIOverview project={enrichedProject} milestones={bundleData?.milestones || []} />

@@ -575,10 +575,10 @@ const STANDARD_KEYS_MAP = {
   'suco': 'SỰ_CỐ',
   'incidentcount': 'SỰ_CỐ',
   'ghichuhientruong': 'GHI_CHÚ_HIỆN_TRƯỜNG',
-  'dailynote': 'GHI_CHÚ_HIỆN_TRƯỜNG',
+  'dailynote': 'DAILY_NOTE',
   'danhgiatuan': 'ĐÁNH_GIÁ_TUẦN',
   'weeklyassessment': 'ĐÁNH_GIÁ_TUẦN',
-  'monthlyreport': 'GHI_CHÚ_HIỆN_TRƯỜNG',
+  'monthlyreport': 'MONTHLY_REPORT',
   
   // risk
   'mucdo': 'MỨC_ĐỘ',
@@ -690,7 +690,7 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     return;
   }
   
-  const headers = data[0];
+  let headers = data[0];
   let targetRowIndex = -1;
   
   // Use _rowIndex directly if valid to allow updating non-unique table rows
@@ -780,7 +780,8 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
     'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
     'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
-    'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT']
+    'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT'],
+    'GHI_CHÚ':               ['GHI_CHÚ', 'GHI_CHU', 'ghichu', 'NOTES']
   };
 
   // Update the row — try key directly first, then aliases
@@ -791,6 +792,12 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     let colIndex = findColumnIndex(headers, key);
     if (colIndex === -1 && FIELD_ALIASES[key]) {
       colIndex = findColumnIndex(headers, FIELD_ALIASES[key]);
+    }
+    if (colIndex === -1 && (key === 'GHI_CHÚ' || key === 'ghichu')) {
+      const lastCol = sheet.getLastColumn();
+      sheet.getRange(1, lastCol + 1).setValue('GHI_CHÚ');
+      headers = sheet.getRange(1, 1, 1, lastCol + 1).getValues()[0];
+      colIndex = lastCol;
     }
     
     if (colIndex !== -1) {
@@ -1272,15 +1279,15 @@ function getDefaultHeaders(sheetName) {
     case 'PROJECT_RISK':
       return ['PROJECT_ID', 'MỨC_ĐỘ', 'NỘI_DUNG', 'ẢNH_HƯỞNG', 'TRẠNG_THÁI', 'PHỤ_TRÁCH', 'NGÀY', 'NGÀY_HOÀN_THÀNH', 'GHI_CHÚ'];
     case 'PROJECT_PERMIT':
-      return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾT_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
+      return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾT_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'GHI_CHÚ', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
     case 'PROJECT_DESIGN':
-      return ['PROJECT_ID', 'HẠNG_MỤC_BẢN_VẼ', 'TÌNH_TRẠNG', 'PHÊ_DUYỆT', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
+      return ['PROJECT_ID', 'HẠNG_MỤC_BẢN_VẼ', 'TÌNH_TRẠNG', 'PHÊ_DUYỆT', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'GHI_CHÚ', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
     case 'PROJECT_PROCUREMENT':
       return ['PROJECT_ID', 'HẠNG_MỤC_MUA_HÀNG', 'NGÀY_VỀ_DỰ_KIẾN', 'NGÀY_VỀ_THỰC_TẾ', 'TÌNH_TRẠNG_VẬT_TƯ', 'ĐÁNH_GIÁ_TIẾN_ĐỘ', 'NCC', 'GHI_CHÚ'];
     case 'PROJECT_CONSTRUCTION':
-      return ['PROJECT_ID', 'NHÓM_THI_CÔNG', 'MÃ_CV', 'HẠNG_MỤC_CÔNG_VIỆC', 'NGÀY_BẮT_ĐẦU', 'SỐ_NGÀY', 'NGÀY_KẾT_THÚC', 'NGÀY_HT_THỰC_TẾ', 'TIẾN_ĐỘ_THỰC_TẾ', 'TRỌNG_SỐ'];
+      return ['PROJECT_ID', 'NHÓM_THI_CÔNG', 'MÃ_CV', 'HẠNG_MỤC_CÔNG_VIỆC', 'NGÀY_BẮT_ĐẦU', 'SỐ_NGÀY', 'NGÀY_KẾT_THÚC', 'NGÀY_HT_THỰC_TẾ', 'TIẾN_ĐỘ_THỰC_TẾ', 'TRỌNG_SỐ', 'GHI_CHÚ'];
     case 'PROJECT_HANDOVER':
-      return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾT_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
+      return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾT_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'GHI_CHÚ', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
     case 'PROJECT_MILESTONE':
       return ['PROJECT_ID', 'MILESTONE', 'NGÀY_KẾ_HOẠCH', 'NGÀY_THỰC_TẾ', 'STATUS'];
     case 'DAILY_SITE_LOG':
