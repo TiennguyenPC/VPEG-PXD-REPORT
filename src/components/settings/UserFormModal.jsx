@@ -86,6 +86,7 @@ export default function UserFormModal({ open, onClose, onSaved, editUser, employ
       if (!emp) return base;
       const emailLocal = parseEmailLocal(getEmployeeEmail(emp));
       const role = mapPositionToRole(getEmployeePosition(emp));
+      const fullEmail = buildVuphongEmail(emailLocal);
       return {
         ...base,
         employeeId: getEmployeeId(emp),
@@ -93,7 +94,7 @@ export default function UserFormModal({ open, onClose, onSaved, editUser, employ
         emailLocal,
         role,
         ...(!isEdit && {
-          username: emailLocal,
+          username: fullEmail,
           password: DEFAULT_PASSWORD,
           passwordConfirm: DEFAULT_PASSWORD,
         }),
@@ -156,8 +157,8 @@ export default function UserFormModal({ open, onClose, onSaved, editUser, employ
       }
     }
     if (s === 2) {
-      if (!isEdit && (!data.username.trim() || data.username.trim().length < 3)) {
-        return 'Username phải có ít nhất 3 ký tự';
+      if (!isEdit && (!data.username.trim() || !data.username.includes('@'))) {
+        return 'Username phải là email @vuphong.com của nhân viên';
       }
       if (!isEdit && data.password.length < 6) return 'Mật khẩu phải có ít nhất 6 ký tự';
       if (!isEdit && data.password !== data.passwordConfirm) return 'Mật khẩu xác nhận không khớp';
@@ -310,7 +311,11 @@ export default function UserFormModal({ open, onClose, onSaved, editUser, employ
                     value={form.emailLocal}
                     onChange={(e) => {
                       const v = e.target.value.toLowerCase().replace(/@.*$/, '');
-                      setForm((p) => ({ ...p, emailLocal: v }));
+                      setForm((p) => ({
+                        ...p,
+                        emailLocal: v,
+                        ...(!isEdit && { username: buildVuphongEmail(v) }),
+                      }));
                     }}
                     placeholder="vd: thuan.nguyen"
                     autoComplete="off"
@@ -333,16 +338,21 @@ export default function UserFormModal({ open, onClose, onSaved, editUser, employ
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
-                  Username {!isEdit && <span className="text-red-400">*</span>}
+                  Username (email) {!isEdit && <span className="text-red-400">*</span>}
                 </label>
                 <input
                   type="text"
                   value={form.username}
                   onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
-                  disabled={isEdit}
-                  placeholder="Tự điền theo email nhân viên"
+                  disabled
+                  placeholder="doan.ngo@vuphong.com"
                   className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-[var(--text-main)] px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#5252ff] disabled:opacity-60"
                 />
+                {!isEdit && form.username && (
+                  <p className="text-[10px] text-[var(--text-muted)]">
+                    Đăng nhập bằng email này
+                  </p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
