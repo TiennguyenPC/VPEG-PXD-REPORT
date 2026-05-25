@@ -668,7 +668,7 @@ export default function ProjectDetailPage() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto print:overflow-visible">
         <ProjectEditProvider canEdit={projectEditable}>
-        <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
+        <div className="p-4 md:p-5 space-y-4 max-w-7xl mx-auto w-full">
           <ProjectHeader
             project={enrichedProject} 
             milestones={bundleData?.milestones || []} 
