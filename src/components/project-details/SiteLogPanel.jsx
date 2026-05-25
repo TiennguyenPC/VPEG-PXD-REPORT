@@ -54,7 +54,7 @@ const compressImage = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.82));
+        resolve(canvas.toDataURL('image/jpeg', 0.78));
       };
     };
   });
@@ -276,6 +276,8 @@ export default function SiteLogPanel({
   const weekdays = t('siteLog.weekdays');
   const datePickerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const photosByDateRef = useRef({});
+  const persistPhotosTimerRef = useRef(null);
   const projectId = project?.PROJECT_ID || project?.id;
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(null);
@@ -295,6 +297,30 @@ export default function SiteLogPanel({
   const [liveWeather, setLiveWeather] = useState(null);
   const [uploadError, setUploadError] = useState('');
   const [needsDriveAuth, setNeedsDriveAuth] = useState(false);
+
+  useEffect(() => {
+    photosByDateRef.current = photosByDate;
+  }, [photosByDate]);
+
+  useEffect(() => () => {
+    if (persistPhotosTimerRef.current) clearTimeout(persistPhotosTimerRef.current);
+  }, []);
+
+  const schedulePersistPhotos = (dateKey) => {
+    if (persistPhotosTimerRef.current) clearTimeout(persistPhotosTimerRef.current);
+    persistPhotosTimerRef.current = setTimeout(() => {
+      const photos = (photosByDateRef.current[dateKey] || []).map(normalizePhotoItem);
+      const stillUploading = photos.some((p) => p.status === 'uploading');
+      if (stillUploading) {
+        schedulePersistPhotos(dateKey);
+        return;
+      }
+      const ready = photos.filter((p) => p.status === 'ready' && photoToPersistUrl(p));
+      if (!ready.length) return;
+      persistPhotosToLog(ready);
+      onSaveStatusChange?.('Saved');
+    }, 450);
+  };
 
   useEffect(() => {
     const fetchWeather = async () => {
@@ -426,12 +452,11 @@ export default function SiteLogPanel({
             status: 'ready',
           };
         });
-        queueMicrotask(() => {
-          persistPhotosToLog(list);
-          onSaveStatusChange?.('Saved');
-        });
-        return { ...prev, [dateKey]: list };
+        const next = { ...prev, [dateKey]: list };
+        photosByDateRef.current = next;
+        return next;
       });
+      schedulePersistPhotos(dateKey);
       setUploadError('');
       setNeedsDriveAuth(false);
     } catch (err) {
@@ -484,14 +509,17 @@ export default function SiteLogPanel({
       file,
     }));
 
-    setPhotosByDate((prev) => ({
-      ...prev,
-      [dateKey]: [...(prev[dateKey] || prev[selectedDate] || []), ...pendingItems],
-    }));
-
-    pendingItems.forEach((item) => {
-      void uploadPhotoInBackground(item, dateKey);
+    setPhotosByDate((prev) => {
+      const next = {
+        ...prev,
+        [dateKey]: [...(prev[dateKey] || prev[selectedDate] || []), ...pendingItems],
+      };
+      photosByDateRef.current = next;
+      return next;
     });
+
+    onSaveStatusChange?.('Saving...');
+    void Promise.all(pendingItems.map((item) => uploadPhotoInBackground(item, dateKey)));
 
     if (fileInputRef.current) fileInputRef.current.value = '';
   };

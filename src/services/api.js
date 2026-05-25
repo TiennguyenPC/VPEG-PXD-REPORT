@@ -508,25 +508,42 @@ export const api = {
     if (base64.includes('base64,')) {
       base64 = base64.split('base64,')[1];
     }
-    const sessionId = `${String(data.projectId || 'p').replace(/\W/g, '_')}_${Date.now()}`;
-    const CHUNK_SIZE = 90000;
+    if (!base64) {
+      throw new Error('Ảnh rỗng');
+    }
+
+    // Ảnh nhỏ — 1 request POST thay vì chunk (nhanh hơn nhiều)
+    const SMALL_BASE64_LIMIT = 280_000;
+    if (base64.length <= SMALL_BASE64_LIMIT) {
+      const result = await postToGAS('upload-site-image', {
+        base64: `data:image/jpeg;base64,${base64}`,
+        projectId: data.projectId,
+      });
+      const url = result?.data?.url;
+      if (!url) {
+        throw new Error('Không nhận được link ảnh từ Google Drive');
+      }
+      return url;
+    }
+
+    const sessionId = `${String(data.projectId || 'p').replace(/\W/g, '_')}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const CHUNK_SIZE = 120_000;
     const chunks = [];
     for (let i = 0; i < base64.length; i += CHUNK_SIZE) {
       chunks.push(base64.slice(i, i + CHUNK_SIZE));
     }
-    if (!chunks.length) {
-      throw new Error('Ảnh rỗng');
-    }
 
-    for (let i = 0; i < chunks.length; i++) {
-      await postToGAS('upload-image-chunk', {
-        sessionId,
-        index: i,
-        total: chunks.length,
-        chunk: chunks[i],
-        projectId: data.projectId
-      });
-    }
+    await Promise.all(
+      chunks.map((chunk, i) =>
+        postToGAS('upload-image-chunk', {
+          sessionId,
+          index: i,
+          total: chunks.length,
+          chunk,
+          projectId: data.projectId,
+        })
+      )
+    );
 
     const commitUrl = new URL(GAS_URL);
     commitUrl.searchParams.append('action', 'upload-image-commit');

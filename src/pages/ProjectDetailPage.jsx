@@ -500,17 +500,18 @@ export default function ProjectDetailPage() {
       }
     });
 
-    // Sync to GAS with debounce (ảnh hiện trường lưu ngay, không chờ 1 giây)
+    // Sync to GAS — ảnh: gom debounce để 4 ảnh song song không ghi đè nhau
     const isPhotoSave = updates.GHI_CHÚ_HIỆN_TRƯỜNG !== undefined || updates.DAILY_NOTE !== undefined;
-    triggerSave(updatedLog);
     if (isPhotoSave) {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
-        saveTimeoutRef.current = null;
-      }
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       pendingSaveRef.current = updatedLog;
-      performSave();
+      setSaveStatus('Saving...');
+      saveTimeoutRef.current = setTimeout(async () => {
+        await performSave();
+      }, 500);
+      return;
     }
+    triggerSave(updatedLog);
   };
 
   const triggerSave = (payload) => {
