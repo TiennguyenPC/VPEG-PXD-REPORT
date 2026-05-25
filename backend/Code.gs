@@ -1774,6 +1774,9 @@ function storeSiteImageChunk_(payload) {
   if (!sid || !chunk || !Number.isFinite(idx) || !Number.isFinite(total)) {
     throw new Error('Thiếu dữ liệu chunk upload');
   }
+  if (chunk.length > 100000) {
+    throw new Error('Chunk ảnh quá lớn (tối đa 100KB). Tải lại trang và thử lại.');
+  }
   var cache = CacheService.getScriptCache();
   cache.put('img_' + sid + '_' + idx, chunk, SITE_IMAGE_CHUNK_TTL);
   cache.put('img_' + sid + '_meta', JSON.stringify({

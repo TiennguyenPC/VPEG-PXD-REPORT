@@ -527,23 +527,22 @@ export const api = {
     }
 
     const sessionId = `${String(data.projectId || 'p').replace(/\W/g, '_')}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-    const CHUNK_SIZE = 120_000;
+    // GAS CacheService giới hạn 100KB/value — chunk phải nhỏ hơn
+    const CHUNK_SIZE = 90_000;
     const chunks = [];
     for (let i = 0; i < base64.length; i += CHUNK_SIZE) {
       chunks.push(base64.slice(i, i + CHUNK_SIZE));
     }
 
-    await Promise.all(
-      chunks.map((chunk, i) =>
-        postToGAS('upload-image-chunk', {
-          sessionId,
-          index: i,
-          total: chunks.length,
-          chunk,
-          projectId: data.projectId,
-        })
-      )
-    );
+    for (let i = 0; i < chunks.length; i++) {
+      await postToGAS('upload-image-chunk', {
+        sessionId,
+        index: i,
+        total: chunks.length,
+        chunk: chunks[i],
+        projectId: data.projectId,
+      });
+    }
 
     const commitUrl = new URL(GAS_URL);
     commitUrl.searchParams.append('action', 'upload-image-commit');

@@ -33,13 +33,8 @@ const compressImage = (file) => {
     reader.readAsDataURL(file);
     reader.onerror = () => reject(new Error('Không đọc được file ảnh'));
     reader.onload = (e) => {
-      const dataUrl = e.target.result;
-      if (file.size < 900_000) {
-        resolve(dataUrl);
-        return;
-      }
       const img = new Image();
-      img.src = dataUrl;
+      img.src = e.target.result;
       img.onerror = () => reject(new Error('File không phải ảnh hợp lệ'));
       img.onload = () => {
         const canvas = document.createElement('canvas');
@@ -54,7 +49,14 @@ const compressImage = (file) => {
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.78));
+        let quality = 0.78;
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+        // Giữ dưới ngưỡng 1-request để tránh chunk (GAS Cache tối đa 100KB/chunk)
+        while (dataUrl.length > 260_000 && quality > 0.42) {
+          quality -= 0.07;
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+        resolve(dataUrl);
       };
     };
   });
