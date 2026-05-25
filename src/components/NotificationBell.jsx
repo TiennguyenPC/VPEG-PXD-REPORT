@@ -56,7 +56,7 @@ function NotifIcon({ type }) {
   if (type === 'task_due_soon') {
     return <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />;
   }
-  if (type === 'task_overdue') {
+  if (type === 'task_overdue' || type === 'risk_overdue') {
     return <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0 mt-0.5" />;
   }
   if (type === 'project_completed') {

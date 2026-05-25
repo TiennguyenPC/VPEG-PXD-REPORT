@@ -374,6 +374,9 @@ function doPost(e) {
     }
     
     if (sheetName) {
+      if (sheetName === 'PROJECT_RISK') {
+        ensureRiskSheetColumns_(ss);
+      }
       if (action.startsWith('add-')) {
         appendRow(ss, sheetName, payload);
         if (action === 'add-project') {
@@ -579,6 +582,8 @@ const STANDARD_KEYS_MAP = {
   'noidung': 'NỘI_DUNG',
   'anhhuong': 'ẢNH_HƯỞNG',
   'phutrach': 'PHỤ_TRÁCH',
+  'ngayhoanthanh': 'NGÀY_HOÀN_THÀNH',
+  'ngay_hoan_thanh': 'NGÀY_HOÀN_THÀNH',
   
   // milestone
   'milestone': 'MILESTONE',
@@ -1244,7 +1249,7 @@ function getDefaultHeaders(sheetName) {
     case 'PROJECT_MASTER':
       return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'KHÁCH_HÀNG', 'PM', 'SM', 'CÔNG_SUẤT_KWP', 'KẾ_HOẠCH_COD', 'DỰ_BÁO_COD', 'TIẾN_ĐỘ_KẾ_HOẠCH', 'TIẾN_ĐỘ_THỰC_TẾ', 'DELAY', 'TRẠNG_THÁI', 'RISK_LEVEL', 'CẬP_NHẬT_CUỐI'];
     case 'PROJECT_RISK':
-      return ['PROJECT_ID', 'MỨC_ĐỘ', 'NỘI_DUNG', 'ẢNH_HƯỞNG', 'TRẠNG_THÁI', 'PHỤ_TRÁCH', 'NGÀY', 'GHI_CHÚ'];
+      return ['PROJECT_ID', 'MỨC_ĐỘ', 'NỘI_DUNG', 'ẢNH_HƯỞNG', 'TRẠNG_THÁI', 'PHỤ_TRÁCH', 'NGÀY', 'NGÀY_HOÀN_THÀNH', 'GHI_CHÚ'];
     case 'PROJECT_PERMIT':
       return ['PROJECT_ID', 'HẠNG_MỤC', 'TÌNH_TRẠNG', 'KẾT_QUẢ_PHẢN_HỒI', 'BƯỚC_TIẾP_THEO', 'KẾT_QUẢ_CUỐI', 'CẬP_NHẬT_BỞI', 'NGÀY_CẬP_NHẬT'];
     case 'PROJECT_DESIGN':
@@ -3405,10 +3410,104 @@ function runProjectCompletedScan_(ss) {
   }
 }
 
+function buildRiskLink_(projectId) {
+  var pid = String(projectId || '').trim();
+  if (!pid) return '/projects';
+  return '/projects/' + encodeURIComponent(pid) + '#section-modules';
+}
+
+function isRiskClosed_(status) {
+  var s = String(status || '').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return s === 'DA DONG' || s === 'CLOSED';
+}
+
+function ensureRiskSheetColumns_(ss) {
+  var sheet = ss.getSheetByName('PROJECT_RISK');
+  if (!sheet) return;
+  initializeSheetIfEmpty(sheet, 'PROJECT_RISK');
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var needed = ['NGÀY_HOÀN_THÀNH'];
+  for (var i = 0; i < needed.length; i++) {
+    if (findColumnIndex(headers, needed[i]) === -1) {
+      var col = sheet.getLastColumn() + 1;
+      sheet.getRange(1, col).setValue(needed[i]);
+      headers.push(needed[i]);
+    }
+  }
+}
+
+function runRiskDeadlineNotifications_(ss) {
+  ensureRiskSheetColumns_(ss);
+  var risks = getSheetDataAsObjects(ss, 'PROJECT_RISK');
+  var today = startOfDayLocal_(new Date());
+  var fpDay = todayFingerprint_();
+
+  for (var i = 0; i < risks.length; i++) {
+    var risk = risks[i];
+    if (isRiskClosed_(risk.TRẠNG_THÁI || risk.STATUS)) continue;
+
+    var dueRaw = risk.NGÀY_HOÀN_THÀNH || risk['NGAY_HOAN_THANH'] || '';
+    var dueDate = parseDateString(dueRaw);
+    if (!dueDate) continue;
+    dueDate = startOfDayLocal_(dueDate);
+    if (dueDate.getTime() >= today.getTime()) continue;
+
+    var projectId = String(risk.PROJECT_ID || risk.projectId || '').trim();
+    var project = projectId ? getProjectById_(ss, projectId) : null;
+    var projectName = project ? String(project.TÊN_DỰ_ÁN || project.PROJECT_NAME || projectId) : projectId;
+    var riskTitle = String(risk.NỘI_DUNG || 'Rủi ro').trim();
+    var assignee = String(risk.PHỤ_TRÁCH || '').trim();
+    var daysLate = Math.max(1, Math.floor((today.getTime() - dueDate.getTime()) / 86400000));
+    var link = buildRiskLink_(projectId);
+    var rowKey = String(risk._rowIndex || i);
+    var riskKey = projectId + '|' + rowKey + '|' + riskTitle;
+    var suffix = projectName ? ' (' + projectName + ')' : '';
+    var dueLabel = Utilities.formatDate(dueDate, Session.getScriptTimeZone() || 'Asia/Ho_Chi_Minh', 'dd/MM/yyyy');
+    var body = 'Rủi ro "' + riskTitle + '"' + suffix + ' đã trễ ' + daysLate + ' ngày (Hạn HT: ' + dueLabel + ')';
+
+    if (assignee) {
+      var assigneeIds = findUserIdsByDisplayName_(ss, assignee);
+      for (var a = 0; a < assigneeIds.length; a++) {
+        createNotificationIfNew_(
+          assigneeIds[a],
+          'risk_overdue',
+          'Rủi ro quá hạn',
+          body,
+          link,
+          riskKey + '_assignee_' + fpDay
+        );
+      }
+    }
+
+    if (project) {
+      var pmIds = findUserIdsByDisplayName_(ss, project.PM);
+      var smIds = findUserIdsByDisplayName_(ss, project.SM);
+      var leaderIds = pmIds.concat(smIds);
+      var ccBody = body + (assignee ? '. Phụ trách: ' + assignee : '');
+      var seenLeader = {};
+      for (var c = 0; c < leaderIds.length; c++) {
+        var lid = leaderIds[c];
+        if (!lid || seenLeader[lid]) continue;
+        seenLeader[lid] = true;
+        createNotificationIfNew_(
+          lid,
+          'risk_overdue',
+          'Rủi ro quá hạn (CC PM/SM)',
+          ccBody,
+          link,
+          riskKey + '_leader_' + lid + '_' + fpDay
+        );
+      }
+    }
+  }
+}
+
 function runDailyNotificationChecks_() {
   var ss = getSpreadsheet();
   ensureNotificationsSheet_(ss);
+  ensureRiskSheetColumns_(ss);
   runTaskDeadlineNotifications_(ss);
+  runRiskDeadlineNotifications_(ss);
   runProjectCompletedScan_(ss);
   return { ok: true, ranAt: new Date().toISOString() };
 }

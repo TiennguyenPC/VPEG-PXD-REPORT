@@ -11,10 +11,39 @@ import {
   normalizeRiskStatus,
   getRiskSeverityStyle,
   getRiskStatusStyle,
+  getRiskLateStyle,
+  isRiskOverdue,
+  getRiskDueDate,
 } from '../../../utils/riskHelpers';
 
 const SEVERITY_OPTIONS = ['Cao', 'Trung bình', 'Thấp'];
 const STATUS_OPTIONS = ['Open', 'Đang xử lý', 'Theo dõi', 'Đã đóng'];
+
+const TH = 'p-2.5 text-center text-[10px] font-bold uppercase tracking-wider align-middle';
+const TD = 'p-2.5 align-top';
+
+function RiskTextCell({ value, placeholder, onChange, disabled, className = '' }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.max(el.scrollHeight, 36)}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      rows={1}
+      disabled={disabled}
+      className={`w-full min-w-0 resize-none overflow-hidden whitespace-pre-wrap break-words bg-transparent focus:outline-none border-b border-transparent focus:border-[#5252ff] text-[var(--text-main)] placeholder:text-[var(--text-muted)] leading-snug ${disabled ? 'opacity-50 pointer-events-none' : ''} ${className}`}
+      value={value}
+      placeholder={placeholder}
+      onChange={onChange}
+    />
+  );
+}
 
 export default function RiskModule({ project, initialData }) {
   const canEdit = useProjectCanEdit();
@@ -127,6 +156,7 @@ export default function RiskModule({ project, initialData }) {
   const watchCount = risks.filter((r) => normalizeRiskStatus(r.TRẠNG_THÁI) === 'Theo dõi').length;
   const closedCount = risks.filter((r) => normalizeRiskStatus(r.TRẠNG_THÁI) === 'Đã đóng').length;
   const highCount = risks.filter((r) => normalizeRiskSeverity(r.MỨC_ĐỘ) === 'Cao').length;
+  const overdueCount = risks.filter((r) => isRiskOverdue(r)).length;
 
   const inputClass = `bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-[var(--text-main)] placeholder:text-[var(--text-muted)] ${!canEdit ? 'opacity-50 pointer-events-none' : ''}`;
 
@@ -161,6 +191,11 @@ export default function RiskModule({ project, initialData }) {
                   <span className="text-[var(--text-muted)]">Tổng</span>
                   <span className="text-[var(--text-strong)]">{risks.length}</span>
                 </span>
+                {overdueCount > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/25">
+                    Trễ {overdueCount}
+                  </span>
+                )}
                 {openCount > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 dark:bg-red-500/10 dark:text-red-400 dark:border-red-500/25">
                     Open {openCount}
@@ -217,6 +252,7 @@ export default function RiskModule({ project, initialData }) {
                         TRẠNG_THÁI: 'Open',
                         PHỤ_TRÁCH: '',
                         NGÀY: getTodayDMY(),
+                        NGÀY_HOÀN_THÀNH: '',
                         GHI_CHÚ: '',
                       };
                       const tempId = `new-${Date.now()}`;
@@ -246,84 +282,96 @@ export default function RiskModule({ project, initialData }) {
                 </div>
               ) : (
                 <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
-                  <table className="w-full text-left text-xs min-w-[720px]">
+                  <table className="w-full text-xs table-fixed min-w-[960px]">
                     <thead>
-                      <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                        <th className="p-3 w-36">Mức độ</th>
-                        <th className="p-3 min-w-[160px]">Nội dung</th>
-                        <th className="p-3 min-w-[120px]">Ảnh hưởng</th>
-                        <th className="p-3 w-36">Trạng thái</th>
-                        <th className="p-3 min-w-[100px]">Phụ trách</th>
-                        <th className="p-3 w-32">Ngày</th>
+                      <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] border-b border-[var(--border-main)]">
+                        <th className={`${TH} w-[9%]`}>Mức độ</th>
+                        <th className={`${TH} w-[24%]`}>Nội dung</th>
+                        <th className={`${TH} w-[18%]`}>Ảnh hưởng</th>
+                        <th className={`${TH} w-[11%]`}>Trạng thái</th>
+                        <th className={`${TH} w-[13%]`}>Phụ trách</th>
+                        <th className={`${TH} w-[10%]`}>Ngày</th>
+                        <th className={`${TH} w-[10%]`}>Ngày HT</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-main)]">
                       {risks.map((r) => {
                         const severity = normalizeRiskSeverity(r.MỨC_ĐỘ) || 'Trung bình';
                         const status = normalizeRiskStatus(r.TRẠNG_THÁI);
+                        const overdue = isRiskOverdue(r);
                         const isClosed = status === 'Đã đóng';
                         const selectDisabled = !canEdit;
+                        const rowId = r._rowIndex || r.id;
 
                         return (
                           <tr
-                            key={r._rowIndex || r.id}
-                            className={`hover:bg-[var(--bg-panel)]/60 transition-colors ${isClosed ? 'opacity-70' : ''}`}
+                            key={rowId}
+                            className={`hover:bg-[var(--bg-panel)]/60 transition-colors ${isClosed ? 'opacity-70' : ''} ${overdue ? 'bg-red-50/40 dark:bg-red-500/5' : ''}`}
                           >
-                            <td className="p-3">
-                              <div className={`relative inline-flex w-full min-w-[6.5rem] items-center rounded-full border ${getRiskSeverityStyle(severity)}`}>
-                                <select
-                                  className={`risk-field-select relative z-10 w-full min-w-0 appearance-none bg-transparent text-inherit text-[10px] font-semibold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
-                                  value={severity}
-                                  onChange={(e) => scheduleSave(r._rowIndex || r.id, 'MỨC_ĐỘ', e.target.value)}
-                                >
-                                  {SEVERITY_OPTIONS.map((opt) => (
-                                    <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
-                                      {opt}
-                                    </option>
-                                  ))}
-                                </select>
-                                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-50" />
+                            <td className={`${TD} text-center`}>
+                              <div className="flex justify-center">
+                                <div className={`relative inline-flex w-full max-w-[7rem] items-center rounded-full border ${getRiskSeverityStyle(severity)}`}>
+                                  <select
+                                    className={`risk-field-select relative z-10 w-full min-w-0 appearance-none bg-transparent text-inherit text-[10px] font-semibold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 text-center ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
+                                    value={severity}
+                                    onChange={(e) => scheduleSave(rowId, 'MỨC_ĐỘ', e.target.value)}
+                                  >
+                                    {SEVERITY_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-50" />
+                                </div>
                               </div>
                             </td>
-                            <td className="p-3">
-                              <input
-                                type="text"
-                                className={`${inputClass} font-semibold`}
+                            <td className={TD}>
+                              <RiskTextCell
+                                className="font-semibold text-left"
                                 value={r.NỘI_DUNG || ''}
                                 placeholder="Nhập nội dung..."
-                                onChange={(e) => {
-                                  scheduleSave(r._rowIndex || r.id, 'NỘI_DUNG', e.target.value);
-                                }}
+                                disabled={!canEdit}
+                                onChange={(e) => scheduleSave(rowId, 'NỘI_DUNG', e.target.value)}
                               />
                             </td>
-                            <td className="p-3">
-                              <input
-                                type="text"
-                                className={`${inputClass} text-[var(--text-muted)]`}
+                            <td className={TD}>
+                              <RiskTextCell
+                                className="text-[var(--text-muted)] text-left"
                                 value={r.ẢNH_HƯỞNG || ''}
                                 placeholder="Nhập ảnh hưởng..."
-                                onChange={(e) => {
-                                  scheduleSave(r._rowIndex || r.id, 'ẢNH_HƯỞNG', e.target.value);
-                                }}
+                                disabled={!canEdit}
+                                onChange={(e) => scheduleSave(rowId, 'ẢNH_HƯỞNG', e.target.value)}
                               />
                             </td>
-                            <td className="p-3">
-                              <div className={`relative inline-flex w-full min-w-[6.5rem] items-center rounded-full border ${getRiskStatusStyle(status)}`}>
-                                <select
-                                  className={`risk-field-select relative z-10 w-full min-w-0 appearance-none bg-transparent text-inherit text-[10px] font-semibold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
-                                  value={status}
-                                  onChange={(e) => scheduleSave(r._rowIndex || r.id, 'TRẠNG_THÁI', e.target.value)}
-                                >
-                                  {STATUS_OPTIONS.map((opt) => (
-                                    <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
-                                      {opt}
-                                    </option>
-                                  ))}
-                                </select>
-                                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-50" />
+                            <td className={`${TD} text-center`}>
+                              <div className="flex flex-col items-center gap-1">
+                                {overdue && (
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${getRiskLateStyle()}`}
+                                    title={`Quá hạn xử lý (Hạn HT: ${getRiskDueDate(r) || '—'})`}
+                                  >
+                                    <AlertTriangle className="w-3 h-3 shrink-0" />
+                                    Trễ
+                                  </span>
+                                )}
+                                <div className={`relative inline-flex w-full max-w-[7.5rem] items-center rounded-full border ${getRiskStatusStyle(status)}`}>
+                                  <select
+                                    className={`risk-field-select relative z-10 w-full min-w-0 appearance-none bg-transparent text-inherit text-[10px] font-semibold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 text-center ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
+                                    value={status}
+                                    onChange={(e) => scheduleSave(rowId, 'TRẠNG_THÁI', e.target.value)}
+                                  >
+                                    {STATUS_OPTIONS.map((opt) => (
+                                      <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
+                                        {opt}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-50" />
+                                </div>
                               </div>
                             </td>
-                            <td className="p-3">
+                            <td className={`${TD} text-center`}>
                               {(() => {
                                 const current = r.PHỤ_TRÁCH || '';
                                 const options = current && !employeeNames.includes(current)
@@ -331,11 +379,11 @@ export default function RiskModule({ project, initialData }) {
                                   : employeeNames;
                                 return (
                                   <select
-                                    className={`${inputClass} font-medium cursor-pointer rounded-md border border-[var(--border-main)] bg-[var(--bg-panel)] px-2 py-1 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
+                                    className={`w-full font-medium cursor-pointer rounded-md border border-[var(--border-main)] bg-[var(--bg-panel)] px-1.5 py-1 text-center text-[10px] focus:outline-none focus:border-[#5252ff] ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
                                     value={current}
-                                    onChange={(e) => scheduleSave(r._rowIndex || r.id, 'PHỤ_TRÁCH', e.target.value)}
+                                    onChange={(e) => scheduleSave(rowId, 'PHỤ_TRÁCH', e.target.value)}
                                   >
-                                    <option value="">-- Chọn nhân sự --</option>
+                                    <option value="">-- Chọn --</option>
                                     {options.map((name) => (
                                       <option key={name} value={name}>{name}</option>
                                     ))}
@@ -343,16 +391,24 @@ export default function RiskModule({ project, initialData }) {
                                 );
                               })()}
                             </td>
-                            <td className="p-3">
+                            <td className={`${TD} text-center`}>
                               <DateInputDMY
-                                className={`${inputClass} tabular-nums`}
+                                className={`${inputClass} tabular-nums text-center`}
                                 value={r.NGÀY || ''}
                                 disabled={!canEdit}
                                 showCalendar={canEdit}
-                                calendarTitle="Chọn ngày ghi nhận"
-                                onChange={(val) => {
-                                  scheduleSave(r._rowIndex || r.id, 'NGÀY', val);
-                                }}
+                                calendarTitle="Ngày ghi nhận"
+                                onChange={(val) => scheduleSave(rowId, 'NGÀY', val)}
+                              />
+                            </td>
+                            <td className={`${TD} text-center`}>
+                              <DateInputDMY
+                                className={`${inputClass} tabular-nums text-center ${overdue ? 'text-red-600 font-semibold' : ''}`}
+                                value={getRiskDueDate(r)}
+                                disabled={!canEdit}
+                                showCalendar={canEdit}
+                                calendarTitle="Ngày hoàn thành xử lý"
+                                onChange={(val) => scheduleSave(rowId, 'NGÀY_HOÀN_THÀNH', val)}
                               />
                             </td>
                           </tr>

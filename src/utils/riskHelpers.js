@@ -1,3 +1,5 @@
+import { parseFlexibleDate } from './timelineDates';
+
 /** Chuẩn hóa mức độ rủi ro từ sheet / module chi tiết dự án */
 export function normalizeRiskSeverity(level) {
   const raw = String(level || '')
@@ -77,6 +79,24 @@ export function getRiskStatusStyle(status) {
   }
 }
 
+export function getRiskDueDate(risk) {
+  return risk?.NGÀY_HOÀN_THÀNH || risk?.NGAY_HOAN_THANH || '';
+}
+
+export function isRiskOverdue(risk, today = new Date()) {
+  if (!isRiskActive(risk?.TRẠNG_THÁI)) return false;
+  const due = parseFlexibleDate(getRiskDueDate(risk));
+  if (!due) return false;
+  const t = new Date(today);
+  t.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  return due.getTime() < t.getTime();
+}
+
+export function getRiskLateStyle() {
+  return 'text-red-700 bg-red-50 border-red-300 dark:text-red-400 dark:bg-red-500/15 dark:border-red-500/40';
+}
+
 export function buildOverviewRiskRows(allRisks, projects = []) {
   const projectById = new Map();
   (projects || []).forEach((p) => {
@@ -95,7 +115,7 @@ export function buildOverviewRiskRows(allRisks, projects = []) {
         issue: r.NỘI_DUNG || r.ẢNH_HƯỞNG || 'Chưa cập nhật chi tiết',
         assignee: r.PHỤ_TRÁCH || proj?.pm || 'Chưa rõ',
         level: normalizeRiskSeverity(r.MỨC_ĐỘ) || r.MỨC_ĐỘ,
-        status: r.TRẠNG_THÁI,
+        status: isRiskOverdue(r) ? 'Trễ' : r.TRẠNG_THÁI,
       };
     });
 
