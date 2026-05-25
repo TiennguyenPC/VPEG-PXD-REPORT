@@ -1,4 +1,34 @@
+import { normalizeToDMY } from './timelineDates';
+import { extractDriveFileId } from './siteImageUrl';
+
 export const CACHE_CONSENT_KEY = 'epc_local_cache_consent';
+
+/** Khóa ngày thống nhất dd/mm/yyyy — tránh lệch format khi đọc/ghi ảnh */
+export function normalizePhotoDateKey(date) {
+  return normalizeToDMY(date) || String(date || '').trim();
+}
+
+/** Ưu tiên cột có ### HÌNH ẢNH (Sheet đôi khi lệch DAILY_NOTE vs GHI_CHÚ_HIỆN_TRƯỜNG) */
+export function getLogNoteText(log) {
+  if (!log) return '';
+  const daily = String(log.DAILY_NOTE || '').trim();
+  const fieldNote = String(log.GHI_CHÚ_HIỆN_TRƯỜNG || '').trim();
+  if (fieldNote.includes('### HÌNH ẢNH')) return fieldNote;
+  if (daily.includes('### HÌNH ẢNH')) return daily;
+  return fieldNote.length >= daily.length ? fieldNote : (daily || fieldNote);
+}
+
+/** URL gốc Drive — không lưu proxy GAS vào Sheet */
+export function canonicalPhotoPersistUrl(item) {
+  const raw = typeof item === 'string'
+    ? item
+    : (item?.remote || item?.preview || '');
+  if (!raw || raw.startsWith('blob:')) return null;
+  const fileId = extractDriveFileId(raw);
+  if (fileId) return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  if (raw.includes('action=serve-site-image')) return null;
+  return raw;
+}
 
 export function getLocalCacheConsent() {
   try {
@@ -51,9 +81,10 @@ export function serializePhotoForCache(item) {
 
 export function writeDateSitePhotos(projectId, date, photos) {
   if (!projectId || !date) return;
+  const dateKey = normalizePhotoDateKey(date);
   const serialized = photos.map(serializePhotoForCache).filter(Boolean).slice(0, 4);
   const all = readSitePhotosByProject(projectId);
-  all[date] = serialized;
+  all[dateKey] = serialized;
   try {
     localStorage.setItem(storageKey(projectId), JSON.stringify(all));
   } catch (e) {
@@ -66,7 +97,7 @@ export function writeAllSitePhotos(projectId, photosByDate) {
   const all = {};
   for (const [date, photos] of Object.entries(photosByDate || {})) {
     const serialized = photos.map(serializePhotoForCache).filter(Boolean).slice(0, 4);
-    if (serialized.length) all[date] = serialized;
+    if (serialized.length) all[normalizePhotoDateKey(date)] = serialized;
   }
   try {
     localStorage.setItem(storageKey(projectId), JSON.stringify(all));

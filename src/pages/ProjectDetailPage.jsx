@@ -30,6 +30,7 @@ import {
   formatDateStr,
   getMondayOfDate,
   getTodayDMY,
+  normalizeToDMY,
 } from "../utils/timelineDates";
 
 const getTodayStr = getTodayDMY;
@@ -352,7 +353,7 @@ export default function ProjectDetailPage() {
   // Compute active log
   let activeLog = null;
   if (selectedView === 'day') {
-    activeLog = logs.find(l => (l.LOG_DATE === selectedDate || l.NGÀY === selectedDate)) || {
+    activeLog = logs.find(l => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(selectedDate)) || {
       PROJECT_ID: id,
       LOG_DATE: selectedDate,
       MANPOWER: 0,
@@ -455,7 +456,7 @@ export default function ProjectDetailPage() {
       }
     }
 
-    const existingLog = logs.find(l => (l.LOG_DATE === targetLogDate || l.NGÀY === targetLogDate)) || {
+    const existingLog = logs.find(l => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(targetLogDate)) || {
       PROJECT_ID: id,
       LOG_DATE: targetLogDate,
       MANPOWER: 0,
@@ -474,6 +475,11 @@ export default function ProjectDetailPage() {
     Object.keys(updates).forEach(k => {
       const mapped = getMappedField(k);
       const val = updates[k];
+      if (k === 'GHI_CHÚ_HIỆN_TRƯỜNG') {
+        updatedFields.DAILY_NOTE = val;
+        updatedFields.GHI_CHÚ_HIỆN_TRƯỜNG = val;
+        return;
+      }
       updatedFields[mapped] = (mapped === 'MANPOWER' || mapped === 'ENGINEERS' || mapped === 'INCIDENT_COUNT') ? Number(val) : val;
     });
 
@@ -486,7 +492,7 @@ export default function ProjectDetailPage() {
 
     // Update local logs list optimistically
     setLogs(prev => {
-      const idx = prev.findIndex(l => (l.LOG_DATE === targetLogDate || l.NGÀY === targetLogDate));
+      const idx = prev.findIndex(l => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(targetLogDate));
       if (idx !== -1) {
         return prev.map((l, i) => i === idx ? { ...l, ...updatedLog } : l);
       } else {

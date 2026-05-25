@@ -10,6 +10,9 @@ import {
   writeDateSitePhotos,
   writeAllSitePhotos,
   mergePhotoLists,
+  normalizePhotoDateKey,
+  getLogNoteText,
+  canonicalPhotoPersistUrl,
 } from '../../utils/sitePhotoCache';
 import SitePhoto from './SitePhoto';
 import {
@@ -64,28 +67,35 @@ const normalizePhotoItem = (item) => {
   return item;
 };
 
-const photoToPersistUrl = (item) => {
-  const raw = item.remote || item.preview || '';
-  if (!raw || raw.startsWith('blob:')) return null;
-  return raw;
+const photoToPersistUrl = canonicalPhotoPersistUrl;
+
+const urlsToPhotoItems = (urls) => urls.map((url) => ({
+  id: url,
+  preview: toDisplayableImageUrl(url),
+  remote: url,
+  status: 'ready',
+}));
+
+const buildPhotosForDate = (serverPhotos, cachedPhotos, prevPhotos) => {
+  const pending = (prevPhotos || []).filter((p) => {
+    const item = normalizePhotoItem(p);
+    return item.status === 'uploading' || item.preview?.startsWith('blob:');
+  });
+  return mergePhotoLists(mergePhotoLists(serverPhotos, cachedPhotos), pending).slice(0, 4);
 };
 
 const photosFromLogs = (logsList) => {
   const out = {};
   for (const log of logsList || []) {
-    const dateKey = log.LOG_DATE || log.NGÀY;
+    const dateKey = normalizePhotoDateKey(log.LOG_DATE || log.NGÀY);
     if (!dateKey) continue;
-    const parsedNote = parseDailyNote(log.DAILY_NOTE || log.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+    const parsedNote = parseDailyNote(getLogNoteText(log));
     const imageUrls = parsedNote.images
       ? parsedNote.images.split('\n').map((l) => l.trim()).filter(Boolean)
       : [];
     if (!imageUrls.length) continue;
-    out[dateKey] = imageUrls.map((url) => ({
-      id: url,
-      preview: toDisplayableImageUrl(url),
-      remote: url,
-      status: 'ready',
-    }));
+    const items = urlsToPhotoItems(imageUrls.map(canonicalPhotoPersistUrl).filter(Boolean));
+    if (items.length) out[dateKey] = items;
   }
   return out;
 };
@@ -269,7 +279,19 @@ export default function SiteLogPanel({
   const projectId = project?.PROJECT_ID || project?.id;
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(null);
-  const [photosByDate, setPhotosByDate] = useState({});
+  const [photosByDate, setPhotosByDate] = useState(() => {
+    if (!projectId) return {};
+    const cached = readSitePhotosByProject(projectId);
+    const out = {};
+    for (const [date, photos] of Object.entries(cached)) {
+      const key = normalizePhotoDateKey(date);
+      out[key] = photos.map(normalizePhotoItem).map((p) => ({
+        ...p,
+        preview: toDisplayableImageUrl(p.remote || p.preview),
+      }));
+    }
+    return out;
+  });
   const [liveWeather, setLiveWeather] = useState(null);
   const [uploadError, setUploadError] = useState('');
   const [needsDriveAuth, setNeedsDriveAuth] = useState(false);
@@ -302,16 +324,17 @@ export default function SiteLogPanel({
     fetchWeather();
   }, [selectedDate]);
 
-  const currentPhotos = (photosByDate[selectedDate] || []).map(normalizePhotoItem);
+  const currentPhotos = (photosByDate[normalizePhotoDateKey(selectedDate)] || []).map(normalizePhotoItem);
   const currentImages = currentPhotos;
   const bgUploadCount = currentPhotos.filter((p) => p.status === 'uploading').length;
 
   const persistPhotosToLog = (photos) => {
     if (!canEdit) return;
     const urls = photos.map(photoToPersistUrl).filter(Boolean);
-    const parsedNote = parseDailyNote(activeLog?.DAILY_NOTE || activeLog?.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+    const parsedNote = parseDailyNote(getLogNoteText(activeLog));
     parsedNote.images = urls.join('\n');
-    onUpdateLog({ GHI_CHÚ_HIỆN_TRƯỜNG: serializeDailyNote(parsedNote) });
+    const serialized = serializeDailyNote(parsedNote);
+    onUpdateLog({ GHI_CHÚ_HIỆN_TRƯỜNG: serialized, DAILY_NOTE: serialized });
     if (projectId) writeDateSitePhotos(projectId, selectedDate, photos);
   };
 
@@ -321,58 +344,67 @@ export default function SiteLogPanel({
   }, [photosByDate, projectId]);
 
   useEffect(() => {
-    if (!logs?.length) return;
+    if (!logs?.length && !projectId) return;
     const fromServer = photosFromLogs(logs);
+    const cachedAll = projectId ? readSitePhotosByProject(projectId) : {};
     setPhotosByDate((prev) => {
-      const next = { ...fromServer };
-      for (const [date, list] of Object.entries(prev)) {
-        const hasPending = list.some((p) => {
-          const item = normalizePhotoItem(p);
-          return item.status === 'uploading' || item.preview?.startsWith('blob:');
-        });
-        if (hasPending) {
-          next[date] = mergePhotoLists(fromServer[date] || [], list);
+      const dateKeys = new Set([
+        ...Object.keys(fromServer),
+        ...Object.keys(cachedAll).map(normalizePhotoDateKey),
+        ...Object.keys(prev).map(normalizePhotoDateKey),
+      ]);
+      const next = { ...prev };
+      let changed = false;
+      for (const rawDate of dateKeys) {
+        const dateKey = normalizePhotoDateKey(rawDate);
+        const serverPhotos = fromServer[dateKey] || [];
+        const cachedPhotos = (cachedAll[dateKey] || cachedAll[rawDate] || []).map(normalizePhotoItem).map((p) => ({
+          ...p,
+          preview: toDisplayableImageUrl(p.remote || p.preview),
+        }));
+        const merged = buildPhotosForDate(serverPhotos, cachedPhotos, prev[dateKey] || prev[rawDate] || []);
+        const prevList = (prev[dateKey] || prev[rawDate] || []).map(normalizePhotoItem);
+        if (JSON.stringify(merged) !== JSON.stringify(prevList)) {
+          if (merged.length) next[dateKey] = merged;
+          else delete next[dateKey];
+          changed = true;
         }
       }
-      if (JSON.stringify(next) === JSON.stringify(prev)) return prev;
-      return next;
+      return changed ? next : prev;
     });
-  }, [logs]);
+  }, [logs, projectId]);
 
-  // Load images from DB when date changes — không ghi đè ảnh đang upload / preview local
+  // Load images when date changes — merge Sheet + localStorage, không ghi đè ảnh đang upload
   useEffect(() => {
-    if (!activeLog) return;
-    const parsedNote = parseDailyNote(activeLog.DAILY_NOTE || activeLog.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+    if (!activeLog || !selectedDate) return;
+    const dateKey = normalizePhotoDateKey(selectedDate);
+    const parsedNote = parseDailyNote(getLogNoteText(activeLog));
     const imageUrls = parsedNote.images
       ? parsedNote.images.split('\n').map((l) => l.trim()).filter(Boolean)
       : [];
 
     setPhotosByDate((prev) => {
-      const local = prev[selectedDate] || [];
+      const local = prev[dateKey] || prev[selectedDate] || [];
       const hasPending = local.some((p) => {
         const item = normalizePhotoItem(p);
         return item.status === 'uploading' || item.preview?.startsWith('blob:');
       });
       if (hasPending) return prev;
 
-      const serverPhotos = imageUrls.map((url) => ({
-        id: url,
-        preview: toDisplayableImageUrl(url),
-        remote: url,
-        status: 'ready',
-      }));
-
+      const serverPhotos = urlsToPhotoItems(imageUrls.map(canonicalPhotoPersistUrl).filter(Boolean));
       const cachedLocal = projectId
-        ? (readSitePhotosByProject(projectId)[selectedDate] || [])
+        ? (readSitePhotosByProject(projectId)[dateKey] || []).map(normalizePhotoItem).map((p) => ({
+            ...p,
+            preview: toDisplayableImageUrl(p.remote || p.preview),
+          }))
         : local.filter((p) => photoToPersistUrl(normalizePhotoItem(p)));
 
-      const merged = mergePhotoLists(serverPhotos, cachedLocal.length ? cachedLocal : local.filter((p) => photoToPersistUrl(normalizePhotoItem(p))));
-
-      if (merged.length === 0) return prev;
-      if (JSON.stringify(merged) === JSON.stringify(local.map(normalizePhotoItem))) return prev;
-      return { ...prev, [selectedDate]: merged };
+      const merged = buildPhotosForDate(serverPhotos, cachedLocal, local);
+      const prevList = local.map(normalizePhotoItem);
+      if (JSON.stringify(merged) === JSON.stringify(prevList)) return prev;
+      return { ...prev, [dateKey]: merged };
     });
-  }, [activeLog, selectedDate]);
+  }, [activeLog, selectedDate, projectId]);
 
   const uploadPhotoInBackground = async (item, dateKey) => {
     try {
@@ -439,7 +471,7 @@ export default function SiteLogPanel({
     const slotsLeft = 4 - currentPhotos.length;
     if (slotsLeft <= 0) return;
     const filesToUpload = files.slice(0, slotsLeft);
-    const dateKey = selectedDate;
+    const dateKey = normalizePhotoDateKey(selectedDate);
 
     setUploadError('');
     setNeedsDriveAuth(false);
@@ -454,7 +486,7 @@ export default function SiteLogPanel({
 
     setPhotosByDate((prev) => ({
       ...prev,
-      [dateKey]: [...(prev[dateKey] || []), ...pendingItems],
+      [dateKey]: [...(prev[dateKey] || prev[selectedDate] || []), ...pendingItems],
     }));
 
     pendingItems.forEach((item) => {
@@ -467,14 +499,15 @@ export default function SiteLogPanel({
   const removeImage = (indexToRemove) => {
     if (!canEdit) return;
     setPhotosByDate((prev) => {
-      const list = (prev[selectedDate] || []).map(normalizePhotoItem);
+      const dateKey = normalizePhotoDateKey(selectedDate);
+      const list = (prev[dateKey] || prev[selectedDate] || []).map(normalizePhotoItem);
       const removed = list[indexToRemove];
       if (removed?.preview?.startsWith('blob:')) {
         URL.revokeObjectURL(removed.preview);
       }
       const updated = list.filter((_, idx) => idx !== indexToRemove);
       persistPhotosToLog(updated);
-      return { ...prev, [selectedDate]: updated };
+      return { ...prev, [dateKey]: updated };
     });
   };
 
@@ -507,7 +540,7 @@ export default function SiteLogPanel({
 
   const handleStartEdit = () => {
     if (!canEdit) return;
-    const parsedNote = parseDailyNote(activeLog?.DAILY_NOTE || activeLog?.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+    const parsedNote = parseDailyNote(getLogNoteText(activeLog));
     const parsedW = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
     
     setEditData({
@@ -541,8 +574,8 @@ export default function SiteLogPanel({
       progressPlanned: editData.progressPlanned,
       dayStatus: editData.dayStatus,
       dayStatusSubtext: editData.dayStatusSubtext,
-      images: editData.images || (photosByDate[selectedDate]
-        ? photosByDate[selectedDate].map(photoToPersistUrl).filter(Boolean).join('\n')
+      images: editData.images || (photosByDate[normalizePhotoDateKey(selectedDate)]
+        ? photosByDate[normalizePhotoDateKey(selectedDate)].map(photoToPersistUrl).filter(Boolean).join('\n')
         : '')
     });
 
@@ -818,7 +851,7 @@ export default function SiteLogPanel({
       {selectedView === 'day' && (
         <>
           {(() => {
-            const parsedNote = parseDailyNote(activeLog?.DAILY_NOTE || activeLog?.GHI_CHÚ_HIỆN_TRƯỜNG || '');
+            const parsedNote = parseDailyNote(getLogNoteText(activeLog));
             const parsedW = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
             
             const manpower = activeLog?.MANPOWER !== undefined ? activeLog?.MANPOWER : (activeLog?.NHÂN_LỰC_SITE || 0);
