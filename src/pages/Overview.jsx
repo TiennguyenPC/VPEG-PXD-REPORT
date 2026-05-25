@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   AlertTriangle,
   Zap,
@@ -47,6 +47,7 @@ const KPI_CARDS = [
     iconBg: 'bg-amber-500/15 text-amber-400',
     borderHover: 'hover:border-amber-500/40',
     glow: 'shadow-[0_0_24px_-8px_rgba(245,158,11,0.2)]',
+    scrollTarget: 'risk',
   },
   {
     key: 'tasks',
@@ -56,6 +57,7 @@ const KPI_CARDS = [
     iconBg: 'bg-rose-500/15 text-rose-400',
     borderHover: 'hover:border-rose-500/40',
     glow: 'shadow-[0_0_24px_-8px_rgba(244,63,94,0.2)]',
+    scrollTarget: 'tasks',
   },
 ];
 
@@ -353,6 +355,22 @@ export default function Overview() {
     year: 'numeric',
   });
 
+  const riskPanelRef = useRef(null);
+  const tasksPanelRef = useRef(null);
+  const [highlightSection, setHighlightSection] = useState(null);
+
+  const scrollToOverviewSection = useCallback((section) => {
+    const ref = section === 'risk' ? riskPanelRef : tasksPanelRef;
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setHighlightSection(section);
+    window.setTimeout(() => setHighlightSection(null), 1800);
+  }, []);
+
+  const sectionHighlightClass = (section) =>
+    highlightSection === section
+      ? 'rounded-2xl ring-2 ring-[#5252ff]/60 shadow-[0_0_24px_-6px_rgba(82,82,255,0.35)] transition-shadow duration-300'
+      : 'rounded-2xl transition-shadow duration-300';
+
   return (
     <div className="min-h-screen flex bg-[var(--bg-main)] text-[var(--text-main)] font-sans">
       <Sidebar activeItem="overview" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
@@ -395,11 +413,11 @@ export default function Overview() {
             {KPI_CARDS.map((card) => {
               const Icon = card.icon;
               const data = kpiValues[card.key];
-              return (
-                <div
-                  key={card.key}
-                  className={`group relative overflow-hidden rounded-xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] p-3 transition-all duration-300 ${card.borderHover} hover:-translate-y-0.5 ${card.glow}`}
-                >
+              const isNavCard = Boolean(card.scrollTarget);
+              const cardClass = `group relative overflow-hidden rounded-xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] p-3 transition-all duration-300 ${card.borderHover} hover:-translate-y-0.5 ${card.glow} ${isNavCard ? 'cursor-pointer text-left w-full' : ''}`;
+
+              const cardBody = (
+                <>
                   <div className={`absolute inset-0 bg-gradient-to-br ${card.accent} opacity-80`} />
                   <div className="relative flex justify-between items-start gap-2">
                     <div>
@@ -415,6 +433,26 @@ export default function Overview() {
                       <Icon className="w-4 h-4" />
                     </div>
                   </div>
+                </>
+              );
+
+              if (isNavCard) {
+                return (
+                  <button
+                    key={card.key}
+                    type="button"
+                    onClick={() => scrollToOverviewSection(card.scrollTarget)}
+                    className={cardClass}
+                    title={card.scrollTarget === 'risk' ? 'Xem rủi ro nổi bật' : 'Xem công việc quan trọng'}
+                  >
+                    {cardBody}
+                  </button>
+                );
+              }
+
+              return (
+                <div key={card.key} className={cardClass}>
+                  {cardBody}
                 </div>
               );
             })}
@@ -503,6 +541,7 @@ export default function Overview() {
               </div>
             </PanelCard>
 
+            <div ref={riskPanelRef} className={`min-w-0 scroll-mt-4 ${sectionHighlightClass('risk')}`}>
             <PanelCard
               title="Vấn đề / Rủi ro nổi bật"
               action={
@@ -590,9 +629,11 @@ export default function Overview() {
                 </table>
               </div>
             </PanelCard>
+            </div>
           </div>
 
           {/* Tasks */}
+          <div ref={tasksPanelRef} className={`scroll-mt-4 ${sectionHighlightClass('tasks')}`}>
           <PanelCard
             title="Theo dõi công việc quan trọng"
             action={
@@ -646,6 +687,7 @@ export default function Overview() {
               )}
             </div>
           </PanelCard>
+          </div>
         </div>
       </main>
     </div>

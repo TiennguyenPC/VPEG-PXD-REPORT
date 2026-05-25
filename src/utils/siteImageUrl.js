@@ -23,30 +23,79 @@ export function buildGasImageProxyUrl(fileId) {
   return `${base}?action=serve-site-image&id=${encodeURIComponent(fileId)}`;
 }
 
-/** URL hiển thị được trong thẻ img (Drive thumbnail / lh3 / GAS proxy) */
-export function toDisplayableImageUrl(url, size = 1920) {
+function buildDriveThumbnailUrl(fileId, width = 640) {
+  return `https://drive.google.com/thumbnail?id=${fileId}&sz=w${width}`;
+}
+
+const workedUrlMemory = new Map();
+
+function cacheKey(fileId, variant) {
+  return `${fileId}:${variant}`;
+}
+
+export function getRememberedImageUrl(fileId, variant = 'thumb') {
+  if (!fileId) return null;
+  const key = cacheKey(fileId, variant);
+  if (workedUrlMemory.has(key)) return workedUrlMemory.get(key);
+  try {
+    const stored = sessionStorage.getItem(`epc_img_ok_${key}`);
+    if (stored) {
+      workedUrlMemory.set(key, stored);
+      return stored;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+export function rememberWorkingImageUrl(fileId, variant, url) {
+  if (!fileId || !url) return;
+  const key = cacheKey(fileId, variant);
+  workedUrlMemory.set(key, url);
+  try {
+    sessionStorage.setItem(`epc_img_ok_${key}`, url);
+  } catch { /* quota / private mode */ }
+}
+
+/** URL hiển thị grid — thumbnail nhỏ, load nhanh hơn GAS proxy */
+export function toDisplayableImageUrl(url, size = 640) {
   if (!url) return url;
   if (url.startsWith('blob:') || url.startsWith('data:')) return url;
 
   const fileId = extractDriveFileId(url);
   if (fileId) {
-    return buildGasImageProxyUrl(fileId);
+    const cached = getRememberedImageUrl(fileId, 'thumb');
+    if (cached) return cached;
+    return buildDriveThumbnailUrl(fileId, size);
   }
   return url;
 }
 
-/** Thử các URL fallback khi ảnh Drive không load */
-export function getImageFallbackUrls(url) {
+/** Thử các URL fallback — thumb: Drive thumbnail trước; full: GAS/proxy cho lightbox */
+export function getImageFallbackUrls(url, { variant = 'thumb' } = {}) {
   if (!url) return [];
   if (url.startsWith('blob:') || url.startsWith('data:')) return [url];
 
   const fileId = extractDriveFileId(url);
   if (!fileId) return [url];
 
+  const cached = getRememberedImageUrl(fileId, variant);
+  if (cached) return [cached, url];
+
+  if (variant === 'full') {
+    return [
+      buildGasImageProxyUrl(fileId),
+      buildDriveThumbnailUrl(fileId, 1920),
+      `https://lh3.googleusercontent.com/d/${fileId}=w1920-h1080`,
+      `https://drive.google.com/uc?export=view&id=${fileId}`,
+      url,
+    ];
+  }
+
   return [
+    buildDriveThumbnailUrl(fileId, 640),
+    buildDriveThumbnailUrl(fileId, 320),
+    `https://lh3.googleusercontent.com/d/${fileId}=w640-h480`,
     buildGasImageProxyUrl(fileId),
-    `https://drive.google.com/thumbnail?id=${fileId}&sz=w1920`,
-    `https://lh3.googleusercontent.com/d/${fileId}=w1920-h1080`,
     `https://drive.google.com/uc?export=view&id=${fileId}`,
     url,
   ];

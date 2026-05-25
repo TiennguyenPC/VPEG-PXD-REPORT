@@ -1355,6 +1355,7 @@ export default function SiteLogPanel({
                         key={item.id || i}
                         src={item.remote || item.preview}
                         status={item.status}
+                        priority={i < 4}
                         onRemove={canEdit ? () => removeImage(i) : undefined}
                       />
                     );

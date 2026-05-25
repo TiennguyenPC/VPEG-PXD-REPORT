@@ -1,9 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, ChevronRight, ChevronLeft, Save, Search, Eye, EyeOff, Loader2 } from 'lucide-react';
 import {
   CREATABLE_ROLES,
   getEmployeeId,
   getEmployeeName,
+  getEmployeeEmail,
+  getEmployeePosition,
+  mapPositionToRole,
 } from '../../utils/permissions';
 import {
   VUPHONG_EMAIL_DOMAIN,
@@ -13,13 +16,15 @@ import {
   formatApiError,
 } from '../../utils/emailDomain';
 
+const DEFAULT_PASSWORD = '123123';
+
 const EMPTY_FORM = {
   employeeId: '',
   displayName: '',
   emailLocal: '',
   username: '',
-  password: '',
-  passwordConfirm: '',
+  password: DEFAULT_PASSWORD,
+  passwordConfirm: DEFAULT_PASSWORD,
   role: 'employee',
   assignedProjects: [],
 };
@@ -71,13 +76,60 @@ export default function UserFormModal({ open, onClose, onSaved, editUser, employ
 
   const selectedCount = form.assignedProjects.length;
 
+  const findEmployee = useCallback(
+    (employeeId) => employees.find((e) => String(getEmployeeId(e)) === String(employeeId)),
+    [employees]
+  );
+
+  const buildFormFromEmployee = useCallback(
+    (emp, base) => {
+      if (!emp) return base;
+      const emailLocal = parseEmailLocal(getEmployeeEmail(emp));
+      const role = mapPositionToRole(getEmployeePosition(emp));
+      return {
+        ...base,
+        employeeId: getEmployeeId(emp),
+        displayName: getEmployeeName(emp),
+        emailLocal,
+        role,
+        ...(!isEdit && {
+          username: emailLocal,
+          password: DEFAULT_PASSWORD,
+          passwordConfirm: DEFAULT_PASSWORD,
+        }),
+      };
+    },
+    [isEdit]
+  );
+
+  const applyEmployeeToForm = useCallback(
+    (emp) => {
+      if (!emp) return;
+      setForm((prev) => buildFormFromEmployee(emp, prev));
+    },
+    [buildFormFromEmployee]
+  );
+
+  useEffect(() => {
+    if (!open || !form.employeeId || employees.length === 0) return;
+    const emp = findEmployee(form.employeeId);
+    if (!emp) return;
+    setForm((prev) => {
+      const next = buildFormFromEmployee(emp, prev);
+      if (
+        prev.emailLocal === next.emailLocal &&
+        prev.username === next.username &&
+        prev.role === next.role &&
+        prev.password === next.password
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, [open, form.employeeId, employees, findEmployee, buildFormFromEmployee]);
+
   const handleEmployeeChange = (employeeId) => {
-    const emp = employees.find((e) => getEmployeeId(e) === employeeId);
-    setForm((prev) => ({
-      ...prev,
-      employeeId,
-      displayName: emp ? getEmployeeName(emp) : prev.displayName,
-    }));
+    applyEmployeeToForm(findEmployee(employeeId));
   };
 
   const toggleProject = (projectId) => {
@@ -93,31 +145,42 @@ export default function UserFormModal({ open, onClose, onSaved, editUser, employ
     });
   };
 
-  const validateStep = (s) => {
+  const validateStep = (s, data = form) => {
     if (s === 1) {
-      if (!form.employeeId) return 'Vui lòng chọn nhân viên';
-      if (!form.emailLocal.trim()) return 'Vui lòng nhập phần tên email';
-      if (!isValidEmailLocal(form.emailLocal)) {
+      if (!data.employeeId) return 'Vui lòng chọn nhân viên';
+      if (!data.emailLocal.trim()) {
+        return 'Không tìm thấy email trong sheet EMPLOYEE — kiểm tra cột Email của nhân viên';
+      }
+      if (!isValidEmailLocal(data.emailLocal)) {
         return 'Phần tên email chỉ gồm chữ, số, dấu chấm, gạch ngang';
       }
     }
     if (s === 2) {
-      if (!isEdit && (!form.username.trim() || form.username.trim().length < 3)) {
+      if (!isEdit && (!data.username.trim() || data.username.trim().length < 3)) {
         return 'Username phải có ít nhất 3 ký tự';
       }
-      if (!isEdit && form.password.length < 6) return 'Mật khẩu phải có ít nhất 6 ký tự';
-      if (!isEdit && form.password !== form.passwordConfirm) return 'Mật khẩu xác nhận không khớp';
-      if (isEdit && form.password && form.password.length < 6) return 'Mật khẩu mới phải có ít nhất 6 ký tự';
-      if (isEdit && form.password && form.password !== form.passwordConfirm) {
+      if (!isEdit && data.password.length < 6) return 'Mật khẩu phải có ít nhất 6 ký tự';
+      if (!isEdit && data.password !== data.passwordConfirm) return 'Mật khẩu xác nhận không khớp';
+      if (isEdit && data.password && data.password.length < 6) return 'Mật khẩu mới phải có ít nhất 6 ký tự';
+      if (isEdit && data.password && data.password !== data.passwordConfirm) {
         return 'Mật khẩu xác nhận không khớp';
       }
-      if (!form.role) return 'Vui lòng chọn role';
+      if (!data.role) return 'Vui lòng chọn role';
     }
     return '';
   };
 
   const handleNext = () => {
-    const err = validateStep(step);
+    let nextForm = form;
+    if (step === 1 && form.employeeId) {
+      const emp = findEmployee(form.employeeId);
+      if (emp) {
+        nextForm = buildFormFromEmployee(emp, form);
+        setForm(nextForm);
+      }
+    }
+
+    const err = validateStep(step, nextForm);
     if (err) {
       setError(err);
       return;
@@ -249,7 +312,7 @@ export default function UserFormModal({ open, onClose, onSaved, editUser, employ
                       const v = e.target.value.toLowerCase().replace(/@.*$/, '');
                       setForm((p) => ({ ...p, emailLocal: v }));
                     }}
-                    placeholder="thieu.nguyen"
+                    placeholder="vd: thuan.nguyen"
                     autoComplete="off"
                     className="flex-1 min-w-0 bg-[var(--bg-main)] text-[var(--text-main)] px-3 py-2.5 text-sm focus:outline-none"
                   />
@@ -277,7 +340,7 @@ export default function UserFormModal({ open, onClose, onSaved, editUser, employ
                   value={form.username}
                   onChange={(e) => setForm((p) => ({ ...p, username: e.target.value }))}
                   disabled={isEdit}
-                  placeholder="ten.nguyen"
+                  placeholder="Tự điền theo email nhân viên"
                   className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-[var(--text-main)] px-3 py-2.5 rounded-lg text-sm focus:outline-none focus:border-[#5252ff] disabled:opacity-60"
                 />
               </div>

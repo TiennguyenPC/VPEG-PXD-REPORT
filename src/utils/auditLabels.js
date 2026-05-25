@@ -6,6 +6,7 @@ export const AUDIT_ACTION_LABELS = {
   'add-user': 'Tạo user',
   'update-user': 'Sửa user',
   'deactivate-user': 'Vô hiệu user',
+  'delete-user': 'Xóa user',
   'change-password': 'Đổi mật khẩu',
   'add-project': 'Tạo dự án',
   'update-project': 'Sửa dự án',

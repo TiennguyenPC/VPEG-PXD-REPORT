@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Pencil, UserX, Loader2, Users, LockOpen } from 'lucide-react';
+import { Plus, Search, Pencil, UserX, Loader2, Users, LockOpen, Lock, Trash2 } from 'lucide-react';
 import SettingsLayout from '../components/settings/SettingsLayout';
 import UserFormModal from '../components/settings/UserFormModal';
 import { api } from '../services/api';
@@ -23,7 +23,7 @@ export default function UserSettingsPage() {
     try {
       const [userData, empData, projData] = await Promise.all([
         api.getUsers(),
-        api.getEmployees().catch(() => []),
+        api.getEmployees(true).catch(() => []),
         api.getProjects(true).catch(() => []),
       ]);
       setUsers(userData || []);
@@ -106,6 +106,32 @@ export default function UserSettingsPage() {
       await loadData();
     } catch (err) {
       alert(err.message || 'Mở khóa thất bại');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleLock = async (user) => {
+    if (!window.confirm(`Tạm khóa tài khoản "${user.displayName}" (${user.username})?\n\nUser sẽ không đăng nhập được cho đến khi admin mở khóa.`)) return;
+    setActionLoading(user.userId);
+    try {
+      await api.lockUser(user.userId);
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Khóa tài khoản thất bại');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDelete = async (user) => {
+    if (!window.confirm(`Xóa vĩnh viễn tài khoản "${user.displayName}" (${user.username})?\n\nHành động này không thể hoàn tác.`)) return;
+    setActionLoading(user.userId);
+    try {
+      await api.deleteUser(user.userId);
+      await loadData();
+    } catch (err) {
+      alert(err.message || 'Xóa tài khoản thất bại');
     } finally {
       setActionLoading(null);
     }
@@ -205,45 +231,55 @@ export default function UserSettingsPage() {
                           </td>
                           <td className={`${tdCell} text-right`}>
                             <div className="flex items-center justify-end gap-1">
-                              {user.locked && !isAdminUser && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleUnlock(user)}
-                                  disabled={actionLoading === user.userId}
-                                  className="px-2 py-1 text-[10px] font-bold rounded border border-amber-500/30 text-amber-400 hover:bg-amber-500/10 disabled:opacity-50 flex items-center gap-1"
-                                  title="Mở khóa tài khoản"
-                                >
-                                  {actionLoading === user.userId ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <LockOpen className="w-3.5 h-3.5" />
-                                  )}
-                                  Mở khóa
-                                </button>
-                              )}
                               {!isAdminUser && (
                                 <>
                                   <button
                                     type="button"
                                     onClick={() => handleOpenEdit(user)}
-                                    className="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[#5252ff]"
+                                    disabled={actionLoading === user.userId}
+                                    className="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[#5252ff] disabled:opacity-50"
                                     title="Sửa"
                                   >
                                     <Pencil className="w-4 h-4" />
                                   </button>
+                                  {user.locked ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUnlock(user)}
+                                      disabled={actionLoading === user.userId}
+                                      className="p-2 rounded hover:bg-[var(--bg-hover)] text-amber-400 hover:text-amber-300 disabled:opacity-50"
+                                      title="Mở khóa"
+                                    >
+                                      {actionLoading === user.userId ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        <LockOpen className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleLock(user)}
+                                      disabled={actionLoading === user.userId}
+                                      className="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-amber-400 disabled:opacity-50"
+                                      title="Tạm khóa"
+                                    >
+                                      {actionLoading === user.userId ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                      ) : (
+                                        <Lock className="w-4 h-4" />
+                                      )}
+                                    </button>
+                                  )}
                                   {user.active !== false ? (
                                     <button
                                       type="button"
                                       onClick={() => handleDeactivate(user)}
                                       disabled={actionLoading === user.userId}
-                                      className="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-red-400 disabled:opacity-50"
+                                      className="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-orange-400 disabled:opacity-50"
                                       title="Vô hiệu hóa"
                                     >
-                                      {actionLoading === user.userId ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                      ) : (
-                                        <UserX className="w-4 h-4" />
-                                      )}
+                                      <UserX className="w-4 h-4" />
                                     </button>
                                   ) : (
                                     <button
@@ -255,6 +291,19 @@ export default function UserSettingsPage() {
                                       Bật lại
                                     </button>
                                   )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDelete(user)}
+                                    disabled={actionLoading === user.userId}
+                                    className="p-2 rounded hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-red-400 disabled:opacity-50"
+                                    title="Xóa tài khoản"
+                                  >
+                                    {actionLoading === user.userId ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="w-4 h-4" />
+                                    )}
+                                  </button>
                                 </>
                               )}
                               {isAdminUser && (
@@ -279,7 +328,7 @@ export default function UserSettingsPage() {
           </div>
 
           <p className="text-[10px] text-[var(--text-muted)]">
-            {filteredUsers.length} tài khoản · Sai mật khẩu 3 lần → khóa · Admin mở khóa tại cột Thao tác
+            {filteredUsers.length} tài khoản · Tạm khóa / Vô hiệu / Xóa tại cột Thao tác · Sai mật khẩu 3 lần tự khóa
           </p>
       </div>
 

@@ -112,7 +112,87 @@ export function getEmployeeId(emp) {
   return String(emp.EMPLOYEE_ID || emp.ID || emp.id || emp._rowIndex || '');
 }
 
+function normalizeFieldKey(key) {
+  return String(key || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function pickFieldValue(obj, { exact = [], includes = [] } = {}) {
+  if (!obj) return '';
+  for (const key of exact) {
+    const val = obj[key];
+    if (val != null && String(val).trim()) return String(val).trim();
+  }
+  for (const [key, val] of Object.entries(obj)) {
+    if (key === '_rowIndex') continue;
+    if (val == null || !String(val).trim()) continue;
+    const norm = normalizeFieldKey(key);
+    for (const pattern of includes) {
+      if (norm === pattern || norm.includes(pattern)) {
+        return String(val).trim();
+      }
+    }
+  }
+  return '';
+}
+
 export function getEmployeeName(emp) {
   if (!emp) return '';
-  return String(emp.NAME || emp.name || emp['HỌ TÊN'] || emp['Họ tên'] || '').trim();
+  const name = pickFieldValue(emp, {
+    exact: ['NAME', 'name', 'HỌ TÊN', 'Họ tên', 'HO_TEN', 'HOTEN'],
+    includes: ['hoten', 'hovaten', 'name'],
+  });
+  return name.trim();
+}
+
+export function getEmployeeEmail(emp) {
+  if (!emp) return '';
+  return pickFieldValue(emp, {
+    exact: ['EMAIL', 'email', 'Email', 'E-MAIL', 'MAIL', 'Mail'],
+    includes: ['email', 'mail', 'thudientu'],
+  }).toLowerCase();
+}
+
+export function getEmployeePosition(emp) {
+  if (!emp) return '';
+  return pickFieldValue(emp, {
+    exact: [
+      'CHUC_VU', 'CHỨC_VỤ', 'Chức vụ', 'POSITION', 'position',
+      'VAI_TRO', 'VAI TRÒ', 'ROLE', 'role', 'CHUC_DANH', 'Chức danh',
+    ],
+    includes: ['chucvu', 'chucdanh', 'position', 'vaitro'],
+  });
+}
+
+/** Map chức vụ trong sheet EMPLOYEE → role tài khoản */
+export function mapPositionToRole(position) {
+  const raw = String(position || '').trim().toLowerCase();
+  if (!raw) return 'employee';
+
+  const normalized = raw.replace(/\./g, '').replace(/\s+/g, ' ');
+
+  if (normalized === 'nhanvien' || normalized === 'nv' || normalized.includes('nhân viên')) {
+    return 'employee';
+  }
+
+  const direct = ['pm', 'sm', 'gs', 'sa', 'tk', 'psc'];
+  if (direct.includes(normalized)) return normalized;
+
+  if (normalized.includes('giám sát') || normalized.includes('giam sat') || normalized === 'gs') {
+    return 'gs';
+  }
+  if (normalized.includes('project manager') || normalized.startsWith('pm ')) return 'pm';
+  if (normalized.includes('site manager') || normalized.startsWith('sm ')) return 'sm';
+  if (normalized.includes('p sc') || normalized.includes('phong sc') || normalized.includes('phòng sc')) {
+    return 'psc';
+  }
+
+  const first = normalized.split(/[\s/-]+/)[0];
+  if (direct.includes(first)) return first;
+
+  return 'employee';
 }

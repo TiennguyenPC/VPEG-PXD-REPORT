@@ -65,7 +65,7 @@ function doGet(e) {
         data = getSheetDataAsObjects(ss, 'PROJECT_TASKS');
         break;
       case 'employees':
-        data = getSheetDataAsObjects(ss, 'EMPLOYEE');
+        data = getSheetDataAsObjects(ss, 'EMPLOYEE').map(sanitizeEmployeeForClient_);
         break;
       case 'project':
         const allProjects = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
@@ -271,6 +271,9 @@ function doPost(e) {
     }
     if (action === 'deactivate-user') {
       return handleDeactivateUser_(payload);
+    }
+    if (action === 'delete-user') {
+      return handleDeleteUser_(payload);
     }
     if (action === 'change-password') {
       return handleChangePassword_(payload);
@@ -592,7 +595,25 @@ const STANDARD_KEYS_MAP = {
   
   // scurve
   'kehoach%': 'KẾ_HOẠCH_%',
-  'thucte%': 'THỰC_TẾ_%'
+  'thucte%': 'THỰC_TẾ_%',
+
+  // employee
+  'employeeid': 'EMPLOYEE_ID',
+  'manv': 'EMPLOYEE_ID',
+  'manhanvien': 'EMPLOYEE_ID',
+  'hoten': 'NAME',
+  'hovaten': 'NAME',
+  'name': 'NAME',
+  'email': 'EMAIL',
+  'mail': 'EMAIL',
+  'thudientu': 'EMAIL',
+  'emailcongty': 'EMAIL',
+  'chucvu': 'CHUC_VU',
+  'chucdanh': 'CHUC_VU',
+  'position': 'CHUC_VU',
+  'vaitro': 'CHUC_VU',
+  'bophan': 'BO_PHAN',
+  'phongban': 'BO_PHAN'
 };
 
 function findColumnIndex(headers, possibleNames) {
@@ -2241,7 +2262,7 @@ function checkMutationPermission_(action, payload, session) {
 function isProtectedMutation_(action) {
   if (!action) return false;
   if (action === 'login' || action === 'logout') return false;
-  if (action === 'add-user' || action === 'update-user' || action === 'deactivate-user') return false;
+  if (action === 'add-user' || action === 'update-user' || action === 'deactivate-user' || action === 'delete-user') return false;
   if (action === 'upload-image-chunk') return false;
   return true;
 }
@@ -2513,6 +2534,56 @@ function getEmployeeDisplayName_(emp) {
   return String(emp.NAME || emp.name || emp['HỌ TÊN'] || emp['Họ tên'] || '').trim();
 }
 
+function pickEmployeeField_(emp, exactKeys, includePatterns) {
+  if (!emp) return '';
+  var k;
+  for (k = 0; k < exactKeys.length; k++) {
+    var exactVal = emp[exactKeys[k]];
+    if (exactVal != null && String(exactVal).trim()) {
+      return String(exactVal).trim();
+    }
+  }
+  for (var key in emp) {
+    if (!emp.hasOwnProperty(key) || key === '_rowIndex') continue;
+    var val = emp[key];
+    if (val == null || !String(val).trim()) continue;
+    var norm = normalizeString(key);
+    for (k = 0; k < includePatterns.length; k++) {
+      if (norm === includePatterns[k] || norm.indexOf(includePatterns[k]) >= 0) {
+        return String(val).trim();
+      }
+    }
+  }
+  return '';
+}
+
+function getEmployeeEmailFromRow_(emp) {
+  return pickEmployeeField_(emp,
+    ['EMAIL', 'email', 'Email', 'MAIL', 'Mail'],
+    ['email', 'mail', 'thudientu']
+  ).toLowerCase();
+}
+
+function getEmployeePositionFromRow_(emp) {
+  return pickEmployeeField_(emp,
+    ['CHUC_VU', 'CHỨC_VỤ', 'Chức vụ', 'POSITION', 'position', 'VAI_TRO', 'VAI TRÒ', 'ROLE', 'role'],
+    ['chucvu', 'chucdanh', 'position', 'vaitro']
+  );
+}
+
+function sanitizeEmployeeForClient_(emp) {
+  if (!emp) return emp;
+  var out = {};
+  for (var key in emp) {
+    if (emp.hasOwnProperty(key)) out[key] = emp[key];
+  }
+  out.EMPLOYEE_ID = String(emp.EMPLOYEE_ID || emp.ID || emp.id || emp._rowIndex || '');
+  out.NAME = getEmployeeDisplayName_(emp) || out.NAME || '';
+  out.EMAIL = getEmployeeEmailFromRow_(emp) || out.EMAIL || '';
+  out.CHUC_VU = getEmployeePositionFromRow_(emp) || out.CHUC_VU || '';
+  return out;
+}
+
 function findEmployeeById_(ss, employeeId) {
   var employees = getSheetDataAsObjects(ss, 'EMPLOYEE');
   var target = String(employeeId || '').trim();
@@ -2685,6 +2756,15 @@ function handleUpdateUser_(payload) {
     updates.FAILED_LOGIN_COUNT = 0;
     updates.LOCKED = 'FALSE';
   }
+  if (payload.lock === true || payload.locked === true) {
+    if (String(user.USER_ID) === String(adminCheck.session.userId)) {
+      return createResponse({ status: 'error', message: 'Không thể khóa tài khoản của chính mình' }, 400);
+    }
+    if (String(user.ROLE || '').toLowerCase() === 'admin') {
+      return createResponse({ status: 'error', message: 'Không thể khóa tài khoản Admin' }, 400);
+    }
+    updates.LOCKED = 'TRUE';
+  }
   if (payload.password) {
     var newPass = String(payload.password);
     if (newPass.length < 6) {
@@ -2724,6 +2804,46 @@ function handleDeactivateUser_(payload) {
   payload = payload || {};
   payload.active = false;
   return handleUpdateUser_(payload);
+}
+
+function handleDeleteUser_(payload) {
+  var adminCheck = requireAdminSession_(payload, null);
+  if (adminCheck.error) {
+    return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+  }
+
+  payload = payload || {};
+  var ss = getSpreadsheet();
+  ensureUsersSheet_(ss);
+
+  var userId = String(payload.userId || '').trim();
+  var user = findUserByUserId_(ss, userId);
+  if (!user) {
+    return createResponse({ status: 'error', message: 'Không tìm thấy user' }, 404);
+  }
+
+  if (String(user.USER_ID) === String(adminCheck.session.userId)) {
+    return createResponse({ status: 'error', message: 'Không thể xóa tài khoản của chính mình' }, 400);
+  }
+  if (String(user.ROLE || '').toLowerCase() === 'admin') {
+    return createResponse({ status: 'error', message: 'Không thể xóa tài khoản Admin' }, 400);
+  }
+  if (user._rowIndex == null) {
+    return createResponse({ status: 'error', message: 'Không xác định được dòng user' }, 400);
+  }
+
+  deleteRowById(ss, 'USERS', user._rowIndex);
+  auditMutation_('delete-user', {
+    userId: userId,
+    username: user.USERNAME,
+    displayName: user.DISPLAY_NAME
+  }, adminCheck.session);
+
+  return createResponse({
+    status: 'success',
+    message: 'Đã xóa tài khoản',
+    data: listUsersForAdmin_(ss)
+  });
 }
 
 function handleChangePassword_(payload) {
@@ -3844,12 +3964,17 @@ function buildAuditSummary_(action, payload) {
       if (payload.unlock === true || payload.locked === false) {
         return 'Mở khóa tài khoản: ' + (payload.userId || payload.username || '');
       }
+      if (payload.lock === true || payload.locked === true) {
+        return 'Tạm khóa tài khoản: ' + (payload.userId || payload.username || '');
+      }
       if (payload.active === false || String(payload.active).toUpperCase() === 'FALSE') {
         return 'Vô hiệu hóa tài khoản: ' + (payload.userId || payload.username || '');
       }
       return 'Cập nhật tài khoản: ' + (payload.userId || payload.username || '');
     case 'deactivate-user':
       return 'Vô hiệu hóa tài khoản: ' + (payload.userId || '');
+    case 'delete-user':
+      return 'Xóa tài khoản: ' + (payload.userId || payload.username || payload.displayName || '');
     case 'change-password':
       return 'Đổi mật khẩu tài khoản';
     case 'add-project':

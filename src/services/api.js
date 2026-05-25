@@ -313,6 +313,14 @@ export const api = {
     const result = await postToGAS('update-user', { userId, unlock: true });
     return result.data;
   },
+  lockUser: async (userId) => {
+    const result = await postToGAS('update-user', { userId, lock: true });
+    return result.data;
+  },
+  deleteUser: async (userId) => {
+    const result = await postToGAS('delete-user', { userId });
+    return result.data;
+  },
   changePassword: async ({ currentPassword, newPassword }) => {
     const result = await postToGAS('change-password', { currentPassword, newPassword });
     return result;
@@ -391,19 +399,22 @@ export const api = {
     localStorage.setItem('epc_projects_cache', JSON.stringify(projectsCache));
     return projectsCache;
   },
-  getEmployees: async () => {
-    const localEmps = localStorage.getItem('epc_employees_cache');
-    if (localEmps) {
-      setTimeout(async () => {
-        try {
-          const data = await fetchFromGAS('employees');
-          localStorage.setItem('epc_employees_cache', JSON.stringify(data || []));
-        } catch (e) { }
-      }, 0);
-      return JSON.parse(localEmps);
+  getEmployees: async (forceRefresh = false) => {
+    const cacheKey = 'epc_employees_cache_v2';
+    if (!forceRefresh) {
+      const localEmps = localStorage.getItem(cacheKey) || localStorage.getItem('epc_employees_cache');
+      if (localEmps) {
+        setTimeout(async () => {
+          try {
+            const data = await fetchFromGAS('employees');
+            localStorage.setItem(cacheKey, JSON.stringify(data || []));
+          } catch (e) { /* ignore */ }
+        }, 0);
+        return JSON.parse(localEmps);
+      }
     }
     const data = await fetchFromGAS('employees');
-    localStorage.setItem('epc_employees_cache', JSON.stringify(data || []));
+    localStorage.setItem(cacheKey, JSON.stringify(data || []));
     return data || [];
   },
   getProject: async (id) => {
