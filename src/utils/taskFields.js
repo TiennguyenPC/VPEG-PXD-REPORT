@@ -1,4 +1,5 @@
 import { normalizeToDMY, parseFlexibleDate } from './timelineDates';
+import { getEmployeeName } from './permissions';
 
 /** Tách chuỗi NHÂN_SỰ thành danh sách (hỗ trợ phân cách , ; | /) */
 export function parseAssignees(raw) {
@@ -23,6 +24,38 @@ export function formatAssigneeDisplay(raw, fallback = 'Chưa chỉ định') {
   if (list.length === 0) return fallback;
   if (list.length === 1) return list[0];
   return list.map(getAssigneeGivenName).join(', ');
+}
+
+/** Danh sách tên cho dropdown phân công — gộp EMPLOYEE + người đang có trên task */
+export function buildAssigneeOptionList(employees = [], tasks = [], extraNames = []) {
+  const seen = new Map();
+  const add = (name) => {
+    const value = String(name || '').trim();
+    if (!value) return;
+    const key = value.toLowerCase();
+    if (!seen.has(key)) seen.set(key, value);
+  };
+
+  employees.forEach((emp) => add(getEmployeeName(emp) || emp.NAME || emp.name || emp.DISPLAY_NAME));
+  (tasks || []).forEach((task) => parseAssignees(task?.NHÂN_SỰ).forEach(add));
+  (extraNames || []).forEach(add);
+
+  return [...seen.values()].sort((a, b) => a.localeCompare(b, 'vi'));
+}
+
+/** Bổ sung PROJECT_ID từ tên dự án khi sheet thiếu mã */
+export function enrichTaskProjectIds(task, projects = []) {
+  if (!task) return task;
+  if (String(task.PROJECT_ID || '').trim()) return task;
+  const name = String(task.TÊN_DỰ_ÁN || '').trim();
+  if (!name || !Array.isArray(projects) || !projects.length) return task;
+  const proj = projects.find(
+    (p) =>
+      String(p.name || p.TÊN_DỰ_ÁN || '').trim() === name ||
+      String(p.id || p.PROJECT_ID || '').trim() === name
+  );
+  if (!proj) return task;
+  return { ...task, PROJECT_ID: String(proj.id || proj.PROJECT_ID || '') };
 }
 
 /** Mô tả công việc — đồng bộ tên cột Sheet (GHI_CHÚ) và alias UI (MÔ_TẢ) */

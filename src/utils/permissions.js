@@ -84,6 +84,34 @@ export function resolveTaskProjectId(task, projects = []) {
   return proj ? String(proj.id || proj.PROJECT_ID || '').trim() : '';
 }
 
+/** PM/SM được gán dự án theo mã hoặc tên (VAL, OSAKA...) */
+export function isUserAssignedToTaskProject(user, task, projects = []) {
+  const assigned = user?.assignedProjects || [];
+  if (!assigned.length || !task) return false;
+
+  const projectId = resolveTaskProjectId(task, projects);
+  const taskName = String(task.TÊN_DỰ_ÁN || '').trim();
+
+  for (const ref of assigned) {
+    const token = String(ref || '').trim();
+    if (!token) continue;
+    if (projectId && token === projectId) return true;
+    if (taskName && (token === taskName || namesMatch(token, taskName))) return true;
+
+    const proj = projects.find(
+      (p) =>
+        String(p.id || p.PROJECT_ID || '').trim() === token ||
+        String(p.name || p.TÊN_DỰ_ÁN || '').trim() === token
+    );
+    if (!proj) continue;
+    const pid = String(proj.id || proj.PROJECT_ID || '').trim();
+    const pname = String(proj.name || proj.TÊN_DỰ_ÁN || '').trim();
+    if (projectId && pid === projectId) return true;
+    if (taskName && pname === taskName) return true;
+  }
+  return false;
+}
+
 function isOfficeTask(task, projects = []) {
   const container = normalizeContainer(task?.BỘ_CHỨA);
   const projectName = normalizeContainer(task?.TÊN_DỰ_ÁN);
@@ -108,8 +136,7 @@ export function canEditTask(user, task, context = {}) {
 
   if (isProjectEditorRole(user?.role)) {
     const { projects = [] } = context;
-    const projectId = resolveTaskProjectId(task, projects);
-    if (projectId && isAssignedToProject(user, projectId)) return true;
+    if (isUserAssignedToTaskProject(user, task, projects)) return true;
     if (isOfficeTask(task, projects) && canCreateTask(user)) return true;
   }
 

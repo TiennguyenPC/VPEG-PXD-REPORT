@@ -2190,11 +2190,35 @@ function canEditTask_(session, payload) {
 
   if (isProjectEditorRole_(session.role)) {
     var ss = getSpreadsheet();
-    var projectId = resolveTaskProjectId_(payload, ss);
-    if (projectId && isAssignedToProject_(session, projectId)) return true;
+    if (isUserAssignedToTaskProject_(session, payload, ss)) return true;
     if (isOfficeTask_(payload, ss)) return true;
   }
 
+  return false;
+}
+
+function isUserAssignedToTaskProject_(session, payload, ss) {
+  var assigned = session.assignedProjects || [];
+  if (!assigned.length || !payload) return false;
+
+  var projectId = resolveTaskProjectId_(payload, ss);
+  var taskName = String(payload.TÊN_DỰ_ÁN || '').trim();
+  var projects = ss ? getSheetDataAsObjects(ss, 'PROJECT_MASTER') : [];
+
+  for (var i = 0; i < assigned.length; i++) {
+    var token = String(assigned[i] || '').trim();
+    if (!token) continue;
+    if (projectId && token === projectId) return true;
+    if (taskName && (token === taskName || namesMatch_(token, taskName))) return true;
+
+    for (var j = 0; j < projects.length; j++) {
+      var pid = String(projects[j].PROJECT_ID || '');
+      var pname = String(projects[j].TÊN_DỰ_ÁN || '');
+      if (token !== pid && token !== pname) continue;
+      if (projectId && pid === projectId) return true;
+      if (taskName && pname === taskName) return true;
+    }
+  }
   return false;
 }
 

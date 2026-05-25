@@ -14,7 +14,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import DateInputDMY from '../components/DateInputDMY';
 import { updateDashboardContext } from '../utils/dashboardContext';
-import { getTaskDescription, isSameTask, UI_ONLY_TASK_FIELDS, enrichTaskForUI, applyTaskFieldUpdate } from '../utils/taskFields';
+import { getTaskDescription, isSameTask, UI_ONLY_TASK_FIELDS, enrichTaskForUI, applyTaskFieldUpdate, buildAssigneeOptionList, enrichTaskProjectIds } from '../utils/taskFields';
 import AssigneeDisplay from '../components/AssigneeDisplay';
 import AssigneeSelect from '../components/AssigneeSelect';
 import { compareDateStrings, normalizeToDMY } from '../utils/timelineDates';
@@ -190,6 +190,11 @@ export default function TaskList() {
 
   const taskContext = useMemo(() => ({ projects }), [projects]);
 
+  const assigneeOptions = useMemo(
+    () => buildAssigneeOptionList(employees, tasks, [user?.displayName]),
+    [employees, tasks, user?.displayName]
+  );
+
   const isDraftEditable = draftTask
     ? canEditTask(user, taskMatchRef.current || draftTask, taskContext)
     : false;
@@ -241,7 +246,9 @@ export default function TaskList() {
   const persistTaskUpdate = useCallback(async (originalTask, updatedTask) => {
     try {
       setTaskSaveError(null);
-      const data = await api.updateTask(updatedTask, originalTask);
+      const withProject = enrichTaskProjectIds(updatedTask, projects);
+      const originalWithProject = enrichTaskProjectIds(originalTask, projects);
+      const data = await api.updateTask(withProject, originalWithProject);
       setTasks(data || []);
       const synced = (data || []).find(t => t._rowIndex === updatedTask._rowIndex)
         || (data || []).find(t => isSameTask(t, updatedTask));
@@ -256,7 +263,7 @@ export default function TaskList() {
       console.error(err);
       setTaskSaveError(err.message || 'Không lưu được lên Google Sheet');
     }
-  }, []);
+  }, [projects]);
 
   const closeTaskDetail = useCallback(() => {
     clearTimeout(saveTimerRef.current);
@@ -580,7 +587,7 @@ export default function TaskList() {
                             <AssigneeSelect
                               value={task.NHÂN_SỰ}
                               onChange={(val) => handleTaskUpdate(task, 'NHÂN_SỰ', val)}
-                              employees={employees}
+                              options={assigneeOptions}
                               variant="dark"
                             />
                           ) : (
@@ -1120,16 +1127,13 @@ export default function TaskList() {
                 )}
                 <div>
                   <label className="text-xs text-slate-400 font-bold uppercase mb-1 block">Nhân sự</label>
-                  <select 
-                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] rounded p-2 text-white text-xs focus:border-[#5252ff] outline-none"
+                  <AssigneeSelect
                     value={newTask.NHÂN_SỰ}
-                    onChange={e => setNewTask({ ...newTask, NHÂN_SỰ: e.target.value })}
-                  >
-                    <option value="">-- Chọn --</option>
-                    {employees.map((emp, i) => (
-                      <option key={i} value={emp.NAME || emp.name}>{emp.NAME || emp.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setNewTask({ ...newTask, NHÂN_SỰ: val })}
+                    options={assigneeOptions}
+                    variant="dark"
+                    className="w-full"
+                  />
                 </div>
               </div>
 
@@ -1296,7 +1300,7 @@ export default function TaskList() {
                     <AssigneeSelect
                       value={draftTask.NHÂN_SỰ}
                       onChange={(val) => handleTaskUpdate(draftTask, 'NHÂN_SỰ', val)}
-                      employees={employees}
+                      options={assigneeOptions}
                       variant="light"
                       className="flex-1"
                     />
@@ -1388,7 +1392,7 @@ export default function TaskList() {
                     <AssigneeSelect
                       value={draftTask.NHÂN_SỰ}
                       onChange={(val) => handleTaskUpdate(draftTask, 'NHÂN_SỰ', val)}
-                      employees={employees}
+                      options={assigneeOptions}
                       variant="light"
                     />
                   ) : (
