@@ -31,11 +31,11 @@ export function getRiskSeverityStyle(level) {
   const n = normalizeRiskSeverity(level);
   switch (n) {
     case 'Cao':
-      return 'text-red-700 bg-red-100 border-red-300 dark:text-red-300 dark:bg-red-500/15 dark:border-red-500/40';
+      return 'text-red-800 bg-red-200 border-red-400 dark:text-red-300 dark:bg-red-500/20 dark:border-red-500/40';
     case 'Trung bình':
-      return 'text-amber-800 bg-amber-100 border-amber-300 dark:text-orange-300 dark:bg-orange-500/15 dark:border-orange-500/40';
+      return 'text-amber-900 bg-amber-200 border-amber-400 dark:text-orange-300 dark:bg-orange-500/20 dark:border-orange-500/40';
     case 'Thấp':
-      return 'text-emerald-800 bg-emerald-100 border-emerald-300 dark:text-emerald-300 dark:bg-emerald-500/15 dark:border-emerald-500/40';
+      return 'text-emerald-900 bg-emerald-200 border-emerald-400 dark:text-emerald-300 dark:bg-emerald-500/20 dark:border-emerald-500/40';
     default:
       return 'text-slate-600 bg-slate-100 border-slate-300 dark:text-slate-400 dark:bg-slate-500/10 dark:border-slate-500/25';
   }

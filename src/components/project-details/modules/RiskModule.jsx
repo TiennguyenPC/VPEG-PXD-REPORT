@@ -9,7 +9,6 @@ import {
   normalizeRiskSeverity,
   normalizeRiskStatus,
   getRiskSeverityStyle,
-  getRiskSeverityRowAccent,
   getRiskStatusStyle,
 } from '../../../utils/riskHelpers';
 
@@ -194,26 +193,29 @@ export default function RiskModule({ project, initialData }) {
                       {risks.map((r) => {
                         const severity = normalizeRiskSeverity(r.MỨC_ĐỘ) || 'Trung bình';
                         const status = normalizeRiskStatus(r.TRẠNG_THÁI);
-                        const rowAccent = getRiskSeverityRowAccent(severity);
                         const isClosed = status === 'Đã đóng';
+                        const selectDisabled = !canEdit || isUpdating;
 
                         return (
                           <tr
                             key={r._rowIndex || r.id}
-                            className={`border-l-4 ${rowAccent} hover:bg-[var(--bg-panel)]/60 transition-colors ${isClosed ? 'opacity-70' : ''}`}
+                            className={`hover:bg-[var(--bg-panel)]/60 transition-colors ${isClosed ? 'opacity-70' : ''}`}
                           >
                             <td className="p-3">
-                              <select
-                                className={`w-full min-w-[6.5rem] text-xs font-bold focus:outline-none appearance-none cursor-pointer px-2.5 py-1 rounded-md border ${getRiskSeverityStyle(severity)} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
-                                value={severity}
-                                onChange={(e) => handleUpdate(r._rowIndex || r.id, 'MỨC_ĐỘ', e.target.value)}
-                              >
-                                {SEVERITY_OPTIONS.map((opt) => (
-                                  <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
-                                    {opt}
-                                  </option>
-                                ))}
-                              </select>
+                              <div className={`relative inline-flex items-center rounded-md border ${getRiskSeverityStyle(severity)}`}>
+                                <select
+                                  className={`relative z-10 min-w-[6.5rem] appearance-none bg-transparent text-inherit text-xs font-bold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
+                                  value={severity}
+                                  onChange={(e) => handleUpdate(r._rowIndex || r.id, 'MỨC_ĐỘ', e.target.value)}
+                                >
+                                  {SEVERITY_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
+                                      {opt}
+                                    </option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-50" />
+                              </div>
                             </td>
                             <td className="p-3">
                               <input
@@ -242,17 +244,20 @@ export default function RiskModule({ project, initialData }) {
                               />
                             </td>
                             <td className="p-3">
-                              <select
-                                className={`w-full min-w-[6.5rem] text-xs font-bold focus:outline-none appearance-none cursor-pointer px-2.5 py-1 rounded-md border ${getRiskStatusStyle(status)} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
-                                value={status}
-                                onChange={(e) => handleUpdate(r._rowIndex || r.id, 'TRẠNG_THÁI', e.target.value)}
-                              >
-                                {STATUS_OPTIONS.map((opt) => (
-                                  <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
-                                    {opt}
-                                  </option>
-                                ))}
-                              </select>
+                              <div className={`relative inline-flex items-center rounded-md border ${getRiskStatusStyle(status)}`}>
+                                <select
+                                  className={`relative z-10 min-w-[6.5rem] appearance-none bg-transparent text-inherit text-xs font-bold px-2.5 py-1 pr-7 focus:outline-none cursor-pointer border-0 ${selectDisabled ? 'opacity-50 pointer-events-none' : ''}`}
+                                  value={status}
+                                  onChange={(e) => handleUpdate(r._rowIndex || r.id, 'TRẠNG_THÁI', e.target.value)}
+                                >
+                                  {STATUS_OPTIONS.map((opt) => (
+                                    <option key={opt} value={opt} className="bg-[var(--bg-panel)] text-[var(--text-main)]">
+                                      {opt}
+                                    </option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none opacity-50" />
+                              </div>
                             </td>
                             <td className="p-3">
                               <input
