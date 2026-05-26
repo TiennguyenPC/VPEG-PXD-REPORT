@@ -652,8 +652,10 @@ export default function App() {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-mobile-nav">
         
+        {/* Mobile: cố định tiêu đề + tìm kiếm/bộ lọc khi scroll */}
+        <div className="max-md:sticky max-md:top-0 max-md:z-40 max-md:bg-[var(--bg-main)] max-md:backdrop-blur-md max-md:border-b max-md:border-[var(--border-main)]/50 max-md:shadow-sm">
         {/* 2. TOP HEADER */}
-        <header className="px-4 md:px-6 pt-3 pb-2 border-b border-[var(--border-main)]/30 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-[var(--bg-panel)]/60 backdrop-blur-md max-md:mobile-header-offset">
+        <header className="max-md:mobile-page-x md:px-6 pt-3 pb-2 border-b border-[var(--border-main)]/30 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-[var(--bg-panel)]/60 backdrop-blur-md max-md:mobile-header-offset md:border-b-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="min-w-0">
               <h1 className="text-base md:text-lg font-bold text-[var(--text-strong)] tracking-tight">DANH SÁCH DỰ ÁN</h1>
@@ -681,13 +683,13 @@ export default function App() {
         </header>
 
         {/* 3. SEARCH + FILTER BAR */}
-        <section className="px-4 md:px-6 py-2 flex flex-col gap-2 md:flex-row md:justify-between md:items-center bg-[var(--bg-main)] relative z-20 border-b border-[var(--border-main)]/20">
+        <section className="max-md:mobile-page-x md:px-6 py-2 flex flex-col gap-2 md:flex-row md:justify-between md:items-center bg-[var(--bg-main)] relative z-20 border-b border-[var(--border-main)]/20">
           
           {/* Left: Search input + Filter button */}
-          <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
+          <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto min-w-0">
             
             {/* Search Input */}
-            <div className="relative">
+            <div className="relative flex-1 min-w-0">
               <input
                 type="text"
                 value={searchTerm}
@@ -823,32 +825,33 @@ export default function App() {
             Hiển thị <span className="text-white font-semibold">{processedProjects.length}</span> dự án phù hợp
           </div>
         </section>
+        </div>
 
         {/* 4. KPI SUMMARY CARDS */}
-        <section className="px-4 md:px-6 py-1.5 grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3 bg-[var(--bg-main)]">
+        <section className="max-md:mobile-page-x md:px-6 py-1.5 grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 bg-[var(--bg-main)]">
           
           {/* Card 1: Total projects */}
-          <div className="glass-panel rounded-lg p-3 flex items-center gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
-            <div className="w-10 h-10 rounded-lg bg-[rgba(82,82,255,0.1)] text-[#5252ff] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(82,82,255,0.2)]">
-              <Folder className="w-4.5 h-4.5 text-[#5252ff]" />
+          <div className="glass-panel rounded-lg p-2.5 md:p-3 flex items-start gap-2 md:gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group min-w-0">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-[rgba(82,82,255,0.1)] text-[#5252ff] flex items-center justify-center shrink-0 border border-[rgba(82,82,255,0.2)]">
+              <Folder className="w-4 h-4 text-[#5252ff]" />
             </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG DỰ ÁN</span>
-              <span className="text-xl font-bold text-white mt-0.5 tracking-tight">{kpiStats.total}</span>
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="text-[9px] md:text-[10px] tracking-wide font-bold text-[var(--text-muted)] uppercase leading-snug">TỔNG DỰ ÁN</span>
+              <span className="text-base md:text-xl font-bold text-white mt-0.5 tracking-tight tabular-nums leading-none">{kpiStats.total}</span>
               <span className="text-[10px] text-[#4d5e7a] font-medium mt-0.5">Dự án</span>
             </div>
             <div className="absolute right-0 top-0 bottom-0 w-[4px] bg-[#5252ff]"></div>
           </div>
 
           {/* Card 2: Total capacity */}
-          <div className="glass-panel rounded-lg p-3 flex items-center gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
-            <div className="w-10 h-10 rounded-lg bg-[rgba(59,130,246,0.1)] text-[#3b82f6] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(59,130,246,0.2)]">
-              <Zap className="w-4.5 h-4.5 text-[#3b82f6]" />
+          <div className="glass-panel rounded-lg p-2.5 md:p-3 flex items-start gap-2 md:gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group min-w-0">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-[rgba(59,130,246,0.1)] text-[#3b82f6] flex items-center justify-center shrink-0 border border-[rgba(59,130,246,0.2)]">
+              <Zap className="w-4 h-4 text-[#3b82f6]" />
             </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG CÔNG SUẤT</span>
-              <span className="text-xl font-bold text-white mt-0.5 tracking-tight">
-                {kpiStats.capacity.toLocaleString()} kWp
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="text-[9px] md:text-[10px] tracking-wide font-bold text-[var(--text-muted)] uppercase leading-snug">TỔNG CÔNG SUẤT</span>
+              <span className="text-base md:text-xl font-bold text-white mt-0.5 tracking-tight tabular-nums leading-none">
+                {kpiStats.capacity.toLocaleString()}
               </span>
               <span className="text-[10px] text-[#4d5e7a] font-medium mt-0.5">kWp</span>
             </div>
@@ -856,26 +859,26 @@ export default function App() {
           </div>
 
           {/* Card 3: In construction */}
-          <div className="glass-panel rounded-lg p-3 flex items-center gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
-            <div className="w-10 h-10 rounded-lg bg-[rgba(249,115,22,0.1)] text-[#f97316] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(249,115,22,0.2)]">
-              <HardHat className="w-4.5 h-4.5 text-[#f97316]" />
+          <div className="glass-panel rounded-lg p-2.5 md:p-3 flex items-start gap-2 md:gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group min-w-0">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-[rgba(249,115,22,0.1)] text-[#f97316] flex items-center justify-center shrink-0 border border-[rgba(249,115,22,0.2)]">
+              <HardHat className="w-4 h-4 text-[#f97316]" />
             </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG DỰ ÁN ĐANG THI CÔNG</span>
-              <span className="text-xl font-bold text-white mt-0.5 tracking-tight">{kpiStats.active}</span>
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="text-[9px] md:text-[10px] tracking-wide font-bold text-[var(--text-muted)] uppercase leading-snug">ĐANG THI CÔNG</span>
+              <span className="text-base md:text-xl font-bold text-white mt-0.5 tracking-tight tabular-nums leading-none">{kpiStats.active}</span>
               <span className="text-[10px] text-[#4d5e7a] font-medium mt-0.5">Dự án</span>
             </div>
             <div className="absolute right-0 top-0 bottom-0 w-[4px] bg-[#f97316]"></div>
           </div>
 
           {/* Card 4: Completed */}
-          <div className="glass-panel rounded-lg p-3 flex items-center gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
-            <div className="w-10 h-10 rounded-lg bg-[rgba(16,185,129,0.1)] text-[#10b981] flex items-center justify-center transition-all group-hover:scale-105 border border-[rgba(16,185,129,0.2)]">
-              <CheckCircle2 className="w-4.5 h-4.5 text-[#10b981]" />
+          <div className="glass-panel rounded-lg p-2.5 md:p-3 flex items-start gap-2 md:gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group min-w-0">
+            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-[rgba(16,185,129,0.1)] text-[#10b981] flex items-center justify-center shrink-0 border border-[rgba(16,185,129,0.2)]">
+              <CheckCircle2 className="w-4 h-4 text-[#10b981]" />
             </div>
-            <div className="flex flex-col">
-              <span className="text-[10px] tracking-wider font-bold text-[var(--text-muted)] uppercase">TỔNG DỰ ÁN HOÀN THÀNH</span>
-              <span className="text-xl font-bold text-white mt-0.5 tracking-tight">{kpiStats.completed}</span>
+            <div className="flex flex-col min-w-0 flex-1">
+              <span className="text-[9px] md:text-[10px] tracking-wide font-bold text-[var(--text-muted)] uppercase leading-snug">HOÀN THÀNH</span>
+              <span className="text-base md:text-xl font-bold text-white mt-0.5 tracking-tight tabular-nums leading-none">{kpiStats.completed}</span>
               <span className="text-[10px] text-[#4d5e7a] font-medium mt-0.5">Dự án</span>
             </div>
             <div className="absolute right-0 top-0 bottom-0 w-[4px] bg-[#10b981]"></div>
@@ -883,7 +886,7 @@ export default function App() {
         </section>
 
         {/* 5. PROJECT TABLE SECTION */}
-        <section className="px-4 md:px-6 py-3 bg-[var(--bg-main)] flex-1 mobile-content-compact">
+        <section className="max-md:mobile-page-x md:px-6 py-3 bg-[var(--bg-main)] flex-1 mobile-content-compact">
           {/* Table Header Section */}
           <div className="mb-2 flex justify-between items-center">
             <h2 className="text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider flex items-center gap-2">

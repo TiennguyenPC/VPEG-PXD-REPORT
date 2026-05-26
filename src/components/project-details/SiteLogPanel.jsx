@@ -501,8 +501,8 @@ export default function SiteLogPanel({
   return (
     <div className="glass-panel p-4 md:p-5 rounded-xl shadow-lg border border-[var(--border-main)]">
       
-      {/* Header and Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+      {/* Header and Tabs — ẩn trên mobile khi đang sửa để form chiếm tối đa chiều cao */}
+      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3 ${isEditing ? 'max-md:hidden' : ''}`}>
         <div className="flex items-start gap-3">
           <div className="w-1 h-10 rounded-full bg-gradient-to-b from-[#5252ff] via-cyan-400 to-emerald-400 shadow-[0_0_18px_rgba(82,82,255,0.45)]"></div>
           <div>
@@ -525,7 +525,7 @@ export default function SiteLogPanel({
                   type="button"
                   onClick={handleCancelEdit}
                   disabled={saveStatus === 'Saving...'}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all disabled:opacity-50"
+                  className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all disabled:opacity-50"
                 >
                   <X className="w-3.5 h-3.5" /> Hủy
                 </button>
@@ -533,7 +533,7 @@ export default function SiteLogPanel({
                   type="button"
                   onClick={handleSaveEdit}
                   disabled={saveStatus === 'Saving...'}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg bg-[#5252ff] hover:bg-[#4040ff] text-white transition-all disabled:opacity-50"
+                  className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg bg-[#5252ff] hover:bg-[#4040ff] text-white transition-all disabled:opacity-50"
                 >
                   <Check className="w-3.5 h-3.5" /> Lưu ngay
                 </button>
@@ -571,8 +571,8 @@ export default function SiteLogPanel({
         </div>
       </div>
 
-      {/* Traversal Navigation Bar */}
-      <div className="flex items-center gap-2 bg-[var(--bg-panel)] border border-[var(--border-main)] p-2 rounded-lg mb-3 justify-between">
+      {/* Traversal Navigation Bar — mobile: chỉ giữ cố định thanh chọn ngày (từ đây trở lên là tab section nav) */}
+      <div className={`flex items-center gap-2 bg-[var(--bg-panel)] border border-[var(--border-main)] p-2 rounded-lg mb-3 justify-between max-md:sticky max-md:top-11 max-md:z-20 max-md:bg-[var(--bg-main)]/95 max-md:backdrop-blur-md max-md:shadow-sm ${isEditing ? 'max-md:mb-2' : ''}`}>
         <button
           onClick={handlePrev}
           disabled={isPrevDisabled()}
@@ -682,8 +682,8 @@ export default function SiteLogPanel({
 
             if (isEditing && editData) {
               return (
-                <div className="bg-[var(--bg-panel)]/80 border border-[var(--border-main)] rounded-xl p-5 mb-4 space-y-4">
-                  <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-3 gap-3">
+                <div className="bg-[var(--bg-panel)]/80 border border-[var(--border-main)] rounded-xl p-4 md:p-5 mb-4 space-y-4 max-md:pb-24">
+                  <div className="hidden md:flex items-center justify-between border-b border-[var(--border-main)] pb-3 gap-3">
                     <div>
                       <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
                         📝 Chỉnh sửa nhật ký ngày {selectedDate}
@@ -926,6 +926,25 @@ export default function SiteLogPanel({
                         placeholder="Nhập vấn đề/rủi ro hoặc bỏ trống nếu không có..."
                       />
                     </div>
+                  </div>
+
+                  <div className="md:hidden flex items-center gap-2 pt-3 mt-1 border-t border-[var(--border-main)]">
+                    <button
+                      type="button"
+                      onClick={handleCancelEdit}
+                      disabled={saveStatus === 'Saving...'}
+                      className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all disabled:opacity-50"
+                    >
+                      <X className="w-4 h-4" /> Hủy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveEdit}
+                      disabled={saveStatus === 'Saving...'}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 px-4 py-2.5 text-xs font-bold rounded-lg bg-[#5252ff] hover:bg-[#4040ff] text-white transition-all disabled:opacity-50"
+                    >
+                      <Check className="w-4 h-4" /> Lưu ngay
+                    </button>
                   </div>
                 </div>
               );

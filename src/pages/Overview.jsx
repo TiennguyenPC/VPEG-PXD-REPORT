@@ -28,7 +28,7 @@ const KPI_CARDS = [
     label: 'Tổng công suất',
     icon: Zap,
     accent: 'from-[#5252ff]/20 to-transparent',
-    iconBg: 'bg-[#5252ff]/15 text-[#7373ff]',
+    iconBg: 'bg-[#5252ff]/20 text-[#5252ff] ring-1 ring-[#5252ff]/35',
     borderHover: 'hover:border-[#5252ff]/40',
     glow: 'shadow-[0_0_24px_-8px_rgba(82,82,255,0.35)]',
   },
@@ -405,23 +405,25 @@ export default function Overview() {
               const Icon = card.icon;
               const data = kpiValues[card.key];
               const isNavCard = Boolean(card.scrollTarget);
-              const cardClass = `group relative overflow-hidden rounded-xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] p-2.5 md:p-3 transition-all duration-300 ${card.borderHover} md:hover:-translate-y-0.5 ${card.glow} ${isNavCard ? 'cursor-pointer text-left w-full' : ''}`;
+              const cardClass = `group relative overflow-hidden rounded-xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] p-2.5 md:p-3 transition-all duration-300 ${card.borderHover} md:hover:-translate-y-0.5 ${card.glow} ${isNavCard ? 'cursor-pointer' : ''}`;
 
               const cardBody = (
                 <>
                   <div className={`absolute inset-0 bg-gradient-to-br ${card.accent} opacity-80`} />
-                  <div className="relative flex justify-between items-start gap-2">
-                    <div>
-                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                  <div className="relative flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1 leading-snug">
                         {card.label}
                       </p>
-                      <p className="text-lg md:text-xl font-black text-[var(--text-strong)] tabular-nums tracking-tight">
+                      <p className="text-base md:text-xl font-black text-[var(--text-strong)] tabular-nums tracking-tight leading-none">
                         {data.value}
-                        <span className="text-xs font-semibold text-slate-500 ml-1.5">{data.unit}</span>
+                      </p>
+                      <p className="text-[11px] font-semibold text-slate-500 mt-0.5 leading-snug">
+                        {data.unit}
                       </p>
                     </div>
-                    <div className={`p-2 rounded-lg ${card.iconBg} shrink-0`}>
-                      <Icon className="w-4 h-4" />
+                    <div className={`relative z-10 p-2 rounded-lg ${card.iconBg} shrink-0`}>
+                      <Icon className="w-4 h-4" strokeWidth={2.25} />
                     </div>
                   </div>
                 </>
@@ -429,15 +431,22 @@ export default function Overview() {
 
               if (isNavCard) {
                 return (
-                  <button
+                  <div
                     key={card.key}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => scrollToOverviewSection(card.scrollTarget)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        scrollToOverviewSection(card.scrollTarget);
+                      }
+                    }}
                     className={cardClass}
                     title={card.scrollTarget === 'risk' ? 'Xem rủi ro nổi bật' : 'Xem công việc quan trọng'}
                   >
                     {cardBody}
-                  </button>
+                  </div>
                 );
               }
 

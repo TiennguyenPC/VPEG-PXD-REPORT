@@ -481,8 +481,8 @@ export default function TaskList() {
       {/* CONTENT AREA */}
       <div className="flex-1 overflow-y-auto bg-[var(--bg-main)] p-4 md:p-6 pt-0 max-md:pb-28 mobile-content-compact">
         
-        {/* CONTROLS (Row 2) */}
-        <div className="sticky top-0 z-40 -mx-4 md:-mx-6 mb-3 space-y-2 bg-[var(--bg-main)] px-4 md:px-6 pt-2 pb-1.5 border-b border-[var(--border-main)]/60 shadow-sm">
+        {/* CONTROLS — mobile: chỉ cố định tab + tìm kiếm */}
+        <div className="max-md:sticky max-md:top-0 z-40 -mx-4 md:-mx-6 mb-3 space-y-2 bg-[var(--bg-main)] px-4 md:px-6 pt-2 pb-1.5 border-b border-[var(--border-main)]/60 max-md:shadow-sm">
         <div className="flex flex-col gap-2 md:flex-row md:justify-between md:items-center">
           <div className="flex bg-[var(--bg-panel)] p-1 rounded-md border border-[var(--border-main)] shadow-sm overflow-x-auto max-w-full">
             <button 
@@ -573,9 +573,10 @@ export default function TaskList() {
             </button>
           )}
         </div>
+        </div>
 
-        {/* STAT CARDS (Row 3) */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-0 rounded-xl overflow-hidden border border-[var(--border-main)] bg-[var(--bg-panel)] shadow-sm max-md:scale-[0.97] max-md:origin-top">
+        {/* STAT CARDS — scroll cùng nội dung, không sticky */}
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-0 rounded-xl overflow-hidden border border-[var(--border-main)] bg-[var(--bg-panel)] shadow-sm mb-3 max-md:scale-[0.97] max-md:origin-top">
           <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
             <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#5252ff] shrink-0">
               <ClipboardList className="w-3.5 h-3.5" />
@@ -662,8 +663,6 @@ export default function TaskList() {
             </div>
           </div>
         )}
-        </div>
-
         {isLoading ? (
           <div className="flex justify-center py-12 text-slate-400 text-sm">Đang tải công việc...</div>
         ) : (

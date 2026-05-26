@@ -58,7 +58,12 @@
     /* Chỉ offset tiêu đề — không lệch lưới KPI / nội dung full-width */
     .mobile-header-offset {
       padding-right: 4.5rem;
-      padding-left: 0;
+      padding-left: 1.25rem;
+    }
+
+    .mobile-page-x {
+      padding-left: 1.25rem;
+      padding-right: 1rem;
     }
   }
 }
