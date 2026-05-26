@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   AlertTriangle,
+  Zap,
   CheckCircle2,
+  Briefcase,
   FileText,
   ChevronDown,
   Calendar,
@@ -21,6 +23,24 @@ import OverviewProgressMobile from '../components/mobile/OverviewProgressMobile'
 import OverviewRiskMobile from '../components/mobile/OverviewRiskMobile';
 
 const KPI_CARDS = [
+  {
+    key: 'capacity',
+    label: 'Tổng công suất',
+    icon: Zap,
+    accent: 'from-[#5252ff]/20 to-transparent',
+    iconBg: 'bg-[#5252ff]/15 text-[#7373ff]',
+    borderHover: 'hover:border-[#5252ff]/40',
+    glow: 'shadow-[0_0_24px_-8px_rgba(82,82,255,0.35)]',
+  },
+  {
+    key: 'active',
+    label: 'Đang thi công',
+    icon: Briefcase,
+    accent: 'from-teal-500/15 to-transparent',
+    iconBg: 'bg-teal-500/15 text-teal-400',
+    borderHover: 'hover:border-teal-500/40',
+    glow: 'shadow-[0_0_24px_-8px_rgba(20,184,166,0.25)]',
+  },
   {
     key: 'risk',
     label: 'Risk cần xử lý',
@@ -240,6 +260,11 @@ export default function Overview() {
 
   const enrichedTasks = useMemo(() => tasks.map(enrichTaskForUI), [tasks]);
 
+  const totalCapacity = useMemo(
+    () => enrichedProjects.reduce((sum, p) => sum + (Number(p.capacity) || 0), 0),
+    [enrichedProjects]
+  );
+
   const activeProjects = useMemo(() => enrichedProjects.filter((p) => {
     const s = (p.status || '').toUpperCase();
     return s !== 'ĐÃ HOÀN THÀNH' && s !== 'HOÀN THÀNH' && s !== 'COMPLETED';
@@ -260,9 +285,11 @@ export default function Overview() {
   }), [enrichedTasks]);
 
   const kpiValues = useMemo(() => ({
+    capacity: { value: totalCapacity.toLocaleString(), unit: 'kWp' },
+    active: { value: activeProjects.length, unit: 'Dự án' },
     risk: { value: riskCount, unit: 'Vấn đề' },
     tasks: { value: importantTasks.length, unit: 'Công việc' },
-  }), [riskCount, importantTasks.length]);
+  }), [totalCapacity, activeProjects.length, riskCount, importantTasks.length]);
 
   const kanbanTasks = useMemo(() => enrichedTasks.filter((t) => {
     const p = (t.ƯU_TIÊN || '').toUpperCase();
@@ -373,7 +400,7 @@ export default function Overview() {
         </header>
 
           {/* KPI row */}
-          <div className="grid grid-cols-2 gap-2.5 md:gap-3 mt-3 w-full min-w-0">
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5 md:gap-3 mt-3 w-full min-w-0">
             {KPI_CARDS.map((card) => {
               const Icon = card.icon;
               const data = kpiValues[card.key];
