@@ -1,14 +1,11 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   AlertTriangle,
-  Zap,
   CheckCircle2,
-  Briefcase,
   FileText,
   ChevronDown,
   Calendar,
   ArrowUpRight,
-  ArrowRight,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
@@ -20,26 +17,10 @@ import AssigneeDisplay from '../components/AssigneeDisplay';
 import { enrichProjectsProgress } from '../utils/projectProgress';
 import { buildOverviewRiskRows } from '../utils/riskHelpers';
 import { parseFlexibleDate } from '../utils/timelineDates';
+import OverviewProgressMobile from '../components/mobile/OverviewProgressMobile';
+import OverviewRiskMobile from '../components/mobile/OverviewRiskMobile';
 
 const KPI_CARDS = [
-  {
-    key: 'capacity',
-    label: 'Tổng công suất Site',
-    icon: Zap,
-    accent: 'from-[#5252ff]/20 to-transparent',
-    iconBg: 'bg-[#5252ff]/15 text-[#7373ff]',
-    borderHover: 'hover:border-[#5252ff]/40',
-    glow: 'shadow-[0_0_24px_-8px_rgba(82,82,255,0.35)]',
-  },
-  {
-    key: 'active',
-    label: 'Dự án đang thi công',
-    icon: Briefcase,
-    accent: 'from-teal-500/15 to-transparent',
-    iconBg: 'bg-teal-500/15 text-teal-400',
-    borderHover: 'hover:border-teal-500/40',
-    glow: 'shadow-[0_0_24px_-8px_rgba(20,184,166,0.25)]',
-  },
   {
     key: 'risk',
     label: 'Risk cần xử lý',
@@ -62,7 +43,7 @@ const KPI_CARDS = [
   },
 ];
 
-function PanelCard({ title, action, children, className = '', centerTitle = false }) {
+function PanelCard({ title, subtitle, action, children, className = '', centerTitle = false }) {
   return (
     <div
       className={`rounded-2xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)]/90 backdrop-blur-sm overflow-hidden flex flex-col shadow-lg shadow-black/20 min-w-0 ${className}`}
@@ -72,10 +53,15 @@ function PanelCard({ title, action, children, className = '', centerTitle = fals
           centerTitle ? 'relative flex items-center justify-center' : 'flex justify-between items-center gap-3'
         }`}
       >
-        <h3 className={`text-sm font-bold text-[var(--text-strong)] tracking-wide ${centerTitle ? 'text-center' : 'truncate'}`}>
-          {title}
-        </h3>
-        {action ? <div className={centerTitle ? 'absolute right-4 top-1/2 -translate-y-1/2' : ''}>{action}</div> : null}
+        <div className={`min-w-0 ${centerTitle ? 'text-center' : ''}`}>
+          <h3 className={`text-sm font-bold text-[var(--text-strong)] tracking-wide ${centerTitle ? 'text-center' : 'truncate'}`}>
+            {title}
+          </h3>
+          {subtitle ? (
+            <p className={`text-[10px] text-slate-500 mt-0.5 ${centerTitle ? 'text-center' : 'truncate'}`}>{subtitle}</p>
+          ) : null}
+        </div>
+        {action ? <div className={`shrink-0 ${centerTitle ? 'absolute right-4 top-1/2 -translate-y-1/2' : ''}`}>{action}</div> : null}
       </div>
       {children}
     </div>
@@ -106,8 +92,8 @@ function CellText({ children, className = '', title }) {
 
 const KANBAN_COLUMNS = [
   { key: 'overdue', label: 'Quá hạn', dot: 'bg-red-500', text: 'text-red-400', dateText: 'text-red-400' },
-  { key: 'today', label: 'Hôm nay', dot: 'bg-amber-400', text: 'text-amber-400', dateText: 'text-amber-400' },
-  { key: 'upcoming', label: 'Sắp tới', dot: 'bg-blue-500', text: 'text-blue-400', dateText: 'text-blue-400' },
+  { key: 'today', label: 'Hạn hôm nay', dot: 'bg-amber-400', text: 'text-amber-400', dateText: 'text-amber-400' },
+  { key: 'upcoming', label: 'Sắp đến hạn', dot: 'bg-blue-500', text: 'text-blue-400', dateText: 'text-blue-400' },
   { key: 'completed', label: 'Hoàn thành', dot: 'bg-emerald-500', text: 'text-emerald-400', dateText: 'text-emerald-400' },
 ];
 
@@ -137,14 +123,16 @@ function TaskKanbanCard({ task, column, onClick }) {
   const assigneeLabel = assigneeList.length <= 1
     ? (assigneeList[0] || null)
     : formatAssigneeDisplay(assigneeFull);
-  const dueLabel = formatShortDueDate(task.NGÀY_KẾT_THÚC_LOCAL || task.NGÀY_KẾT_THÚC);
+  const dueRaw = task.NGÀY_KẾT_THÚC_LOCAL || task.NGÀY_KẾT_THÚC;
+  const dueShort = formatShortDueDate(dueRaw);
+  const dueLabel = dueShort === '—' ? dueShort : `Hạn ${dueShort}`;
   const metaLine = assigneeLabel ? `${projectLabel} - ${assigneeLabel}` : projectLabel;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex-1 min-w-[120px] max-w-full text-left rounded-lg border border-[var(--border-main)]/70 bg-[var(--bg-main)]/40 hover:bg-[var(--bg-hover)]/60 hover:border-[var(--border-main)] transition-colors p-2.5 flex flex-col gap-1.5"
+      className="w-full text-left rounded-lg border border-[var(--border-main)]/70 bg-[var(--bg-main)]/40 hover:bg-[var(--bg-hover)]/60 hover:border-[var(--border-main)] transition-colors p-2.5 flex flex-col gap-1.5"
     >
       <div
         className="text-[10px] text-slate-500 uppercase tracking-wide truncate"
@@ -163,7 +151,10 @@ function TaskKanbanCard({ task, column, onClick }) {
             {task.TÁC_VỤ}
           </span>
         </div>
-        <span className={`text-[10px] font-semibold tabular-nums shrink-0 pt-0.5 ${column.dateText}`}>
+        <span
+          className={`text-[10px] font-semibold tabular-nums shrink-0 pt-0.5 ${column.dateText}`}
+          title={dueRaw ? `Hạn hoàn thành: ${dueRaw}` : undefined}
+        >
           {dueLabel}
         </span>
       </div>
@@ -249,11 +240,6 @@ export default function Overview() {
 
   const enrichedTasks = useMemo(() => tasks.map(enrichTaskForUI), [tasks]);
 
-  const totalCapacity = useMemo(
-    () => enrichedProjects.reduce((sum, p) => sum + (Number(p.capacity) || 0), 0),
-    [enrichedProjects]
-  );
-
   const activeProjects = useMemo(() => enrichedProjects.filter((p) => {
     const s = (p.status || '').toUpperCase();
     return s !== 'ĐÃ HOÀN THÀNH' && s !== 'HOÀN THÀNH' && s !== 'COMPLETED';
@@ -272,6 +258,11 @@ export default function Overview() {
     const p = (t.ƯU_TIÊN || '').toUpperCase();
     return p !== 'THẤP' && p !== 'LOW' && p !== '';
   }), [enrichedTasks]);
+
+  const kpiValues = useMemo(() => ({
+    risk: { value: riskCount, unit: 'Vấn đề' },
+    tasks: { value: importantTasks.length, unit: 'Công việc' },
+  }), [riskCount, importantTasks.length]);
 
   const kanbanTasks = useMemo(() => enrichedTasks.filter((t) => {
     const p = (t.ƯU_TIÊN || '').toUpperCase();
@@ -321,13 +312,6 @@ export default function Overview() {
     return buckets;
   }, [kanbanTasks, priorityWeight]);
 
-  const kpiValues = useMemo(() => ({
-    capacity: { value: totalCapacity.toLocaleString(), unit: 'kWp' },
-    active: { value: activeProjects.length, unit: 'Dự án' },
-    risk: { value: riskCount, unit: 'Vấn đề' },
-    tasks: { value: importantTasks.length, unit: 'Công việc' },
-  }), [totalCapacity, activeProjects.length, riskCount, importantTasks.length]);
-
   const todayLabel = new Date().toLocaleDateString('vi-VN', {
     weekday: 'long',
     day: 'numeric',
@@ -355,46 +339,46 @@ export default function Overview() {
     <div className="min-h-screen flex bg-[var(--bg-main)] text-[var(--text-main)] font-sans">
       <Sidebar activeItem="overview" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto relative">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto relative pb-mobile-nav">
         {/* Ambient background */}
-        <div className="pointer-events-none fixed inset-0 ml-48 overflow-hidden">
+        <div className="pointer-events-none fixed inset-0 md:ml-48 overflow-hidden">
           <div className="absolute -top-32 right-1/4 w-[480px] h-[480px] bg-[#5252ff]/8 rounded-full blur-[100px]" />
           <div className="absolute bottom-0 left-1/3 w-[360px] h-[360px] bg-teal-500/5 rounded-full blur-[90px]" />
         </div>
 
         {isRefreshing && (
-          <div className="absolute top-3 right-6 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-panel)]/90 border border-[var(--border-main)] text-[10px] text-[var(--text-muted)] shadow-sm">
+          <div className="absolute top-3 right-4 md:right-6 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-[var(--bg-panel)]/90 border border-[var(--border-main)] text-[10px] text-[var(--text-muted)] shadow-sm">
             <div className="w-3 h-3 border-2 border-[#5252ff]/30 border-t-[#5252ff] rounded-full animate-spin" />
             Đang cập nhật...
           </div>
         )}
 
-        <div className="relative z-10 px-6 pt-3 pb-2 border-b border-[var(--border-main)]/50 bg-[var(--bg-main)]">
-        <header className="flex justify-between items-center">
-          <div>
+        <div className="relative z-10 px-4 md:px-6 pt-3 pb-2 border-b border-[var(--border-main)]/50 bg-[var(--bg-main)]">
+        <header className="flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center max-md:mobile-header-offset">
+          <div className="min-w-0">
             <p className="text-[10px] font-bold text-[#5252ff] uppercase tracking-[0.2em] mb-0.5">Dashboard PXD</p>
-            <h1 className="text-xl font-black text-[var(--text-strong)] tracking-tight">Tổng quan</h1>
+            <h1 className="text-lg md:text-xl font-black text-[var(--text-strong)] tracking-tight">Tổng quan</h1>
             <p className="text-[11px] text-[var(--text-muted)] mt-0.5 capitalize">{todayLabel}</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
             <button
               type="button"
-              className="flex items-center gap-2 bg-[var(--bg-panel)] border border-[var(--border-main)] hover:border-[#5252ff]/50 px-4 py-2 rounded-lg text-sm text-[var(--text-main)] transition-all shadow-sm"
+              className="flex items-center gap-1.5 md:gap-2 bg-[var(--bg-panel)] border border-[var(--border-main)] hover:border-[#5252ff]/50 px-3 md:px-4 py-1.5 md:py-2 rounded-lg text-xs md:text-sm text-[var(--text-main)] transition-all shadow-sm"
             >
-              <Calendar className="w-4 h-4 text-[#5252ff]" />
+              <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#5252ff]" />
               <span className="font-semibold">Năm 2026</span>
-              <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
+              <ChevronDown className="w-3.5 h-3.5 md:w-4 md:h-4 text-[var(--text-muted)]" />
             </button>
           </div>
         </header>
 
           {/* KPI row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mt-3 max-w-[1680px] w-full mx-auto min-w-0">
+          <div className="grid grid-cols-2 gap-2.5 md:gap-3 mt-3 w-full min-w-0">
             {KPI_CARDS.map((card) => {
               const Icon = card.icon;
               const data = kpiValues[card.key];
               const isNavCard = Boolean(card.scrollTarget);
-              const cardClass = `group relative overflow-hidden rounded-xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] p-3 transition-all duration-300 ${card.borderHover} hover:-translate-y-0.5 ${card.glow} ${isNavCard ? 'cursor-pointer text-left w-full' : ''}`;
+              const cardClass = `group relative overflow-hidden rounded-xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] p-2.5 md:p-3 transition-all duration-300 ${card.borderHover} md:hover:-translate-y-0.5 ${card.glow} ${isNavCard ? 'cursor-pointer text-left w-full' : ''}`;
 
               const cardBody = (
                 <>
@@ -404,7 +388,7 @@ export default function Overview() {
                       <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
                         {card.label}
                       </p>
-                      <p className="text-xl font-black text-[var(--text-strong)] tabular-nums tracking-tight">
+                      <p className="text-lg md:text-xl font-black text-[var(--text-strong)] tabular-nums tracking-tight">
                         {data.value}
                         <span className="text-xs font-semibold text-slate-500 ml-1.5">{data.unit}</span>
                       </p>
@@ -439,13 +423,19 @@ export default function Overview() {
           </div>
         </div>
 
-        <div className="relative z-10 px-6 pt-3 pb-4 space-y-4 max-w-[1680px] w-full mx-auto min-w-0">
+        <div className="relative z-10 px-4 md:px-6 pt-3 pb-4 space-y-4 max-w-[1680px] w-full mx-auto min-w-0 mobile-content-compact">
 
           {/* Progress + Risks */}
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 min-w-0">
             <PanelCard title="Giám sát tiến độ dự án">
-              <div className="p-2 flex-1 overflow-x-auto min-w-0">
-                <table className="w-full border-collapse" style={{ minWidth: '420px' }}>
+              <div className="md:hidden">
+                <OverviewProgressMobile
+                  projects={progressProjects}
+                  onOpenProject={(id) => navigate(`/projects/${id}`)}
+                />
+              </div>
+              <div className="hidden md:block p-2 flex-1 overflow-x-auto min-w-0">
+                <table className="w-full border-collapse">
                   <colgroup>
                     <col style={{ width: '38%' }} />
                     <col style={{ width: '24%' }} />
@@ -535,8 +525,11 @@ export default function Overview() {
                 </button>
               }
             >
-              <div className="overflow-x-auto flex-1 min-w-0 p-2">
-                <table className="w-full border-collapse" style={{ minWidth: '520px' }}>
+              <div className="md:hidden">
+                <OverviewRiskMobile risks={riskList} onOpenProject={(id) => navigate(`/projects/${id}`)} />
+              </div>
+              <div className="hidden md:block overflow-x-auto flex-1 min-w-0 p-2">
+                <table className="w-full border-collapse">
                   <colgroup>
                     <col style={{ width: '14%' }} />
                     <col style={{ width: '34%' }} />
@@ -616,6 +609,7 @@ export default function Overview() {
           <div ref={tasksPanelRef} className={`scroll-mt-4 ${sectionHighlightClass('tasks')}`}>
           <PanelCard
             title="Theo dõi công việc quan trọng"
+            subtitle="Phân loại theo hạn hoàn thành (ngày kết thúc)"
             action={
               <button
                 type="button"
@@ -628,14 +622,12 @@ export default function Overview() {
             }
           >
             <div className="p-2.5 min-w-0">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {KANBAN_COLUMNS.map((col, idx) => (
-                  <div key={col.key} className="min-w-0 flex flex-col gap-1.5 relative">
-                    {idx > 0 && (
-                      <div className="hidden lg:flex absolute -left-2.5 top-[11px] items-center pointer-events-none">
-                        <ArrowRight className="w-3 h-3 text-slate-600" />
-                      </div>
-                    )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-md:flex max-md:overflow-x-auto max-md:gap-3 max-md:pb-2 max-md:snap-x max-md:snap-mandatory">
+                {KANBAN_COLUMNS.map((col) => (
+                  <div
+                    key={col.key}
+                    className="min-w-0 flex flex-col gap-1.5 relative max-md:min-w-[82vw] max-md:max-w-[82vw] max-md:shrink-0 max-md:snap-start"
+                  >
                     <div className="flex items-center justify-center gap-1.5 mb-1 px-1">
                       <span className={`w-2 h-2 rounded-full ${col.dot}`} />
                       <span className={`text-xs font-semibold ${col.text}`}>{col.label}</span>

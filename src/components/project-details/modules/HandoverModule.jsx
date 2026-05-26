@@ -8,6 +8,9 @@ import ModuleProgressPill from './ModuleProgressPill';
 import { useProjectCanEdit } from '../../../context/ProjectEditContext';
 import { useI18n } from '../../../context/I18nContext';
 import { ModuleCell } from '../../ModuleCell';
+import ModuleNotesCell from './ModuleNotesCell';
+import ModuleSelectField from './ModuleSelectField';
+import { normalizeModuleField } from '../../../utils/moduleDisplay';
 
 const defaultHandovers = [
   'Hồ sơ thiết kế hoàn công',
@@ -48,20 +51,22 @@ export default function HandoverModule({ project, initialData, onProgressChange 
           id: `handover_${index}`,
           _rowIndex: row._rowIndex,
           HẠNG_MỤC: name,
-          TÌNH_TRẠNG: getVal(row, ['TÌNH_TRẠNG', 'tinhtrang']) || 'Chưa làm',
-          KẾT_QUẢ_PHẢN_HỒI: getVal(row, ['KẾT_QUẢ_PHẢN_HỒI', 'KẾ_QUẢ_PHẢN_HỒI', 'phanhoi', 'ketquaphanhoi']) || 'Chưa phản hồi',
-          BƯỚC_TIẾP_THEO: getVal(row, ['BƯỚC_TIẾP_THEO', 'buoctieptheo', 'buoctiep']) || 'Chuẩn bị HS',
-          KẾT_QUẢ_CUỐI: getVal(row, ['KẾT_QUẢ_CUỐI', 'KẾ_QUẢ_CUỐI', 'ketquacuoi', 'ket_qua_cuoi']) || '-'
+          TÌNH_TRẠNG: normalizeModuleField(getVal(row, ['TÌNH_TRẠNG', 'tinhtrang'])),
+          KẾT_QUẢ_PHẢN_HỒI: normalizeModuleField(getVal(row, ['KẾT_QUẢ_PHẢN_HỒI', 'KẾ_QUẢ_PHẢN_HỒI', 'phanhoi', 'ketquaphanhoi'])),
+          BƯỚC_TIẾP_THEO: normalizeModuleField(getVal(row, ['BƯỚC_TIẾP_THEO', 'buoctieptheo', 'buoctiep'])),
+          KẾT_QUẢ_CUỐI: normalizeModuleField(getVal(row, ['KẾT_QUẢ_CUỐI', 'KẾ_QUẢ_CUỐI', 'ketquacuoi', 'ket_qua_cuoi'])),
+          GHI_CHÚ: normalizeModuleField(getVal(row, ['GHI_CHÚ', 'ghichu']))
         };
       }
       return {
         id: `handover_${index}`,
         _rowIndex: undefined,
         HẠNG_MỤC: name,
-        TÌNH_TRẠNG: 'Chưa làm',
-        KẾT_QUẢ_PHẢN_HỒI: 'Chưa phản hồi',
-        BƯỚC_TIẾP_THEO: 'Chuẩn bị HS',
-        KẾT_QUẢ_CUỐI: '-'
+        TÌNH_TRẠNG: '',
+        KẾT_QUẢ_PHẢN_HỒI: '',
+        BƯỚC_TIẾP_THEO: '',
+        KẾT_QUẢ_CUỐI: '',
+        GHI_CHÚ: ''
       };
     });
   };
@@ -143,7 +148,10 @@ export default function HandoverModule({ project, initialData, onProgressChange 
           
           KẾT_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI,
           KẾ_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI,
-          ketquacuoi: updatedItem.KẾT_QUẢ_CUỐI
+          ketquacuoi: updatedItem.KẾT_QUẢ_CUỐI,
+
+          GHI_CHÚ: updatedItem.GHI_CHÚ,
+          ghichu: updatedItem.GHI_CHÚ
         };
         const response = await api.updateHandover(payload);
         if (response && response.data && response.data.length > 0) {
@@ -260,7 +268,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
           >
             <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
               <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
-                <table className="w-full text-left text-xs min-w-[800px]">
+                <table className="w-full text-left text-xs min-w-[950px]">
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
                       <th className="p-3">{t('table.item')}</th>
@@ -268,6 +276,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
                       <th className="p-3">{t('table.feedback')}</th>
                       <th className="p-3">{t('table.nextStep')}</th>
                       <th className="p-3">{t('table.finalResult')}</th>
+                      <th className="p-3 w-64">{t('table.notes')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
@@ -281,10 +290,10 @@ export default function HandoverModule({ project, initialData, onProgressChange 
                         </td>
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={p.TÌNH_TRẠNG} colorClass={getStatusColor(p.TÌNH_TRẠNG)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={p.TÌNH_TRẠNG || ''}
+                          <ModuleSelectField
+                            value={p.TÌNH_TRẠNG}
                             disabled={!canEdit}
+                            colorClass={getStatusColor(p.TÌNH_TRẠNG)}
                             onChange={(e) => handleUpdate(p.id, 'TÌNH_TRẠNG', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chưa làm</option>
@@ -292,54 +301,65 @@ export default function HandoverModule({ project, initialData, onProgressChange 
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã trình duyệt</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đang chỉnh sửa</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã chốt</option>
-                          </select>
+                          </ModuleSelectField>
                           </ModuleCell>
                         </td>
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_PHẢN_HỒI} colorClass={getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={p.KẾT_QUẢ_PHẢN_HỒI || ''}
+                          <ModuleSelectField
+                            value={p.KẾT_QUẢ_PHẢN_HỒI}
                             disabled={!canEdit}
+                            colorClass={getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)}
                             onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_PHẢN_HỒI', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chưa có phản hồi</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã tiếp nhận</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Yêu cầu chỉnh sửa</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã thông qua</option>
-                          </select>
+                          </ModuleSelectField>
                           </ModuleCell>
                         </td>
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={p.BƯỚC_TIẾP_THEO} colorClass={getNextStepColor(p.BƯỚC_TIẾP_THEO)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={p.BƯỚC_TIẾP_THEO || ''}
+                          <ModuleSelectField
+                            value={p.BƯỚC_TIẾP_THEO}
                             disabled={!canEdit}
+                            colorClass={getNextStepColor(p.BƯỚC_TIẾP_THEO)}
                             onChange={(e) => handleUpdate(p.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chuẩn bị hồ sơ</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Trình duyệt CĐT</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Bổ sung/Chỉnh sửa</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Trình ký duyệt</option>
-                          </select>
+                          </ModuleSelectField>
                           </ModuleCell>
                         </td>
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_CUỐI} colorClass={getFinalResultColor(p.KẾT_QUẢ_CUỐI)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={p.KẾT_QUẢ_CUỐI || ''}
+                          <ModuleSelectField
+                            value={p.KẾT_QUẢ_CUỐI}
                             disabled={!canEdit}
+                            colorClass={getFinalResultColor(p.KẾT_QUẢ_CUỐI)}
                             onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                           >
-                            <option className="bg-[var(--bg-panel)] text-slate-200" value="-">-</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã ký duyệt</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã bàn giao</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã hoàn tất</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">N/A</option>
-                          </select>
+                          </ModuleSelectField>
                           </ModuleCell>
+                        </td>
+                        <td className="p-3">
+                          <ModuleNotesCell
+                            value={p.GHI_CHÚ || ''}
+                            canEdit={canEdit}
+                            readDisplay={p.GHI_CHÚ ? ts(p.GHI_CHÚ) : ''}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setHandovers(prev => prev.map(item => item.id === p.id ? { ...item, GHI_CHÚ: v } : item));
+                            }}
+                            onBlur={(e) => handleUpdate(p.id, 'GHI_CHÚ', e.target.value)}
+                          />
                         </td>
                       </tr>
                     ))}

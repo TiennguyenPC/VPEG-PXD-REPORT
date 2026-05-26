@@ -10,6 +10,10 @@ import {
 } from '../../utils/timelineDates';
 import { useI18n } from '../../context/I18nContext';
 import { displayMilestoneTitle } from '../../i18n/messages';
+import { useAuth } from '../../context/AuthContext';
+import { canViewContractTracking, canEditContractTracking } from '../../utils/permissions';
+import { getContractMilestoneDates, getModuleScheduleDate } from '../../utils/contractTracking';
+import ContractTrackingPanel from './ContractTrackingPanel';
 
 class MilestoneErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { hasError: false, error: null }; }
@@ -20,16 +24,34 @@ class MilestoneErrorBoundary extends React.Component {
   }
 }
 
-function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData = [] }) {
+function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData = [], onContractTrackingSave, moduleBundles }) {
   const { t, tf, ts } = useI18n();
+  const { user } = useAuth();
+  const projectId = project?.id || project?.PROJECT_ID;
+  const canViewContract = canViewContractTracking(user, projectId, project);
+  const canEditContract = canEditContractTracking(user, projectId, project);
   const [milestones, setMilestones] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [datesVersion, setDatesVersion] = useState(0);
+
+  useEffect(() => {
+    const pid = project?.PROJECT_ID || project?.id;
+    if (!pid) return undefined;
+    const handler = (e) => {
+      if (String(e.detail?.projectId) === String(pid)) {
+        setDatesVersion((v) => v + 1);
+      }
+    };
+    window.addEventListener('module-dates-updated', handler);
+    return () => window.removeEventListener('module-dates-updated', handler);
+  }, [project?.PROJECT_ID, project?.id]);
 
   useEffect(() => {
     const generateMilestones = () => {
       setIsLoading(true);
       const today = new Date();
       today.setHours(0,0,0,0);
+      const projectId = project?.PROJECT_ID || project?.id;
 
       const parseDateStr = (dateStr) => parseFlexibleDate(dateStr);
 
@@ -45,26 +67,33 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
         let date = '-';
         let startDate = null;
         let endDate = null;
-        
+
+        const moduleEnd = getModuleScheduleDate(projectId, moduleKey, 'end');
+        const moduleStart = getModuleScheduleDate(projectId, moduleKey, 'start');
+        if (moduleStart) startDate = parseDateStr(moduleStart);
+        if (moduleEnd) {
+          date = moduleEnd;
+          endDate = parseDateStr(moduleEnd);
+        }
+
         const milestoneRow = milestonesData.find(m => String(m.MILESTONE).toUpperCase() === String(title).toUpperCase() || String(m.MILESTONE).toUpperCase().includes(String(title).toUpperCase()));
-        if (milestoneRow && milestoneRow.NGÀY_KẾ_HOẠCH) {
+        if (date === '-' && milestoneRow?.NGÀY_KẾ_HOẠCH) {
           date = milestoneRow.NGÀY_KẾ_HOẠCH;
           endDate = parseDateStr(date);
           if (endDate) date = formatDateDMY(endDate);
         }
 
-        try {
-          const id = project?.PROJECT_ID || project?.id;
-          const data = localStorage.getItem(`dates_${moduleKey}_${id}`);
-          if (data) {
-            const parsed = JSON.parse(data);
-            if (parsed.start) startDate = parseDateStr(parsed.start);
-            if (date === '-') {
+        if (date === '-') {
+          try {
+            const data = localStorage.getItem(`dates_${moduleKey}_${projectId}`);
+            if (data) {
+              const parsed = JSON.parse(data);
+              if (parsed.start) startDate = parseDateStr(parsed.start);
               date = calculateEndDate(parsed.start, parsed.days);
               endDate = parseDateStr(date);
             }
-          }
-        } catch(e) {}
+          } catch (e) { /* ignore */ }
+        }
 
         let status = 'pending';
         const progress = moduleProgress[moduleKey] || 0;
@@ -89,50 +118,93 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
         return { title, date, status, progress, delayDays };
       };
 
+      const contractDates = getContractMilestoneDates(project);
+
       const kickoffSheetData = milestonesData.find(m => String(m.MILESTONE).toUpperCase() === 'KICKOFF');
-      let kickoffDate = kickoffSheetData?.NGÀY_KẾ_HOẠCH || project?.kickoffDate || project?.startDate || project?.NGÀY_BẮT_ĐẦU || '-';
+      let kickoffDate =
+        contractDates.kickoff ||
+        kickoffSheetData?.NGÀY_KẾ_HOẠCH ||
+        project?.kickoffDate ||
+        project?.KICKOFF_DATE ||
+        '-';
       if (!kickoffDate || kickoffDate === '') kickoffDate = '-';
       const kD = parseDateStr(kickoffDate);
       if (kD) kickoffDate = formatDateDMY(kD);
 
       const codSheetData = milestonesData.find(m => String(m.MILESTONE).toUpperCase() === 'COD' || String(m.MILESTONE).toUpperCase() === 'BÀN GIAO & ĐÓNG ĐIỆN (COD)');
-      let codDateStr = codSheetData?.NGÀY_KẾ_HOẠCH || project?.cod || project?.codDate || project?.COD || '-';
+      let codDateStr =
+        contractDates.cod ||
+        codSheetData?.NGÀY_KẾ_HOẠCH ||
+        project?.cod ||
+        project?.codDate ||
+        project?.COD ||
+        '-';
       if (!codDateStr || codDateStr === '') codDateStr = '-';
       const codD = parseDateStr(codDateStr);
       if (codD) codDateStr = formatDateDMY(codD);
       const handoverData = getModuleData('handover', 'BÀN GIAO HỒ SƠ');
       let handoverDate = handoverData.date;
-      if (handoverDate === '-' && kD && codD) {
-        handoverDate = formatDateDMY(codD);
+      if (handoverDate === '-' && contractDates.handover) {
+        handoverDate = contractDates.handover;
       }
 
-      let kickoffStatus = 'completed';
-      if (kD && today < kD) kickoffStatus = 'pending';
+      let kickoffStatus = 'pending';
+      let kickoffProgress = 0;
+      const projectKickoffRaw = project?.kickoffDate || project?.KICKOFF_DATE;
+      const projectKickoff = parseDateStr(projectKickoffRaw);
+      if (!kD && projectKickoff) {
+        kickoffDate = formatDateDMY(projectKickoff);
+      }
+
+      const effectiveKickoff = kD || projectKickoff;
+      const anyModuleStarted = Object.values(moduleProgress).some((p) => Number(p) > 0);
+
+      if (effectiveKickoff) {
+        if (today < effectiveKickoff) {
+          kickoffStatus = 'pending';
+          kickoffProgress = 0;
+        } else {
+          kickoffStatus = 'completed';
+          kickoffProgress = 100;
+        }
+      } else if (anyModuleStarted) {
+        kickoffStatus = 'completed';
+        kickoffProgress = 100;
+        if (kickoffDate === '-') kickoffDate = formatDateDMY(today);
+      }
 
       let codStatus = 'pending';
       let codDelay = 0;
+      let codProgress = 0;
       if (!codD) {
         codStatus = project?.status === 'completed' ? 'completed' : 'pending';
+        codProgress = project?.status === 'completed' ? 100 : 0;
       } else {
         if (today <= codD) {
           codStatus = 'pending';
+          codProgress = 0;
         } else {
-          if (project?.status === 'completed' || (moduleProgress['handover'] >= 100)) {
+          if (project?.status === 'completed') {
             codStatus = 'completed';
+            codProgress = 100;
+          } else if (moduleProgress['handover'] >= 100) {
+            codStatus = 'completed';
+            codProgress = 100;
           } else {
             codStatus = 'delay';
             codDelay = Math.floor((today.getTime() - codD.getTime()) / (1000 * 60 * 60 * 24));
+            codProgress = 0;
           }
         }
       }
 
       const generated = [
-        { id: 1, title: 'KICKOFF', date: kickoffDate, status: kickoffStatus, progress: 100, delayDays: 0 },
+        { id: 1, title: 'KICKOFF', date: kickoffDate, status: kickoffStatus, progress: kickoffProgress, delayDays: 0 },
         { id: 2, ...getModuleData('permit', 'PHÁP LÝ') },
         { id: 3, ...getModuleData('design', 'THIẾT KẾ') },
         { id: 4, ...getModuleData('procurement', 'VẬT TƯ') },
         { id: 5, ...getModuleData('construction', 'THI CÔNG') },
-        { id: 6, title: 'COD', date: codDateStr, status: codStatus, progress: project?.status === 'completed' ? 100 : moduleProgress['handover'] >= 100 ? 100 : 0, delayDays: codDelay },
+        { id: 6, title: 'COD', date: codDateStr, status: codStatus, progress: codProgress, delayDays: codDelay },
         { id: 7, ...handoverData, date: handoverDate }
       ];
 
@@ -143,7 +215,7 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
     if (project?.PROJECT_ID || project?.id) {
       generateMilestones();
     }
-  }, [project, moduleProgress, milestonesData]);
+  }, [project, moduleProgress, milestonesData, datesVersion]);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -187,13 +259,22 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]"></div> {t('milestoneUi.inProgress')}</div>
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#64748b]"></div> {t('milestoneUi.notStarted')}</div>
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div> {t('milestoneUi.delay')}</div>
-          
-          <div className="ml-2 px-4 py-2 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg text-right shadow-sm">
+
+          <div className="ml-2 px-4 py-2 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg text-right shadow-sm min-w-[120px]">
             <p className="text-[10px] text-[var(--text-muted)]">{t('milestoneUi.expectedCod')}</p>
-            <p className="text-sm font-bold text-[#7c3aed] tracking-wider">{codNode?.date || '29/06/2026'}</p>
+            <p className="text-sm font-bold text-[#7c3aed] tracking-wider">{codNode?.date || '-'}</p>
           </div>
         </div>
       </div>
+
+      {canViewContract && (
+        <ContractTrackingPanel
+          project={project}
+          canEdit={canEditContract && !!onContractTrackingSave}
+          onSave={onContractTrackingSave}
+          moduleBundles={moduleBundles}
+        />
+      )}
 
       <div className="relative pt-12 pb-16 overflow-x-auto custom-scrollbar">
         <div className="min-w-[900px] relative px-10">

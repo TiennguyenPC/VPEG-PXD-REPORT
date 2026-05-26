@@ -1,5 +1,4 @@
 import { normalizeToDMY, parseFlexibleDate } from './timelineDates';
-import { getEmployeeName } from './permissions';
 
 /** Tách chuỗi NHÂN_SỰ thành danh sách (hỗ trợ phân cách , ; | /) */
 export function parseAssignees(raw) {
@@ -24,23 +23,6 @@ export function formatAssigneeDisplay(raw, fallback = 'Chưa chỉ định') {
   if (list.length === 0) return fallback;
   if (list.length === 1) return list[0];
   return list.map(getAssigneeGivenName).join(', ');
-}
-
-/** Danh sách tên cho dropdown phân công — gộp EMPLOYEE + người đang có trên task */
-export function buildAssigneeOptionList(employees = [], tasks = [], extraNames = []) {
-  const seen = new Map();
-  const add = (name) => {
-    const value = String(name || '').trim();
-    if (!value) return;
-    const key = value.toLowerCase();
-    if (!seen.has(key)) seen.set(key, value);
-  };
-
-  employees.forEach((emp) => add(getEmployeeName(emp) || emp.NAME || emp.name || emp.DISPLAY_NAME));
-  (tasks || []).forEach((task) => parseAssignees(task?.NHÂN_SỰ).forEach(add));
-  (extraNames || []).forEach(add);
-
-  return [...seen.values()].sort((a, b) => a.localeCompare(b, 'vi'));
 }
 
 /** Bổ sung PROJECT_ID từ tên dự án khi sheet thiếu mã */
@@ -74,16 +56,23 @@ export function enrichTaskForUI(task) {
 
   const start = formatDateLocal(task.NGÀY_BẮT_ĐẦU);
   const end = formatDateLocal(task.NGÀY_KẾT_THÚC);
-  let status = task.TRẠNG_THÁI || 'Chưa bắt đầu';
+  const storedStatus = String(task.TRẠNG_THÁI || '').trim();
+  const isCompleted = storedStatus === 'Đã hoàn thành' || storedStatus === 'Hoàn thành';
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const startDate = parseFlexibleDate(start);
   const endDate = parseFlexibleDate(end);
 
-  if (status !== 'Đã hoàn thành') {
-    if (endDate && today > endDate) status = 'Trễ';
-    else if (startDate && today >= startDate) status = 'Đang diễn ra';
+  let status;
+  if (isCompleted) {
+    status = 'Đã hoàn thành';
+  } else if (endDate && today > endDate) {
+    status = 'Trễ';
+  } else if (startDate && today >= startDate) {
+    status = 'Đang diễn ra';
+  } else {
+    status = 'Chưa bắt đầu';
   }
 
   return {
@@ -146,6 +135,7 @@ export function buildTaskPayload(task, originalTask = null) {
     TRẠNG_THÁI: task.TRẠNG_THÁI,
     ƯU_TIÊN: task.ƯU_TIÊN,
     GHI_CHÚ: description,
+    NGƯỜI_TẠO: task.NGƯỜI_TẠO,
   };
 }
 

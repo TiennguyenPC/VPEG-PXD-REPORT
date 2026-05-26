@@ -1,16 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, Share2, Download, Menu, Link2Off, Building2, Zap } from 'lucide-react';
+import { ChevronLeft, Share2, Download, Menu, Link2Off, Building2, Zap, Pencil } from 'lucide-react';
 import { api } from '../../services/api';
+import { useProjectCanEdit } from '../../context/ProjectEditContext';
 
-export default function ProjectHeader({ project, onBack, onToggleSidebar, isSidebarCollapsed, shareMode = 'internal' }) {
+export default function ProjectHeader({ project, onBack, onToggleSidebar, isSidebarCollapsed, shareMode = 'internal', onUpdateProject }) {
+  const canEdit = useProjectCanEdit();
   const [copied, setCopied] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [shareStatus, setShareStatus] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({ name: '', client: '', capacity: '' });
+  const [saving, setSaving] = useState(false);
 
   const projectId = project?.PROJECT_ID || project?.id;
-  const progress = Math.min(100, Math.max(0, project.actualProgress || 0));
-  const isDelayed = (project.delay || 0) < 0;
+  const progress = Math.min(100, Math.max(0, project?.actualProgress || 0));
+  const isDelayed = (project?.delay || 0) < 0;
   const progressColor = isDelayed ? 'from-red-500 to-red-400' : 'from-emerald-500 to-emerald-400';
+
+  const startEdit = () => {
+    setDraft({
+      name: project?.name || '',
+      client: project?.client || '',
+      capacity: String(project?.capacity ?? ''),
+    });
+    setEditing(true);
+  };
+
+  const cancelEdit = () => setEditing(false);
+
+  const parseCapacity = (val) => {
+    let v = String(val || '').trim();
+    if (v.includes(',') && v.includes('.')) {
+      v = v.replace(/\./g, '').replace(',', '.');
+    } else {
+      v = v.replace(',', '.');
+    }
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const saveEdit = async () => {
+    if (!onUpdateProject || saving) return;
+    setSaving(true);
+    try {
+      await onUpdateProject({
+        name: draft.name.trim(),
+        client: draft.client.trim(),
+        capacity: parseCapacity(draft.capacity),
+      });
+      setEditing(false);
+    } catch (e) {
+      window.alert(e?.message || 'Không lưu được');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     if (shareMode !== 'public' || !projectId) return;
@@ -155,28 +199,84 @@ export default function ProjectHeader({ project, onBack, onToggleSidebar, isSide
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-base sm:text-lg font-bold text-[var(--text-strong)] tracking-tight leading-snug">
-                <span className="hidden print:inline text-xs uppercase tracking-widest text-[#7373ff] mr-2">Báo cáo</span>
-                {(project.name || '').toUpperCase()}
-              </h1>
+              {editing ? (
+                <input
+                  type="text"
+                  value={draft.name}
+                  onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                  className="flex-1 min-w-[160px] text-base font-bold uppercase bg-[var(--bg-main)] border border-[#5252ff]/40 rounded-md px-2 py-1 text-[var(--text-strong)] focus:outline-none focus:border-[#5252ff]"
+                  placeholder="Tên dự án"
+                />
+              ) : (
+                <h1 className="text-base sm:text-lg font-bold text-[var(--text-strong)] tracking-tight leading-snug">
+                  <span className="hidden print:inline text-xs uppercase tracking-widest text-[#7373ff] mr-2">Báo cáo</span>
+                  {(project.name || '').toUpperCase()}
+                </h1>
+              )}
               {(project.status === 'completed' || project.status === 'COMPLETED') && (
                 <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 border border-emerald-500/20 dark:text-emerald-400">
                   Hoàn thành
                 </span>
               )}
+              {canEdit && onUpdateProject && !editing && (
+                <button
+                  type="button"
+                  onClick={startEdit}
+                  className="p-1.5 rounded-md border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[#5252ff] hover:border-[#5252ff]/40 transition-colors print:hidden"
+                  title="Sửa thông tin dự án"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {editing && (
+                <div className="flex items-center gap-1 print:hidden">
+                  <button type="button" onClick={saveEdit} disabled={saving} className="px-2 py-1 text-[10px] font-bold rounded bg-[#5252ff] text-white disabled:opacity-60">
+                    {saving ? '...' : 'Lưu'}
+                  </button>
+                  <button type="button" onClick={cancelEdit} className="px-2 py-1 text-[10px] font-bold rounded border border-[var(--border-main)] text-[var(--text-muted)]">
+                    Hủy
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-              <span className="inline-flex items-center gap-1 max-w-full text-[11px] text-[var(--text-muted)] bg-[var(--bg-hover)] border border-[var(--border-main)] rounded-md px-2 py-0.5">
-                <Building2 className="w-3 h-3 shrink-0 opacity-60" />
-                <span className="truncate font-medium text-[var(--text-strong)]">{project.client}</span>
-              </span>
-              <span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-muted)] bg-[var(--bg-hover)] border border-[var(--border-main)] rounded-md px-2 py-0.5">
-                <Zap className="w-3 h-3 shrink-0 opacity-60" />
-                <span className="font-medium text-[var(--text-strong)] tabular-nums">
-                  {Number(project.capacity || 0).toLocaleString()} kWp
-                </span>
-              </span>
+              {editing ? (
+                <>
+                  <input
+                    type="text"
+                    value={draft.client}
+                    onChange={(e) => setDraft((d) => ({ ...d, client: e.target.value }))}
+                    className="flex-1 min-w-[140px] text-[11px] bg-[var(--bg-main)] border border-[var(--border-main)] rounded-md px-2 py-1 text-[var(--text-strong)] focus:outline-none focus:border-[#5252ff]"
+                    placeholder="Khách hàng"
+                  />
+                  <input
+                    type="number"
+                    step="0.01"
+                    min={0}
+                    value={draft.capacity}
+                    onChange={(e) => {
+                      let v = e.target.value.trim().replace(',', '.');
+                      setDraft((d) => ({ ...d, capacity: v }));
+                    }}
+                    className="w-28 text-[11px] bg-[var(--bg-main)] border border-[var(--border-main)] rounded-md px-2 py-1 text-[var(--text-strong)] focus:outline-none focus:border-[#5252ff]"
+                    placeholder="kWp"
+                  />
+                </>
+              ) : (
+                <>
+                  <span className="inline-flex items-center gap-1 max-w-full text-[11px] text-[var(--text-muted)] bg-[var(--bg-hover)] border border-[var(--border-main)] rounded-md px-2 py-0.5">
+                    <Building2 className="w-3 h-3 shrink-0 opacity-60" />
+                    <span className="truncate font-medium text-[var(--text-strong)]">{project.client}</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1 text-[11px] text-[var(--text-muted)] bg-[var(--bg-hover)] border border-[var(--border-main)] rounded-md px-2 py-0.5">
+                    <Zap className="w-3 h-3 shrink-0 opacity-60" />
+                    <span className="font-medium text-[var(--text-strong)] tabular-nums">
+                      {Number(project.capacity || 0).toLocaleString('vi-VN', { maximumFractionDigits: 2 })} kWp
+                    </span>
+                  </span>
+                </>
+              )}
             </div>
           </div>
         </div>

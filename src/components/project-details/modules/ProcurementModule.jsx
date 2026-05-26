@@ -9,6 +9,9 @@ import { parseFlexibleDate } from '../../../utils/timelineDates';
 import { useProjectCanEdit } from '../../../context/ProjectEditContext';
 import { useI18n } from '../../../context/I18nContext';
 import { ModuleCell } from '../../ModuleCell';
+import ModuleNotesCell from './ModuleNotesCell';
+import ModuleSelectField from './ModuleSelectField';
+import { normalizeModuleField } from '../../../utils/moduleDisplay';
 
 const defaultProcurements = [
   'An toàn tạm',
@@ -48,30 +51,6 @@ const getAutoEvaluation = (expectedStr, actualStr) => {
 };
 
 
-function AutoGrowingTextarea({ value, onChange, onBlur, disabled, placeholder }) {
-  const textareaRef = React.useRef(null);
-
-  React.useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px';
-    }
-  }, [value]);
-
-  return (
-    <textarea
-      ref={textareaRef}
-      value={value}
-      placeholder={placeholder}
-      disabled={disabled}
-      onChange={onChange}
-      onBlur={onBlur}
-      rows={1}
-      className="bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 resize-none overflow-hidden min-h-[24px] py-1 leading-normal transition-all"
-    />
-  );
-}
-
 export default function ProcurementModule({ project, initialData, onProgressChange }) {
   const canEdit = useProjectCanEdit();
   const { t, tf, ts } = useI18n();
@@ -98,8 +77,8 @@ export default function ProcurementModule({ project, initialData, onProgressChan
         return hm && hm.toLowerCase().replace(/\s+/g, '') === nameLower;
       }) : null;
       if (row) {
-        const expected = getVal(row, ['NGÀY_VỀ_DỰ_KIẾN', 'ngayvedukien']) || '';
-        const actual = getVal(row, ['NGÀY_VỀ_THỰC_TẾ', 'ngayvethucte']) || '';
+        const expected = normalizeModuleField(getVal(row, ['NGÀY_VỀ_DỰ_KIẾN', 'ngayvedukien']));
+        const actual = normalizeModuleField(getVal(row, ['NGÀY_VỀ_THỰC_TẾ', 'ngayvethucte']));
         const autoEval = getAutoEvaluation(expected, actual);
         return {
           id: `proc_${index}`,
@@ -107,9 +86,9 @@ export default function ProcurementModule({ project, initialData, onProgressChan
           HẠNG_MỤC_MUA_HÀNG: name,
           NGÀY_VỀ_DỰ_KIẾN: expected,
           NGÀY_VỀ_THỰC_TẾ: actual,
-          TÌNH_TRẠNG_VẬT_TƯ: getVal(row, ['TÌNH_TRẠNG_VẬT_TƯ', 'tinhtrangvattu']) || '',
-          ĐÁNH_GIÁ_TIẾN_ĐỘ: getVal(row, ['ĐÁNH_GIÁ_TIẾN_ĐỘ', 'danhgiatiendo']) || autoEval,
-          GHI_CHÚ: getVal(row, ['GHI_CHÚ', 'ghichu']) || ''
+          TÌNH_TRẠNG_VẬT_TƯ: normalizeModuleField(getVal(row, ['TÌNH_TRẠNG_VẬT_TƯ', 'tinhtrangvattu'])),
+          ĐÁNH_GIÁ_TIẾN_ĐỘ: autoEval,
+          GHI_CHÚ: normalizeModuleField(getVal(row, ['GHI_CHÚ', 'ghichu']))
         };
       }
       return {
@@ -195,7 +174,8 @@ export default function ProcurementModule({ project, initialData, onProgressChan
     let updatedItem = null;
     const nextItems = items.map(i => {
       if (i.id === id) {
-        let temp = { ...i, [field]: value };
+        if (field === 'ĐÁNH_GIÁ_TIẾN_ĐỘ') return i;
+        const temp = { ...i, [field]: value };
         if (field === 'NGÀY_VỀ_DỰ_KIẾN' || field === 'NGÀY_VỀ_THỰC_TẾ') {
           temp.ĐÁNH_GIÁ_TIẾN_ĐỘ = getAutoEvaluation(temp.NGÀY_VỀ_DỰ_KIẾN, temp.NGÀY_VỀ_THỰC_TẾ);
         }
@@ -241,7 +221,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
           tinh_trang_vat_tu: updatedItem.TÌNH_TRẠNG_VẬT_TƯ,
           tinhtrangvattu: updatedItem.TÌNH_TRẠNG_VẬT_TƯ,
           
-          ĐÁNH_GIÁ_TIẾN_ĐỘ: updatedItem.ĐÁNH_GIÁ_TIẾN_ĐỘ,
+          ĐÁNH_GIÁ_TIẾN_ĐỘ: getAutoEvaluation(updatedItem.NGÀY_VỀ_DỰ_KIẾN, updatedItem.NGÀY_VỀ_THỰC_TẾ),
           danh_gia_tien_do: updatedItem.ĐÁNH_GIÁ_TIẾN_ĐỘ,
           
           GHI_CHÚ: updatedItem.GHI_CHÚ,
@@ -349,25 +329,33 @@ export default function ProcurementModule({ project, initialData, onProgressChan
           >
             <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
               <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
-                <table className="w-full text-left text-xs min-w-[950px]">
+                <table className="w-full table-fixed text-left text-xs">
+                  <colgroup>
+                    <col className="w-[26%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[13%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[14%]" />
+                    <col className="w-[20%]" />
+                  </colgroup>
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                      <th className="p-3">{t('table.equipment')}</th>
-                      <th className="p-3 w-32">{t('table.expectedArrival')}</th>
-                      <th className="p-3 w-32">{t('table.actualArrival')}</th>
-                      <th className="p-3 w-36">{t('table.materialStatus')}</th>
-                      <th className="p-3 w-40">{t('table.progressEval')}</th>
-                      <th className="p-3 w-64">{t('table.notes')}</th>
+                      <th className="p-3 text-left align-bottom">{t('table.equipment')}</th>
+                      <th className="p-3 text-center align-bottom">{t('table.expectedArrival')}</th>
+                      <th className="p-3 text-center align-bottom">{t('table.actualArrival')}</th>
+                      <th className="p-3 text-center align-bottom">{t('table.materialStatus')}</th>
+                      <th className="p-3 text-center align-bottom">{t('table.progressEval')}</th>
+                      <th className="p-3 text-left align-bottom">{t('table.notes')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
                     {items.map(item => (
                       <tr key={item.id} className="hover:bg-[var(--bg-panel)]/50 transition-colors">
                         <td className="p-3 font-semibold text-slate-200">{ts(item.HẠNG_MỤC_MUA_HÀNG)}</td>
-                        <td className="p-3">
+                        <td className="p-3 text-center align-middle whitespace-nowrap">
                           <DateInputDMY
-                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${!item.NGÀY_VỀ_DỰ_KIẾN || item.NGÀY_VỀ_DỰ_KIẾN === '-' ? 'opacity-60' : ''} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={item.NGÀY_VỀ_DỰ_KIẾN && item.NGÀY_VỀ_DỰ_KIẾN !== '-' ? item.NGÀY_VỀ_DỰ_KIẾN : ''}
+                            className={`bg-transparent focus:outline-none w-full min-w-[7.25rem] tabular-nums border-b border-transparent focus:border-[#5252ff] text-slate-300 ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            value={item.NGÀY_VỀ_DỰ_KIẾN || ''}
                             disabled={!canEdit}
                             onChange={(val) => {
                               setItems(prev => prev.map(i => i.id === item.id ? { ...i, NGÀY_VỀ_DỰ_KIẾN: val } : i));
@@ -375,10 +363,10 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                             onBlur={(_e, val) => handleUpdate(item.id, 'NGÀY_VỀ_DỰ_KIẾN', val)}
                           />
                         </td>
-                        <td className="p-3">
+                        <td className="p-3 text-center align-middle whitespace-nowrap">
                           <DateInputDMY
-                            className={`bg-transparent focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${!item.NGÀY_VỀ_THỰC_TẾ || item.NGÀY_VỀ_THỰC_TẾ === '-' ? 'opacity-60' : ''} ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={item.NGÀY_VỀ_THỰC_TẾ && item.NGÀY_VỀ_THỰC_TẾ !== '-' ? item.NGÀY_VỀ_THỰC_TẾ : ''}
+                            className={`bg-transparent focus:outline-none w-full min-w-[7.25rem] tabular-nums border-b border-transparent focus:border-[#5252ff] text-slate-300 ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
+                            value={item.NGÀY_VỀ_THỰC_TẾ || ''}
                             disabled={!canEdit}
                             onChange={(val) => {
                               setItems(prev => prev.map(i => i.id === item.id ? { ...i, NGÀY_VỀ_THỰC_TẾ: val } : i));
@@ -386,52 +374,43 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                             onBlur={(_e, val) => handleUpdate(item.id, 'NGÀY_VỀ_THỰC_TẾ', val)}
                           />
                         </td>
-                        <td className="p-3">
-                          <ModuleCell canEdit={canEdit} value={item.TÌNH_TRẠNG_VẬT_TƯ || '-'} colorClass={getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={item.TÌNH_TRẠNG_VẬT_TƯ || ''}
+                        <td className="p-3 text-center align-middle">
+                          <ModuleCell canEdit={canEdit} value={item.TÌNH_TRẠNG_VẬT_TƯ} colorClass={getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)} ts={ts}>
+                          <ModuleSelectField
+                            value={item.TÌNH_TRẠNG_VẬT_TƯ}
                             disabled={!canEdit}
+                            colorClass={getStatusColor(item.TÌNH_TRẠNG_VẬT_TƯ)}
                             onChange={(e) => handleUpdate(item.id, 'TÌNH_TRẠNG_VẬT_TƯ', e.target.value)}
                           >
-                            <option className="bg-[var(--bg-panel)] text-slate-200" value="">-</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chưa đặt</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã đặt hàng</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đang vận chuyển</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã tới site</option>
-                          </select>
+                          </ModuleSelectField>
                           </ModuleCell>
                         </td>
-                        <td className="p-3">
-                          <ModuleCell canEdit={canEdit} value={item.ĐÁNH_GIÁ_TIẾN_ĐỘ || '-'} colorClass={getProgressStyle(item.ĐÁNH_GIÁ_TIẾN_ĐỘ)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={item.ĐÁNH_GIÁ_TIẾN_ĐỘ || ''}
-                            disabled={!canEdit}
-                            onChange={(e) => handleUpdate(item.id, 'ĐÁNH_GIÁ_TIẾN_ĐỘ', e.target.value)}
-                          >
-                            <option className="bg-[var(--bg-panel)] text-slate-200" value="">-</option>
-                            <option className="bg-[var(--bg-panel)] text-slate-200">Đúng tiến độ</option>
-                            <option className="bg-[var(--bg-panel)] text-slate-200">Đang theo kế hoạch</option>
-                            <option className="bg-[var(--bg-panel)] text-slate-200">Trễ</option>
-                          </select>
-                          </ModuleCell>
+                        <td className="p-3 text-center align-middle">
+                          {(() => {
+                            const evalText = getAutoEvaluation(item.NGÀY_VỀ_DỰ_KIẾN, item.NGÀY_VỀ_THỰC_TẾ);
+                            if (!evalText) return null;
+                            return (
+                              <span className={`inline-block text-[11px] whitespace-nowrap ${getProgressStyle(evalText)}`}>
+                                {ts(evalText)}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="p-3">
-                          {canEdit ? (
-                          <AutoGrowingTextarea 
+                          <ModuleNotesCell
                             value={item.GHI_CHÚ || ''}
-                            placeholder="Nhập ghi chú..."
-                            disabled={!canEdit}
+                            canEdit={canEdit}
+                            readDisplay={item.GHI_CHÚ ? ts(item.GHI_CHÚ) : ''}
                             onChange={(e) => {
                               const v = e.target.value;
                               setItems(prev => prev.map(i => i.id === item.id ? { ...i, GHI_CHÚ: v } : i));
                             }}
                             onBlur={(e) => handleUpdate(item.id, 'GHI_CHÚ', e.target.value)}
                           />
-                          ) : (
-                          <span className="text-slate-300">{ts(item.GHI_CHÚ || '-')}</span>
-                          )}
                         </td>
                       </tr>
                     ))}

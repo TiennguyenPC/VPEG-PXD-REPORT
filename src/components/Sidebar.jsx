@@ -1,127 +1,13 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
-import { Activity, Briefcase, Folder, PanelLeftClose, PanelLeftOpen, Sun, Moon, Monitor, Check, LogOut, Settings, UserCircle } from 'lucide-react';
+import { Activity, Briefcase, Folder, PanelLeftClose, PanelLeftOpen, LogOut, Settings, UserCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useTheme } from '../hooks/useTheme';
 import { useAuth } from '../context/AuthContext';
 import { getRoleLabel, getUserInitials, isAdmin } from '../utils/permissions';
 import NotificationBell from './NotificationBell';
+import ThemeToggleInline from './ThemeToggleInline';
 import VuPhongLogo from './VuPhongLogo';
-
-const THEME_MENU_WIDTH = 176;
-const THEME_MENU_HEIGHT = 132;
-const THEME_MENU_GAP = 8;
-
-function computeThemeMenuLayout(btnRect, sidebarPlacement) {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const gap = THEME_MENU_GAP;
-
-  if (sidebarPlacement) {
-    let left = btnRect.right - THEME_MENU_WIDTH;
-    if (left < gap) left = gap;
-    if (left + THEME_MENU_WIDTH > vw - gap) {
-      left = Math.max(gap, btnRect.left - THEME_MENU_WIDTH - gap);
-    }
-    let top = btnRect.top - THEME_MENU_HEIGHT - gap;
-    if (top < gap) {
-      top = btnRect.bottom + gap;
-    }
-    top = Math.max(gap, Math.min(top, vh - THEME_MENU_HEIGHT - gap));
-    left = Math.max(gap, Math.min(left, vw - THEME_MENU_WIDTH - gap));
-    return { top, left };
-  }
-
-  return {
-    top: Math.min(btnRect.bottom + gap, vh - THEME_MENU_HEIGHT - gap),
-    left: Math.max(gap, Math.min(btnRect.left, vw - THEME_MENU_WIDTH - gap)),
-  };
-}
-
-function ThemeToggleInline({ placement = 'sidebar' }) {
-  const { theme, setThemeMode } = useTheme();
-  const [open, setOpen] = React.useState(false);
-  const [menuPos, setMenuPos] = React.useState({ top: 0, left: 0 });
-  const ref = React.useRef(null);
-  const btnRef = React.useRef(null);
-
-  const updateMenuPos = React.useCallback(() => {
-    if (!btnRef.current) return;
-    setMenuPos(computeThemeMenuLayout(btnRef.current.getBoundingClientRect(), placement === 'sidebar'));
-  }, [placement]);
-
-  React.useEffect(() => () => setOpen(false), []);
-
-  React.useEffect(() => {
-    if (!open) return undefined;
-    updateMenuPos();
-    const handler = (e) => {
-      if (ref.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
-      setOpen(false);
-    };
-    const onReflow = () => updateMenuPos();
-    document.addEventListener('mousedown', handler);
-    window.addEventListener('resize', onReflow);
-    window.addEventListener('scroll', onReflow, true);
-    return () => {
-      document.removeEventListener('mousedown', handler);
-      window.removeEventListener('resize', onReflow);
-      window.removeEventListener('scroll', onReflow, true);
-    };
-  }, [open, updateMenuPos]);
-
-  const openMenu = () => {
-    if (!open && btnRef.current) {
-      setMenuPos(computeThemeMenuLayout(btnRef.current.getBoundingClientRect(), placement === 'sidebar'));
-    }
-    setOpen((v) => !v);
-  };
-
-  const Icon = theme === 'light' ? Sun : theme === 'system' ? Monitor : Moon;
-
-  const menu = open ? createPortal(
-    <div
-      ref={ref}
-      className="fixed z-[9999] w-44 rounded-xl border border-[var(--border-main)] bg-[var(--bg-panel)] shadow-2xl py-1"
-      style={{ top: menuPos.top, left: menuPos.left }}
-    >
-      {[
-        { value: 'light', label: 'Sáng', Icon: Sun },
-        { value: 'dark', label: 'Tối', Icon: Moon },
-        { value: 'system', label: 'Hệ thống', Icon: Monitor },
-      ].map(({ value, label, Icon: Ic }) => (
-        <button
-          key={value}
-          type="button"
-          onClick={() => { setThemeMode(value); setOpen(false); }}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-xs text-[var(--text-main)] hover:bg-[var(--bg-hover)] transition-colors"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <Ic className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
-            <span className="whitespace-nowrap">{label}</span>
-          </div>
-          {theme === value && <Check className="w-3 h-3 shrink-0 text-[#5252ff]" />}
-        </button>
-      ))}
-    </div>,
-    document.body
-  ) : null;
-
-  return (
-    <>
-      <button
-        ref={btnRef}
-        type="button"
-        onClick={openMenu}
-        className="p-1.5 rounded-lg hover:bg-[var(--bg-hover)] text-[var(--text-muted)] hover:text-[var(--text-strong)] transition-colors"
-        title="Chế độ giao diện"
-      >
-        <Icon className="w-4 h-4" />
-      </button>
-      {menu}
-    </>
-  );
-}
+import MobileBottomNav from './MobileBottomNav';
+import MobileHeaderActions from './MobileHeaderActions';
 
 export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
   const navigate = useNavigate();
@@ -137,7 +23,8 @@ export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
   };
 
   return (
-    <aside className={`bg-[var(--bg-panel)] flex flex-col shrink-0 h-screen sticky top-0 hidden md:flex transition-all duration-300 print:hidden ${isCollapsed ? 'w-16 border-r border-[var(--border-main)]' : 'w-56 border-r border-[var(--border-main)]'}`}>
+    <>
+    <aside className={`bg-[var(--bg-panel)] flex flex-col shrink-0 app-height-screen sticky top-0 hidden md:flex transition-all duration-300 print:hidden ${isCollapsed ? 'w-16 border-r border-[var(--border-main)]' : 'w-56 border-r border-[var(--border-main)]'}`}>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
         {/* Logo */}
         <div className={`h-[72px] flex items-center justify-center border-b border-[var(--border-main)]/40 ${isCollapsed ? 'px-2' : 'px-3'}`}>
@@ -185,8 +72,8 @@ export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
         </nav>
       </div>
 
-      {/* Bottom: user profile card — overflow visible for theme menu portal */}
-      <div className="shrink-0 p-2">
+      {/* Bottom: user profile card */}
+      <div className="shrink-0 p-2 safe-area-bottom">
         {isCollapsed ? (
           <div className="flex flex-col items-center gap-2 py-2">
             <div
@@ -197,7 +84,7 @@ export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
               {initials}
             </div>
             <NotificationBell compact sidebarPlacement />
-            <ThemeToggleInline placement="sidebar" />
+            <ThemeToggleInline />
             <button
               onClick={handleLogout}
               className="p-1.5 rounded-lg border border-red-500/25 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:border-red-500/40 transition-colors"
@@ -261,12 +148,15 @@ export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
               </div>
               <div className="w-px bg-[var(--border-main)]/50" />
               <div className="flex items-center justify-center px-3 py-1 hover:bg-[var(--bg-panel)]/50 transition-colors">
-                <ThemeToggleInline placement="sidebar" />
+                <ThemeToggleInline />
               </div>
             </div>
           </div>
         )}
       </div>
     </aside>
+    <MobileHeaderActions />
+    <MobileBottomNav activeItem={activeItem} />
+    </>
   );
 }

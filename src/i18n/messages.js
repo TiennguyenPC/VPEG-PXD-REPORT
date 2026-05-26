@@ -1,3 +1,5 @@
+import { STORED_VALUES_EN } from './storedValues';
+
 export const messages = {
   vi: {
     share: {
@@ -6,7 +8,7 @@ export const messages = {
       client: 'Khách hàng',
       capacity: 'Công suất',
       progress: 'Tiến độ',
-      footer: '© Vu Phong Energy Group — Bản xem công khai (read-only)',
+      footer: '© Vu Phong Energy Group — Bản dành cho khách hàng',
       linkUnavailable: 'Link không khả dụng',
       linkExpired: 'Link chia sẻ đã hết hạn hoặc bị tắt bởi quản trị viên.',
       loadError: 'Không tải được dữ liệu chia sẻ',
@@ -56,7 +58,7 @@ export const messages = {
       monitoring: 'Đang theo dõi',
       normal: 'Bình thường',
       siteNotes: 'Ghi chú hiện trường',
-      noNotes: 'Không có ghi chú. Nhấn biểu tượng bút để cập nhật nhanh nhật ký hiện trường.',
+      noNotes: 'Không có ghi chú. Nhấn "Sửa nhật ký" ở góc trên để cập nhật.',
       daySummary: 'Tóm tắt ngày',
       actualProgress: 'Tiến độ thực tế',
       variance: 'Chênh lệch',
@@ -121,6 +123,9 @@ export const messages = {
       planShort: 'Kế hoạch',
       actualShort: 'Thực tế',
       varianceShort: 'Chênh lệch',
+      behindSchedule: 'Chậm tiến độ',
+      gapLabel: 'Gap',
+      riskLabel: 'Risk',
       monthPrefix: 'THÁNG',
       loading: 'Đang thiết lập biểu đồ...',
       loadingHint: 'Vui lòng cập nhật Ngày Kickoff và COD để biểu đồ tự động nội suy.',
@@ -146,10 +151,10 @@ export const messages = {
     },
     modules: {
       risk: 'RỦI RO DỰ ÁN',
-      permit: 'GIẤY PHÉP / HỒ SƠ PHÁP LÝ DỰ ÁN',
-      design: 'THIẾT KẾ KỸ THUẬT / SHOPDRAWING',
-      procurement: 'CUNG ỨNG VẬT TƯ / PROCUREMENT',
-      construction: 'THI CÔNG HIỆN TRƯỜNG / LẮP ĐẶT DỰ ÁN',
+      permit: 'GIẤY PHÉP',
+      design: 'THIẾT KẾ KỸ THUẬT',
+      procurement: 'CUNG ỨNG VẬT TƯ',
+      construction: 'THI CÔNG HIỆN TRƯỜNG',
       handover: 'BÀN GIAO HỒ SƠ DỰ ÁN',
       completed: '{done}/{total} hoàn thành',
       weight: 'Trọng số: {n}%',
@@ -168,6 +173,11 @@ export const messages = {
       today: 'HÔM NAY',
       expectedCod: 'DỰ KIẾN COD',
       daysLate: '-{n} ngày',
+      scheduleSettings: 'Cài đặt ngày dự án',
+      projectStart: 'Ngày bắt đầu dự án',
+      kickoffDate: 'Ngày Kickoff',
+      codDate: 'Ngày COD',
+      scheduleHint: 'Ngày bắt đầu = Sale Admin email PXD triển khai (ký HĐ). Kickoff là mốc họp riêng, không trùng ngày bắt đầu.',
     },
     table: {
       item: 'Hạng mục',
@@ -186,9 +196,9 @@ export const messages = {
       notes: 'Ghi chú',
       taskCode: 'Mã CV',
       taskItem: 'Hạng mục công việc hiện trường',
-      startDate: 'Ngày bắt đầu',
-      endDate: 'Ngày kết thúc',
-      actualEnd: 'Ngày HT thực tế',
+      startDate: 'Bắt đầu',
+      endDate: 'Kết thúc',
+      actualEnd: 'Thực tế',
       actualProgress: 'Tiến độ thực tế',
       weekday: 'Thứ',
       date: 'Ngày',
@@ -210,7 +220,7 @@ export const messages = {
       client: 'Client',
       capacity: 'Capacity',
       progress: 'Progress',
-      footer: '© Vu Phong Energy Group — Public view (read-only)',
+      footer: '© Vu Phong Energy Group — Customer view',
       linkUnavailable: 'Link unavailable',
       linkExpired: 'This share link has expired or was disabled by an administrator.',
       loadError: 'Could not load shared project data',
@@ -260,7 +270,7 @@ export const messages = {
       monitoring: 'Under review',
       normal: 'Normal',
       siteNotes: 'Site notes',
-      noNotes: 'No notes yet. Use the edit button to add site log entries.',
+      noNotes: 'No notes yet. Click "Edit log" at the top to add entries.',
       daySummary: 'Day summary',
       actualProgress: 'Actual progress',
       variance: 'Variance',
@@ -325,6 +335,9 @@ export const messages = {
       planShort: 'Plan',
       actualShort: 'Actual',
       varianceShort: 'Variance',
+      behindSchedule: 'Behind schedule',
+      gapLabel: 'Gap',
+      riskLabel: 'Risk',
       monthPrefix: 'MONTH',
       loading: 'Setting up chart...',
       loadingHint: 'Update Kickoff and COD dates for automatic chart interpolation.',
@@ -372,6 +385,11 @@ export const messages = {
       today: 'TODAY',
       expectedCod: 'EXPECTED COD',
       daysLate: '-{n} days',
+      scheduleSettings: 'Project schedule',
+      projectStart: 'Project start',
+      kickoffDate: 'Kickoff date',
+      codDate: 'COD date',
+      scheduleHint: 'Start = PXD receives deployment email after contract signing. Kickoff is a separate meeting milestone.',
     },
     table: {
       item: 'Item',
@@ -390,9 +408,9 @@ export const messages = {
       notes: 'Notes',
       taskCode: 'Task code',
       taskItem: 'Site work item',
-      startDate: 'Start date',
-      endDate: 'End date',
-      actualEnd: 'Actual completion',
+      startDate: 'Start',
+      endDate: 'End',
+      actualEnd: 'Actual',
       actualProgress: 'Actual progress',
       weekday: 'Day',
       date: 'Date',
@@ -408,8 +426,6 @@ export const messages = {
     storedValues: {},
   },
 };
-
-import { STORED_VALUES_EN } from './storedValues';
 
 export const LOCALE_STORAGE_KEY = 'shareLocale';
 export const DEFAULT_LOCALE = 'vi';

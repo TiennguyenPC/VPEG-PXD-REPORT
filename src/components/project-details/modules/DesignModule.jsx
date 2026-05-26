@@ -8,6 +8,9 @@ import ModuleProgressPill from './ModuleProgressPill';
 import { useProjectCanEdit } from '../../../context/ProjectEditContext';
 import { useI18n } from '../../../context/I18nContext';
 import { ModuleCell } from '../../ModuleCell';
+import ModuleNotesCell from './ModuleNotesCell';
+import ModuleSelectField from './ModuleSelectField';
+import { normalizeModuleField } from '../../../utils/moduleDisplay';
 
 const defaultDesigns = [
   'Bản vẽ sơ bộ làm giấy phép',
@@ -47,20 +50,22 @@ export default function DesignModule({ project, initialData, onProgressChange })
           id: `design_${index}`,
           _rowIndex: row._rowIndex,
           HẠNG_MỤC: name,
-          TÌNH_TRẠNG: getVal(row, ['TÌNH_TRẠNG', 'tinhtrang']) || 'Chưa làm',
-          PHÊ_DUYỆT: getVal(row, ['PHÊ_DUYỆT', 'pheduyet', 'KẾT_QUẢ_PHẢN_HỒI', 'KẾ_QUẢ_PHẢN_HỒI']) || 'Chưa phản hồi',
-          BƯỚC_TIẾP_THEO: getVal(row, ['BƯỚC_TIẾP_THEO', 'buoctieptheo', 'buoctiep']) || 'Vẽ mới',
-          KẾT_QUẢ_CUỐI: getVal(row, ['KẾT_QUẢ_CUỐI', 'KẾ_QUẢ_CUỐI', 'ketquacuoi', 'ket_qua_cuoi', 'kequacuoi']) || '-'
+          TÌNH_TRẠNG: normalizeModuleField(getVal(row, ['TÌNH_TRẠNG', 'tinhtrang'])),
+          PHÊ_DUYỆT: normalizeModuleField(getVal(row, ['PHÊ_DUYỆT', 'pheduyet', 'KẾT_QUẢ_PHẢN_HỒI', 'KẾ_QUẢ_PHẢN_HỒI'])),
+          BƯỚC_TIẾP_THEO: normalizeModuleField(getVal(row, ['BƯỚC_TIẾP_THEO', 'buoctieptheo', 'buoctiep'])),
+          KẾT_QUẢ_CUỐI: normalizeModuleField(getVal(row, ['KẾT_QUẢ_CUỐI', 'KẾ_QUẢ_CUỐI', 'ketquacuoi', 'ket_qua_cuoi', 'kequacuoi'])),
+          GHI_CHÚ: normalizeModuleField(getVal(row, ['GHI_CHÚ', 'ghichu']))
         };
       }
       return {
         id: `design_${index}`,
         _rowIndex: undefined,
         HẠNG_MỤC: name,
-        TÌNH_TRẠNG: 'Chưa làm',
-        PHÊ_DUYỆT: 'Chưa phản hồi',
-        BƯỚC_TIẾP_THEO: 'Vẽ mới',
-        KẾT_QUẢ_CUỐI: '-'
+        TÌNH_TRẠNG: '',
+        PHÊ_DUYỆT: '',
+        BƯỚC_TIẾP_THEO: '',
+        KẾT_QUẢ_CUỐI: '',
+        GHI_CHÚ: ''
       };
     });
   };
@@ -150,7 +155,8 @@ export default function DesignModule({ project, initialData, onProgressChange })
         TÌNH_TRẠNG: d.TÌNH_TRẠNG,
         PHÊ_DUYỆT: d.PHÊ_DUYỆT,
         BƯỚC_TIẾP_THEO: d.BƯỚC_TIẾP_THEO,
-        KẾT_QUẢ_CUỐI: d.KẾT_QUẢ_CUỐI
+        KẾT_QUẢ_CUỐI: d.KẾT_QUẢ_CUỐI,
+        GHI_CHÚ: d.GHI_CHÚ
       }));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData));
     }
@@ -177,7 +183,10 @@ export default function DesignModule({ project, initialData, onProgressChange })
           
           KẾT_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI,
           KẾ_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI,
-          ketquacuoi: updatedItem.KẾT_QUẢ_CUỐI
+          ketquacuoi: updatedItem.KẾT_QUẢ_CUỐI,
+
+          GHI_CHÚ: updatedItem.GHI_CHÚ,
+          ghichu: updatedItem.GHI_CHÚ
         };
         const response = await api.updateDesign(payload);
         if (response && response.data && response.data.length > 0) {
@@ -302,7 +311,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
           >
             <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
               <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
-                <table className="w-full text-left text-xs min-w-[800px]">
+                <table className="w-full text-left text-xs min-w-[950px]">
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
                       <th className="p-3">{t('table.drawingItem')}</th>
@@ -310,6 +319,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
                       <th className="p-3">{t('table.approval')}</th>
                       <th className="p-3">{t('table.nextStepLong')}</th>
                       <th className="p-3">{t('table.finalResult')}</th>
+                      <th className="p-3 w-64">{t('table.notes')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
@@ -323,10 +333,10 @@ export default function DesignModule({ project, initialData, onProgressChange })
                         </td>
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={d.TÌNH_TRẠNG} colorClass={getStatusColor(d.TÌNH_TRẠNG)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={d.TÌNH_TRẠNG || ''}
+                          <ModuleSelectField
+                            value={d.TÌNH_TRẠNG}
                             disabled={!canEdit}
+                            colorClass={getStatusColor(d.TÌNH_TRẠNG)}
                             onChange={(e) => handleUpdate(d.id, 'TÌNH_TRẠNG', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chưa làm</option>
@@ -334,15 +344,15 @@ export default function DesignModule({ project, initialData, onProgressChange })
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã gửi nội bộ</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã gửi CĐT</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đang chỉnh sửa</option>
-                          </select>
+                          </ModuleSelectField>
                           </ModuleCell>
                         </td>
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={d.PHÊ_DUYỆT} colorClass={getApprovalColor(d.PHÊ_DUYỆT)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={d.PHÊ_DUYỆT || ''}
+                          <ModuleSelectField
+                            value={d.PHÊ_DUYỆT}
                             disabled={!canEdit}
+                            colorClass={getApprovalColor(d.PHÊ_DUYỆT)}
                             onChange={(e) => handleUpdate(d.id, 'PHÊ_DUYỆT', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chưa phản hồi</option>
@@ -350,15 +360,15 @@ export default function DesignModule({ project, initialData, onProgressChange })
                             <option className="bg-[var(--bg-panel)] text-slate-200">Duyệt có điều kiện</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Yêu cầu chỉnh sửa</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Không đạt</option>
-                          </select>
+                          </ModuleSelectField>
                           </ModuleCell>
                         </td>
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={d.BƯỚC_TIẾP_THEO} colorClass={getNextStepColor(d.BƯỚC_TIẾP_THEO)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={d.BƯỚC_TIẾP_THEO || ''}
+                          <ModuleSelectField
+                            value={d.BƯỚC_TIẾP_THEO}
                             disabled={!canEdit}
+                            colorClass={getNextStepColor(d.BƯỚC_TIẾP_THEO)}
                             onChange={(e) => handleUpdate(d.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                           >
                             <option className="bg-[var(--bg-panel)] text-slate-200">Vẽ mới</option>
@@ -368,26 +378,37 @@ export default function DesignModule({ project, initialData, onProgressChange })
                             <option className="bg-[var(--bg-panel)] text-slate-200">Giải trình</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Chốt hồ sơ</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Hoàn tất thiết kế</option>
-                          </select>
+                          </ModuleSelectField>
                           </ModuleCell>
                         </td>
                         <td className="p-3">
                           <ModuleCell canEdit={canEdit} value={d.KẾT_QUẢ_CUỐI} colorClass={getFinalResultColor(d.KẾT_QUẢ_CUỐI)} ts={ts}>
-                          <select 
-                            className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                            value={d.KẾT_QUẢ_CUỐI || ''}
+                          <ModuleSelectField
+                            value={d.KẾT_QUẢ_CUỐI}
                             disabled={!canEdit}
+                            colorClass={getFinalResultColor(d.KẾT_QUẢ_CUỐI)}
                             onChange={(e) => handleUpdate(d.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                           >
-                            <option className="bg-[var(--bg-panel)] text-slate-200" value="-">-</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã duyệt bản vẽ sơ bộ</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã duyệt bản vẽ thi công</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã chốt BOQ</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Đã có bản vẽ hoàn công</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">Hoàn tất thiết kế</option>
                             <option className="bg-[var(--bg-panel)] text-slate-200">N/A</option>
-                          </select>
+                          </ModuleSelectField>
                           </ModuleCell>
+                        </td>
+                        <td className="p-3">
+                          <ModuleNotesCell
+                            value={d.GHI_CHÚ || ''}
+                            canEdit={canEdit}
+                            readDisplay={d.GHI_CHÚ ? ts(d.GHI_CHÚ) : ''}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setDesigns(prev => prev.map(item => item.id === d.id ? { ...item, GHI_CHÚ: v } : item));
+                            }}
+                            onBlur={(e) => handleUpdate(d.id, 'GHI_CHÚ', e.target.value)}
+                          />
                         </td>
                       </tr>
                     ))}

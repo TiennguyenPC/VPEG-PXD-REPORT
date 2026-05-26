@@ -399,8 +399,23 @@ function doPost(e) {
       if (sheetName === 'PROJECT_RISK') {
         ensureRiskSheetColumns_(ss);
       }
+      if (sheetName === 'PROJECT_TASKS') {
+        ensureTaskSheetColumns_(ss);
+      }
       if (action.startsWith('add-')) {
+        if (action === 'add-task') {
+          var taskCreator = getActorFromPayload_(payload);
+          payload.NGƯỜI_TẠO = String((taskCreator && taskCreator.displayName) || payload.NGƯỜI_TẠO || '').trim();
+        }
+        if (action === 'add-project') {
+          ensureProjectMasterColumns_(ss);
+          var projectCreator = getActorFromPayload_(payload);
+          payload.NGƯỜI_TẠO = String((projectCreator && projectCreator.displayName) || payload.NGƯỜI_TẠO || '').trim();
+        }
         appendRow(ss, sheetName, payload);
+        if (action === 'add-project') {
+          autoAssignProjectToUser_(ss, getActorFromPayload_(payload), payload.PROJECT_ID || payload.id);
+        }
         if (action === 'add-project') {
           const projectId = payload.PROJECT_ID || payload.id;
           if (projectId) {
@@ -418,6 +433,11 @@ function doPost(e) {
           }
         } else if (payload._rowIndex) {
           deleteRowById(ss, sheetName, payload._rowIndex);
+        } else if (action === 'delete-project') {
+          var deletedProject = deleteProjectCompletely_(ss, payload.PROJECT_ID || payload.id);
+          if (!deletedProject) {
+            return createResponse({ status: 'error', message: 'Không tìm thấy dự án để xóa' }, 404);
+          }
         } else {
           deleteProjectRow(ss, sheetName, payload.PROJECT_ID || payload.id);
         }
@@ -432,6 +452,12 @@ function doPost(e) {
         var pidForStatus = payload.PROJECT_ID || payload.id;
         var oldProjectStatus = getProjectFieldBeforeUpdate_(ss, pidForStatus, 'TRẠNG_THÁI');
         updateRowById(ss, sheetName, pidForStatus, payload);
+        if (payload.KẾ_HOẠCH_COD || payload.COD_PLAN || payload.cod) {
+          syncProjectCodToMilestone_(ss, pidForStatus, payload.KẾ_HOẠCH_COD || payload.COD_PLAN || payload.cod);
+        }
+        if (payload.KICKOFF_DATE || payload.kickoffDate) {
+          syncProjectKickoffToMilestone_(ss, pidForStatus, payload.KICKOFF_DATE || payload.kickoffDate);
+        }
         var newProjectStatus = payload.TRẠNG_THÁI != null ? payload.TRẠNG_THÁI : oldProjectStatus;
         if (isProjectCompleted_(newProjectStatus) && !isProjectCompleted_(oldProjectStatus)) {
           notifyProjectCompleted_(ss, pidForStatus, getActorFromPayload_(payload));
@@ -470,14 +496,20 @@ function doPost(e) {
     
     if (action === 'update-site-log') {
       const projectId = payload.PROJECT_ID || payload.id;
+      let constructions = [];
+      if (projectId) {
+        constructions = replayConstructionProgressFromSiteLogs_(ss, projectId);
+        recalculateProjectProgress(ss, projectId);
+      }
       auditMutation_(action, payload);
-      const dailyLogs = getSheetDataAsObjects(ss, 'DAILY_SITE_LOG').filter(row => (row.PROJECT_ID == projectId || row.projectId == projectId));
+      const dailyLogs = filterDailyLogsForProject_(getSheetDataAsObjects(ss, 'DAILY_SITE_LOG'), projectId);
       return createResponse({
         status: 'success',
         message: 'Data updated successfully',
         dailyLogs: dailyLogs,
         weeklyLogs: getWeeklyAggregates(ss, projectId, dailyLogs),
-        monthlyLogs: getMonthlyAggregates(ss, projectId, dailyLogs)
+        monthlyLogs: getMonthlyAggregates(ss, projectId, dailyLogs),
+        constructions: constructions
       });
     }
     if (action === 'update-module-dates') {
@@ -654,6 +686,12 @@ function findColumnIndex(headers, possibleNames) {
 }
 
 function getSheetDataAsObjects(ss, sheetName) {
+  if (sheetName === 'PROJECT_TASKS') {
+    ensureTaskSheetColumns_(ss);
+  }
+  if (sheetName === 'PROJECT_MASTER') {
+    ensureProjectMasterColumns_(ss);
+  }
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) return [];
   
@@ -714,8 +752,10 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
   let headers = data[0];
   let targetRowIndex = -1;
   
-  // Use _rowIndex directly if valid to allow updating non-unique table rows
-  if (updatedData && updatedData._rowIndex && Number(updatedData._rowIndex) > 1 && Number(updatedData._rowIndex) <= data.length) {
+  // Use _rowIndex directly if valid — except DAILY_SITE_LOG (must match project + date)
+  var canUseRowIndex = updatedData && updatedData._rowIndex && Number(updatedData._rowIndex) > 1
+    && Number(updatedData._rowIndex) <= data.length && sheetName !== 'DAILY_SITE_LOG';
+  if (canUseRowIndex) {
     targetRowIndex = Number(updatedData._rowIndex);
   } else {
     // Find ID column (could be PROJECT_ID or id depending on sheet)
@@ -740,23 +780,18 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     const secondaryKeyValue = secondaryKeyName && updatedData ? updatedData[secondaryKeyName] : undefined;
     
     for (let i = 1; i < data.length; i++) {
-      // Weak equality because sheet ID might be number but payload ID is string
-      const idMatch = (data[i][idColIndex] == recordId);
+      const idMatch = projectIdsMatch_(data[i][idColIndex], recordId);
       
       let dateMatch = true;
-      if (sheetName === 'DAILY_SITE_LOG' && dateColIndex !== -1 && updatedData) {
-        const payloadDate = updatedData.LOG_DATE || updatedData.NGÀY;
-        const rowDateVal = data[i][dateColIndex];
-        
-        let rowDateStr = String(rowDateVal);
-        if (rowDateVal instanceof Date) {
-          const y = rowDateVal.getFullYear();
-          const m = String(rowDateVal.getMonth() + 1).padStart(2, '0');
-          const d = String(rowDateVal.getDate()).padStart(2, '0');
-          rowDateStr = `${d}/${m}/${y}`;
-        }
-        
-        dateMatch = (rowDateStr === String(payloadDate));
+      if (sheetName === 'DAILY_SITE_LOG' && updatedData) {
+        const payloadDate = normalizeLogDateDMY_(updatedData.LOG_DATE || updatedData.NGÀY);
+        const logDateCol = findColumnIndex(headers, ['LOG_DATE']);
+        const ngayCol = findColumnIndex(headers, ['NGÀY']);
+        let rowDateNorm = '';
+        if (logDateCol !== -1) rowDateNorm = normalizeLogDateDMY_(data[i][logDateCol]);
+        if (!rowDateNorm && ngayCol !== -1) rowDateNorm = normalizeLogDateDMY_(data[i][ngayCol]);
+        if (!rowDateNorm && dateColIndex !== -1) rowDateNorm = normalizeLogDateDMY_(data[i][dateColIndex]);
+        dateMatch = payloadDate ? (rowDateNorm === payloadDate) : true;
       }
       
       // For multi-row sheets, also match by secondary key (item name)
@@ -792,6 +827,8 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     'CÔNG_SUẤT_KWP':   ['CÔNG_SUẤT_KWP', 'CAPACITY_KWP'],
     'KẾ_HOẠCH_COD':    ['KẾ_HOẠCH_COD', 'COD_PLAN', 'NGÀY_ĐÓNG_ĐIỆN', 'NGÀY_ĐÓNG_ĐIỆN_COD'],
     'KICKOFF_DATE':    ['KICKOFF_DATE', 'NGÀY_KICKOFF', 'KICKOFF'],
+    'NGÀY_BẮT_ĐẦU':   ['NGÀY_BẮT_ĐẦU', 'NGAY_BAT_DAU', 'PROJECT_START', 'START_DATE'],
+    'THEO_DÕI_HĐ':    ['THEO_DÕI_HĐ', 'THEO_DOI_HD', 'CONTRACT_TRACKING'],
     'TIẾN_ĐỘ_KẾ_HOẠCH':['TIẾN_ĐỘ_KẾ_HOẠCH', 'PLAN_PROGRESS'],
     'TIẾN_ĐỘ_THỰC_TẾ': ['TIẾN_ĐỘ_THỰC_TẾ', 'ACTUAL_PROGRESS'],
     // Vietnamese → English reverse aliases
@@ -952,6 +989,7 @@ function applyTaskPayloadToRow_(sheet, headers, targetRowIndex, payload) {
 }
 
 function updateTaskRow(ss, payload) {
+  ensureTaskSheetColumns_(ss);
   const sheet = ss.getSheetByName('PROJECT_TASKS');
   if (!sheet) {
     throw new Error('PROJECT_TASKS sheet not found');
@@ -968,6 +1006,7 @@ function updateTaskRow(ss, payload) {
 }
 
 function deleteTaskRow(ss, payload) {
+  ensureTaskSheetColumns_(ss);
   const sheet = ss.getSheetByName('PROJECT_TASKS');
   if (!sheet) return false;
 
@@ -998,6 +1037,81 @@ function deleteProjectRow(ss, sheetName, projectId) {
     }
   }
   return false;
+}
+
+function deleteAllProjectRows_(ss, sheetName, projectId) {
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet || !projectId) return 0;
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return 0;
+  var headers = data[0];
+  var idCol = findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']);
+  if (idCol === -1) return 0;
+  var targetId = normalizeCellValue(projectId);
+  var deleted = 0;
+  for (var i = data.length - 1; i >= 1; i--) {
+    if (normalizeCellValue(data[i][idCol]) === targetId) {
+      sheet.deleteRow(i + 1);
+      deleted++;
+    }
+  }
+  return deleted;
+}
+
+function deleteTasksForProject_(ss, projectId, projectName) {
+  var sheet = ss.getSheetByName('PROJECT_TASKS');
+  if (!sheet) return;
+  ensureTaskSheetColumns_(ss);
+  var ctx = getTaskSheetContext_(sheet);
+  if (!ctx) return;
+  var nameCol = findColumnIndex(ctx.headers, ['TÊN_DỰ_ÁN', 'PROJECT_NAME']);
+  var targetId = normalizeCellValue(projectId);
+  var targetName = normalizeCellValue(projectName);
+  for (var i = ctx.data.length - 1; i >= 1; i--) {
+    var rowPid = ctx.pidCol !== -1 ? normalizeCellValue(ctx.data[i][ctx.pidCol]) : '';
+    var rowName = nameCol !== -1 ? normalizeCellValue(ctx.data[i][nameCol]) : '';
+    if ((targetId && rowPid === targetId) || (targetName && rowName === targetName)) {
+      sheet.deleteRow(i + 1);
+    }
+  }
+}
+
+function deleteProjectCompletely_(ss, projectId) {
+  if (!projectId) return false;
+  var projectName = getProjectDisplayName_(ss, projectId);
+  var relatedSheets = [
+    'PROJECT_RISK', 'PROJECT_PERMIT', 'PROJECT_DESIGN', 'PROJECT_PROCUREMENT',
+    'PROJECT_CONSTRUCTION', 'PROJECT_HANDOVER', 'PROJECT_MILESTONE',
+    'DAILY_SITE_LOG', 'PROJECT_SHARE'
+  ];
+  for (var s = 0; s < relatedSheets.length; s++) {
+    deleteAllProjectRows_(ss, relatedSheets[s], projectId);
+  }
+  deleteTasksForProject_(ss, projectId, projectName);
+  return deleteProjectRow(ss, 'PROJECT_MASTER', projectId);
+}
+
+function autoAssignProjectToUser_(ss, session, projectId) {
+  if (!session || !projectId) return;
+  var userId = String(session.userId || '').trim();
+  if (!userId) return;
+  ensureUsersSheet_(ss);
+  var sheet = ss.getSheetByName('USERS');
+  if (!sheet) return;
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var assignCol = findColumnIndex(headers, ['ASSIGNED_PROJECTS']);
+  var userIdCol = findColumnIndex(headers, ['USER_ID']);
+  if (assignCol === -1 || userIdCol === -1) return;
+  var data = sheet.getDataRange().getValues();
+  var pid = String(projectId).trim();
+  for (var i = 1; i < data.length; i++) {
+    if (normalizeCellValue(data[i][userIdCol]) !== userId) continue;
+    var current = parseAssignedProjects_(data[i][assignCol]);
+    if (current.indexOf(pid) >= 0) return;
+    current.push(pid);
+    sheet.getRange(i + 1, assignCol + 1).setValue(current.join(', '));
+    return;
+  }
 }
 
 // ================= AGGREGATION UTILITIES =================
@@ -1300,7 +1414,7 @@ function initializeSheetIfEmpty(sheet, sheetName) {
 function getDefaultHeaders(sheetName) {
   switch (sheetName) {
     case 'PROJECT_MASTER':
-      return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'KHÁCH_HÀNG', 'PM', 'SM', 'CÔNG_SUẤT_KWP', 'KẾ_HOẠCH_COD', 'DỰ_BÁO_COD', 'TIẾN_ĐỘ_KẾ_HOẠCH', 'TIẾN_ĐỘ_THỰC_TẾ', 'DELAY', 'TRẠNG_THÁI', 'RISK_LEVEL', 'CẬP_NHẬT_CUỐI'];
+      return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'KHÁCH_HÀNG', 'PM', 'SM', 'CÔNG_SUẤT_KWP', 'KẾ_HOẠCH_COD', 'DỰ_BÁO_COD', 'TIẾN_ĐỘ_KẾ_HOẠCH', 'TIẾN_ĐỘ_THỰC_TẾ', 'DELAY', 'TRẠNG_THÁI', 'RISK_LEVEL', 'CẬP_NHẬT_CUỐI', 'NGƯỜI_TẠO'];
     case 'PROJECT_RISK':
       return ['PROJECT_ID', 'MỨC_ĐỘ', 'NỘI_DUNG', 'ẢNH_HƯỞNG', 'TRẠNG_THÁI', 'PHỤ_TRÁCH', 'NGÀY', 'NGÀY_HOÀN_THÀNH', 'GHI_CHÚ'];
     case 'PROJECT_PERMIT':
@@ -1318,7 +1432,7 @@ function getDefaultHeaders(sheetName) {
     case 'DAILY_SITE_LOG':
       return ['PROJECT_ID', 'LOG_DATE', 'NGÀY', 'MANPOWER', 'NHÂN_LỰC_SITE', 'ENGINEERS', 'KỸ_SƯ_GS', 'WEATHER', 'THỜI_TIẾT', 'INCIDENT_COUNT', 'SỰ_CỐ', 'DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG', 'SITE_PHOTOS', 'WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN', 'MONTHLY_REPORT', 'STATUS', 'UPDATED_BY', 'UPDATED_AT'];
     case 'PROJECT_TASKS':
-      return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'TÁC_VỤ', 'NHÂN_SỰ', 'NGÀY_BẮT_ĐẦU', 'NGÀY_KẾT_THÚC', 'BỘ_CHỨA', 'TRẠNG_THÁI', 'ƯU_TIÊN', 'GHI_CHÚ'];
+      return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'TÁC_VỤ', 'NHÂN_SỰ', 'NGÀY_BẮT_ĐẦU', 'NGÀY_KẾT_THÚC', 'BỘ_CHỨA', 'TRẠNG_THÁI', 'ƯU_TIÊN', 'GHI_CHÚ', 'NGƯỜI_TẠO'];
     case 'USERS':
       return ['USER_ID', 'USERNAME', 'PASSWORD_HASH', 'SALT', 'EMAIL', 'EMPLOYEE_ID', 'DISPLAY_NAME', 'ROLE', 'ASSIGNED_PROJECTS', 'ACTIVE', 'FAILED_LOGIN_COUNT', 'LOCKED', 'LAST_LOGIN', 'CREATED_AT'];
     case 'AUDIT_LOG':
@@ -1330,6 +1444,120 @@ function getDefaultHeaders(sheetName) {
     default:
       return [];
   }
+}
+
+function extractDailyNoteSection_(text, heading) {
+  if (!text) return null;
+  var regex = new RegExp('### ' + heading + '\\n([\\s\\S]*?)(?=###|$)', 'i');
+  var match = String(text).match(regex);
+  return match ? match[1].trim() : null;
+}
+
+function parseSiteLogProgressEntries_(noteText) {
+  var section = extractDailyNoteSection_(noteText, 'TIẾN ĐỘ HẠNG MỤC');
+  if (!section) return [];
+  try {
+    var parsed = JSON.parse(section);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function taskProgressKey_(entry) {
+  return String(entry.taskCode || entry.MÃ_CV || '').trim() + '::' + String(entry.taskName || entry.HẠNG_MỤC_CÔNG_VIỆC || '').trim();
+}
+
+function replayConstructionProgressFromSiteLogs_(ss, projectId) {
+  if (!projectId) return [];
+  var logs = filterDailyLogsForProject_(getSheetDataAsObjects(ss, 'DAILY_SITE_LOG'), projectId);
+  var sums = {};
+  logs.forEach(function(log) {
+    var note = String(log.DAILY_NOTE || log.GHI_CHÚ_HIỆN_TRƯỜNG || '').trim();
+    parseSiteLogProgressEntries_(note).forEach(function(entry) {
+      var delta = Number(entry.deltaPercent || 0);
+      if (!delta) return;
+      var key = taskProgressKey_(entry);
+      sums[key] = (sums[key] || 0) + delta;
+    });
+  });
+
+  var sheet = ss.getSheetByName('PROJECT_CONSTRUCTION');
+  if (!sheet) {
+    return getSheetDataAsObjects(ss, 'PROJECT_CONSTRUCTION').filter(function(r) {
+      return String(r.PROJECT_ID || r.projectId) === String(projectId);
+    });
+  }
+
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) {
+    return getSheetDataAsObjects(ss, 'PROJECT_CONSTRUCTION').filter(function(r) {
+      return String(r.PROJECT_ID || r.projectId) === String(projectId);
+    });
+  }
+
+  var headers = data[0];
+  var progressCol = findColumnIndex(headers, ['TIẾN_ĐỘ_THỰC_TẾ', 'ACTUAL_PROGRESS']);
+  var codeCol = findColumnIndex(headers, ['MÃ_CV']);
+  var itemCol = findColumnIndex(headers, ['HẠNG_MỤC_CÔNG_VIỆC']);
+  var idCol = findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']);
+
+  if (progressCol === -1 || idCol === -1) {
+    return getSheetDataAsObjects(ss, 'PROJECT_CONSTRUCTION').filter(function(r) {
+      return String(r.PROJECT_ID || r.projectId) === String(projectId);
+    });
+  }
+
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) !== String(projectId)) continue;
+    var code = codeCol !== -1 ? String(data[i][codeCol] || '').trim() : '';
+    var item = itemCol !== -1 ? String(data[i][itemCol] || '').trim() : '';
+    var key = code + '::' + item;
+    if (!Object.prototype.hasOwnProperty.call(sums, key)) continue;
+    var newVal = Math.min(100, Math.max(0, Number(sums[key] || 0)));
+    sheet.getRange(i + 1, progressCol + 1).setValue(newVal);
+  }
+
+  return getSheetDataAsObjects(ss, 'PROJECT_CONSTRUCTION').filter(function(r) {
+    return String(r.PROJECT_ID || r.projectId) === String(projectId);
+  });
+}
+
+function normalizeProjectId_(id) {
+  return String(id || '').replace(/^'/, '').trim();
+}
+
+function projectIdsMatch_(a, b) {
+  return normalizeProjectId_(a) === normalizeProjectId_(b);
+}
+
+function normalizeLogDateDMY_(val) {
+  if (val == null || val === '') return '';
+  if (val instanceof Date) {
+    var y = val.getFullYear();
+    var m = String(val.getMonth() + 1).padStart(2, '0');
+    var d = String(val.getDate()).padStart(2, '0');
+    return d + '/' + m + '/' + y;
+  }
+  var s = String(val).trim();
+  var parts = s.split('/');
+  if (parts.length === 3) {
+    var day = parseInt(parts[0], 10);
+    var month = parseInt(parts[1], 10);
+    var yearRaw = String(parts[2] || '').trim();
+    if (!Number.isFinite(day) || !Number.isFinite(month) || !yearRaw) return s;
+    var year = parseInt(yearRaw, 10);
+    if (yearRaw.length === 2) year = 2000 + year;
+    if (!Number.isFinite(year)) return s;
+    return String(day).padStart(2, '0') + '/' + String(month).padStart(2, '0') + '/' + year;
+  }
+  return s;
+}
+
+function filterDailyLogsForProject_(logs, projectId) {
+  return (logs || []).filter(function(row) {
+    return projectIdsMatch_(row.PROJECT_ID || row.projectId, projectId);
+  });
 }
 
 function recalculateProjectProgress(ss, projectId) {
@@ -1531,6 +1759,52 @@ function batchAppendRows(ss, sheetName, rowsData) {
     sheet.getRange(sheet.getLastRow() + 1, 1, rowsArray.length, headers.length).setValues(rowsArray);
   }
 }
+function syncProjectCodToMilestone_(ss, projectId, codDate) {
+  if (!projectId || !codDate) return;
+  var sheet = ss.getSheetByName('PROJECT_MILESTONE');
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return;
+  var headers = data[0];
+  var idCol = findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']);
+  var milestoneCol = findColumnIndex(headers, ['MILESTONE']);
+  var planCol = findColumnIndex(headers, ['NGÀY_KẾ_HOẠCH', 'NGAY_KE_HOACH']);
+  if (idCol === -1 || milestoneCol === -1 || planCol === -1) return;
+
+  var codStr = formatLogDateCellValue_(codDate);
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) != String(projectId)) continue;
+    var title = String(data[i][milestoneCol] || '').toUpperCase();
+    if (title === 'COD' || title.indexOf('COD') !== -1) {
+      sheet.getRange(i + 1, planCol + 1).setValue(codStr);
+    }
+  }
+  SpreadsheetApp.flush();
+}
+
+function syncProjectKickoffToMilestone_(ss, projectId, kickoffDate) {
+  if (!projectId || !kickoffDate) return;
+  var sheet = ss.getSheetByName('PROJECT_MILESTONE');
+  if (!sheet) return;
+  var data = sheet.getDataRange().getValues();
+  if (data.length <= 1) return;
+  var headers = data[0];
+  var idCol = findColumnIndex(headers, ['PROJECT_ID', 'id', 'projectId']);
+  var milestoneCol = findColumnIndex(headers, ['MILESTONE']);
+  var planCol = findColumnIndex(headers, ['NGÀY_KẾ_HOẠCH', 'NGAY_KE_HOACH']);
+  if (idCol === -1 || milestoneCol === -1 || planCol === -1) return;
+
+  var kickoffStr = formatLogDateCellValue_(kickoffDate);
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][idCol]) != String(projectId)) continue;
+    var title = String(data[i][milestoneCol] || '').toUpperCase();
+    if (title === 'KICKOFF') {
+      sheet.getRange(i + 1, planCol + 1).setValue(kickoffStr);
+    }
+  }
+  SpreadsheetApp.flush();
+}
+
 function initializeProjectDetails(ss, projectId, kickoffDate = '', codDate = '') {
   if (!projectId) return;
 
@@ -2395,13 +2669,70 @@ function isAssignedToProject_(session, projectId) {
 function canEditProject_(session, projectId) {
   if (!session) return false;
   if (String(session.role || '').toLowerCase() === 'admin') return true;
+  if (isAssignedToProject_(session, projectId)) return true;
+  return isProjectCreatorById_(session, projectId, getSpreadsheet());
+}
+
+function canViewContractTracking_(session, projectId) {
+  if (!session) return false;
+  if (String(session.role || '').toLowerCase() === 'admin') return true;
+  var role = String(session.role || '').toLowerCase();
+  if (role !== 'pm' && role !== 'sm') return false;
   return isAssignedToProject_(session, projectId);
+}
+
+function payloadHasContractTracking_(payload) {
+  if (!payload) return false;
+  if (payload['THEO_DÕI_HĐ'] != null || payload.THEO_DOI_HD != null || payload.CONTRACT_TRACKING != null) return true;
+  if (payload.contractTracking != null) return true;
+  return false;
+}
+
+function getProjectCreatorFromMaster_(projectId, ss) {
+  ss = ss || getSpreadsheet();
+  if (!projectId) return '';
+  var projects = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
+  var targetId = String(projectId).trim();
+  for (var i = 0; i < projects.length; i++) {
+    var pid = String(projects[i].PROJECT_ID || projects[i].id || '').trim();
+    if (pid !== targetId) continue;
+    return String(projects[i].NGƯỜI_TẠO || projects[i].NGUOI_TAO || projects[i].CREATED_BY || '').trim();
+  }
+  return '';
+}
+
+function isProjectCreatorById_(session, projectId, ss) {
+  var creator = getProjectCreatorFromMaster_(projectId, ss);
+  if (!creator) return false;
+  return namesMatch_(session.displayName, creator);
+}
+
+function canDeleteProject_(session, projectId, ss) {
+  if (!session || !projectId) return false;
+  if (String(session.role || '').toLowerCase() === 'admin') return true;
+  return isProjectCreatorById_(session, projectId, ss);
+}
+
+function canDeleteTask_(session, payload, ss) {
+  if (!session) return false;
+  if (String(session.role || '').toLowerCase() === 'admin') return true;
+  payload = payload || {};
+  ss = ss || getSpreadsheet();
+  var creator = getTaskCreatorFromSheet_(payload, ss);
+  if (!creator) return false;
+  return namesMatch_(session.displayName, creator);
+}
+
+function canCreateProject_(session) {
+  return !!(session && session.username && session.username !== 'unknown');
 }
 
 function canEditTask_(session, payload) {
   if (!session) return false;
   if (String(session.role || '').toLowerCase() === 'admin') return true;
   payload = payload || {};
+
+  if (hasFullTaskEditRights_(session, payload, getSpreadsheet())) return true;
 
   var assignee = resolveTaskAssigneeForPermission_(payload);
   var assignees = parseAssigneeNames_(assignee);
@@ -2410,13 +2741,87 @@ function canEditTask_(session, payload) {
   }
   if (namesMatch_(session.displayName, assignee)) return true;
 
+  return false;
+}
+
+function getTaskCreatorFromSheet_(payload, ss) {
+  ss = ss || getSpreadsheet();
+  var sheet = ss.getSheetByName('PROJECT_TASKS');
+  if (!sheet) return '';
+  var ctx = getTaskSheetContext_(sheet);
+  if (!ctx) return '';
+  var rowIndex = findTaskRowIndex_(sheet, payload);
+  if (rowIndex <= 1) return '';
+  var creatorCol = findColumnIndex(ctx.headers, ['NGƯỜI_TẠO', 'NGUOI_TAO', 'CREATED_BY']);
+  if (creatorCol === -1) return '';
+  return normalizeCellValue(ctx.data[rowIndex - 1][creatorCol]);
+}
+
+function isTaskCreator_(session, payload, ss) {
+  var creator = getTaskCreatorFromSheet_(payload, ss);
+  if (!creator) return false;
+  return namesMatch_(session.displayName, creator);
+}
+
+function hasFullTaskEditRights_(session, payload, ss) {
+  if (!session) return false;
+  if (String(session.role || '').toLowerCase() === 'admin') return true;
+  payload = payload || {};
+  ss = ss || getSpreadsheet();
+  if (isTaskCreator_(session, payload, ss)) return true;
+
   if (isProjectEditorRole_(session.role)) {
-    var ss = getSpreadsheet();
     if (isUserAssignedToTaskProject_(session, payload, ss)) return true;
     if (isOfficeTask_(payload, ss)) return true;
   }
 
   return false;
+}
+
+function isCompletedTaskStatus_(status) {
+  var s = normalizeCellValue(status);
+  return s === 'Đã hoàn thành' || s === 'Hoàn thành';
+}
+
+function checkAssigneeTaskFieldRestrictions_(session, payload, ss) {
+  if (hasFullTaskEditRights_(session, payload, ss)) return null;
+
+  ss = ss || getSpreadsheet();
+  var sheet = ss.getSheetByName('PROJECT_TASKS');
+  if (!sheet) return null;
+  var rowIndex = findTaskRowIndex_(sheet, payload);
+  if (rowIndex <= 1) return null;
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var oldRow = sheet.getRange(rowIndex, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  var restricted = ['NHÂN_SỰ', 'NGÀY_BẮT_ĐẦU', 'NGÀY_KẾT_THÚC', 'ƯU_TIÊN', 'BỘ_CHỨA', 'NGƯỜI_TẠO'];
+  for (var r = 0; r < restricted.length; r++) {
+    var key = restricted[r];
+    if (payload[key] == null) continue;
+    var col = findColumnIndex(headers, key);
+    if (col === -1) continue;
+    var oldVal = normalizeCellValue(oldRow[col]);
+    var newVal = normalizeCellValue(payload[key]);
+    if (oldVal !== newVal) {
+      return 'Bạn chỉ được sửa tên tác vụ, mô tả và dự án';
+    }
+  }
+
+  if (payload.TRẠNG_THÁI != null) {
+    var statusCol = findColumnIndex(headers, ['TRẠNG_THÁI', 'STATUS']);
+    var oldStatus = statusCol !== -1 ? normalizeCellValue(oldRow[statusCol]) : '';
+    var newStatus = normalizeCellValue(payload.TRẠNG_THÁI);
+    if (oldStatus !== newStatus) {
+      var oldCompleted = isCompletedTaskStatus_(oldStatus);
+      var newCompleted = isCompletedTaskStatus_(newStatus);
+      if (oldCompleted === newCompleted) {
+        return 'Trạng thái tự động theo ngày — chỉ bấm Hoàn thành';
+      }
+    }
+  }
+
+  return null;
 }
 
 function isUserAssignedToTaskProject_(session, payload, ss) {
@@ -2527,6 +2932,13 @@ function checkMutationPermission_(action, payload, session) {
     if (!canEditTask_(session, payload)) {
       return 'Bạn chỉ được sửa công việc được phân công cho mình';
     }
+    if (action === 'delete-task' && !canDeleteTask_(session, payload, getSpreadsheet())) {
+      return 'Chỉ người tạo task mới được xóa (Admin có toàn quyền)';
+    }
+    if (action === 'update-task') {
+      var assigneeFieldErr = checkAssigneeTaskFieldRestrictions_(session, payload, getSpreadsheet());
+      if (assigneeFieldErr) return assigneeFieldErr;
+    }
     return null;
   }
 
@@ -2537,8 +2949,20 @@ function checkMutationPermission_(action, payload, session) {
     return null;
   }
 
+  if (action === 'add-project') {
+    return canCreateProject_(session) ? null : 'Vui lòng đăng nhập để tạo dự án';
+  }
+
+  if (action === 'delete-project') {
+    if (!pid) return 'Thiếu mã dự án';
+    if (!canDeleteProject_(session, pid, getSpreadsheet())) {
+      return 'Chỉ người tạo dự án mới được xóa (Admin có toàn quyền)';
+    }
+    return null;
+  }
+
   var projectMutations = [
-    'update-project', 'delete-project', 'add-project',
+    'update-project',
     'update-risk', 'add-risk',
     'update-permit', 'add-permit',
     'update-design', 'add-design',
@@ -2548,10 +2972,15 @@ function checkMutationPermission_(action, payload, session) {
   ];
 
   if (projectMutations.indexOf(action) >= 0) {
-    if (!pid || !isAssignedToProject_(session, pid)) {
-      return 'Bạn chưa được gán dự án này (Cài đặt → Tài khoản → Sửa → Gán dự án)';
+    if (!pid) return 'Thiếu mã dự án';
+    if (action === 'update-project' && payloadHasContractTracking_(payload)) {
+      if (!canViewContractTracking_(session, pid)) {
+        return 'Theo dõi HĐ chỉ dành cho SM/PM nội bộ được gán dự án';
+      }
     }
-    return null;
+    if (isAssignedToProject_(session, pid)) return null;
+    if (isProjectCreatorById_(session, pid, getSpreadsheet())) return null;
+    return 'Bạn chưa được gán dự án này (Cài đặt → Tài khoản → Sửa → Gán dự án)';
   }
 
   return 'Không có quyền thực hiện thao tác này';
@@ -3845,6 +4274,38 @@ function ensureRiskSheetColumns_(ss) {
   initializeSheetIfEmpty(sheet, 'PROJECT_RISK');
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   var needed = ['NGÀY_HOÀN_THÀNH'];
+  for (var i = 0; i < needed.length; i++) {
+    if (findColumnIndex(headers, needed[i]) === -1) {
+      var col = sheet.getLastColumn() + 1;
+      sheet.getRange(1, col).setValue(needed[i]);
+      headers.push(needed[i]);
+    }
+  }
+}
+
+/** Tự thêm cột NGƯỜI_TẠO trên PROJECT_TASKS nếu sheet cũ chưa có */
+function ensureTaskSheetColumns_(ss) {
+  var sheet = ss.getSheetByName('PROJECT_TASKS');
+  if (!sheet) return;
+  initializeSheetIfEmpty(sheet, 'PROJECT_TASKS');
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var needed = ['NGƯỜI_TẠO'];
+  for (var i = 0; i < needed.length; i++) {
+    if (findColumnIndex(headers, needed[i]) === -1) {
+      var col = sheet.getLastColumn() + 1;
+      sheet.getRange(1, col).setValue(needed[i]);
+      headers.push(needed[i]);
+    }
+  }
+}
+
+/** Tự thêm cột NGƯỜI_TẠO trên PROJECT_MASTER nếu sheet cũ chưa có */
+function ensureProjectMasterColumns_(ss) {
+  var sheet = ss.getSheetByName('PROJECT_MASTER');
+  if (!sheet) return;
+  initializeSheetIfEmpty(sheet, 'PROJECT_MASTER');
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var needed = ['NGƯỜI_TẠO'];
   for (var i = 0; i < needed.length; i++) {
     if (findColumnIndex(headers, needed[i]) === -1) {
       var col = sheet.getLastColumn() + 1;

@@ -8,6 +8,9 @@ import ModuleProgressPill from './ModuleProgressPill';
 import { useProjectCanEdit } from '../../../context/ProjectEditContext';
 import { useI18n } from '../../../context/I18nContext';
 import { ModuleCell } from '../../ModuleCell';
+import ModuleNotesCell from './ModuleNotesCell';
+import ModuleSelectField from './ModuleSelectField';
+import { normalizeModuleField } from '../../../utils/moduleDisplay';
 
 const defaultPermits = [
   'Sở công thương',
@@ -48,20 +51,22 @@ export default function PermitModule({ project, initialData, onProgressChange })
           id: `permit_${index}`,
           _rowIndex: row._rowIndex,
           HẠNG_MỤC: name,
-          TÌNH_TRẠNG: getVal(row, ['TÌNH_TRẠNG', 'tinhtrang']) || 'Chưa làm',
-          KẾT_QUẢ_PHẢN_HỒI: getVal(row, ['KẾT_QUẢ_PHẢN_HỒI', 'KẾ_QUẢ_PHẢN_HỒI', 'phanhoi', 'ketquaphanhoi']) || 'Chưa có phản hồi',
-          BƯỚC_TIẾP_THEO: getVal(row, ['BƯỚC_TIẾP_THEO', 'buoctieptheo', 'buoctiep']) || 'Nộp hồ sơ',
-          KẾT_QUẢ_CUỐI: getVal(row, ['KẾT_QUẢ_CUỐI', 'KẾ_QUẢ_CUỐI', 'ketquacuoi', 'ket_qua_cuoi', 'kequacuoi']) || 'N/A'
+          TÌNH_TRẠNG: normalizeModuleField(getVal(row, ['TÌNH_TRẠNG', 'tinhtrang'])),
+          KẾT_QUẢ_PHẢN_HỒI: normalizeModuleField(getVal(row, ['KẾT_QUẢ_PHẢN_HỒI', 'KẾ_QUẢ_PHẢN_HỒI', 'phanhoi', 'ketquaphanhoi'])),
+          BƯỚC_TIẾP_THEO: normalizeModuleField(getVal(row, ['BƯỚC_TIẾP_THEO', 'buoctieptheo', 'buoctiep'])),
+          KẾT_QUẢ_CUỐI: normalizeModuleField(getVal(row, ['KẾT_QUẢ_CUỐI', 'KẾ_QUẢ_CUỐI', 'ketquacuoi', 'ket_qua_cuoi', 'kequacuoi'])),
+          GHI_CHÚ: normalizeModuleField(getVal(row, ['GHI_CHÚ', 'ghichu']))
         };
       }
       return {
         id: `permit_${index}`,
         _rowIndex: undefined,
         HẠNG_MỤC: name,
-        TÌNH_TRẠNG: 'Chưa làm',
-        KẾT_QUẢ_PHẢN_HỒI: 'Chưa có phản hồi',
-        BƯỚC_TIẾP_THEO: 'Nộp hồ sơ',
-        KẾT_QUẢ_CUỐI: 'N/A'
+        TÌNH_TRẠNG: '',
+        KẾT_QUẢ_PHẢN_HỒI: '',
+        BƯỚC_TIẾP_THEO: '',
+        KẾT_QUẢ_CUỐI: '',
+        GHI_CHÚ: ''
       };
     });
   };
@@ -151,7 +156,8 @@ export default function PermitModule({ project, initialData, onProgressChange })
         TÌNH_TRẠNG: p.TÌNH_TRẠNG,
         KẾT_QUẢ_PHẢN_HỒI: p.KẾT_QUẢ_PHẢN_HỒI,
         BƯỚC_TIẾP_THEO: p.BƯỚC_TIẾP_THEO,
-        KẾT_QUẢ_CUỐI: p.KẾT_QUẢ_CUỐI
+        KẾT_QUẢ_CUỐI: p.KẾT_QUẢ_CUỐI,
+        GHI_CHÚ: p.GHI_CHÚ
       }));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(rawData));
     }
@@ -179,7 +185,10 @@ export default function PermitModule({ project, initialData, onProgressChange })
           
           KẾT_QUẢ_CUỐI: updatedItem.KẾT_QUẢ_CUỐI,
           ketquacuoi: updatedItem.KẾT_QUẢ_CUỐI,
-          ket_qua_cuoi: updatedItem.KẾT_QUẢ_CUỐI
+          ket_qua_cuoi: updatedItem.KẾT_QUẢ_CUỐI,
+
+          GHI_CHÚ: updatedItem.GHI_CHÚ,
+          ghichu: updatedItem.GHI_CHÚ
         };
         const response = await api.updatePermit(payload);
         if (response && response.data && response.data.length > 0) {
@@ -316,7 +325,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
           >
             <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
               <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
-                <table className="w-full text-left text-xs min-w-[800px]">
+                <table className="w-full text-left text-xs min-w-[950px]">
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
                       <th className="p-3">{t('table.item')}</th>
@@ -324,6 +333,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
                       <th className="p-3">{t('table.feedback')}</th>
                       <th className="p-3">{t('table.nextStep')}</th>
                       <th className="p-3">{t('table.finalResult')}</th>
+                      <th className="p-3 w-64">{t('table.notes')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]">
@@ -343,10 +353,10 @@ export default function PermitModule({ project, initialData, onProgressChange })
                           </td>
                           <td className="p-3">
                             <ModuleCell canEdit={canEdit} value={p.TÌNH_TRẠNG} colorClass={getStatusColor(p.TÌNH_TRẠNG)} ts={ts}>
-                            <select
-                              className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                              value={p.TÌNH_TRẠNG || ''}
+                            <ModuleSelectField
+                              value={p.TÌNH_TRẠNG}
                               disabled={!canEdit}
+                              colorClass={getStatusColor(p.TÌNH_TRẠNG)}
                               onChange={(e) => handleUpdate(p.id, 'TÌNH_TRẠNG', e.target.value)}
                             >
                               {!standardStatuses.includes(p.TÌNH_TRẠNG) && p.TÌNH_TRẠNG && (
@@ -355,15 +365,15 @@ export default function PermitModule({ project, initialData, onProgressChange })
                               {standardStatuses.map(status => (
                                 <option key={status} className="bg-[var(--bg-panel)] text-slate-200" value={status}>{status}</option>
                               ))}
-                            </select>
+                            </ModuleSelectField>
                             </ModuleCell>
                           </td>
                           <td className="p-3">
                             <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_PHẢN_HỒI} colorClass={getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)} ts={ts}>
-                            <select
-                              className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                              value={p.KẾT_QUẢ_PHẢN_HỒI || ''}
+                            <ModuleSelectField
+                              value={p.KẾT_QUẢ_PHẢN_HỒI}
                               disabled={!canEdit}
+                              colorClass={getResultColor(p.KẾT_QUẢ_PHẢN_HỒI)}
                               onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_PHẢN_HỒI', e.target.value)}
                             >
                               {!standardResponses.includes(p.KẾT_QUẢ_PHẢN_HỒI) && p.KẾT_QUẢ_PHẢN_HỒI && (
@@ -372,15 +382,15 @@ export default function PermitModule({ project, initialData, onProgressChange })
                               {standardResponses.map(resp => (
                                 <option key={resp} className="bg-[var(--bg-panel)] text-slate-200" value={resp}>{resp}</option>
                               ))}
-                            </select>
+                            </ModuleSelectField>
                             </ModuleCell>
                           </td>
                           <td className="p-3">
                             <ModuleCell canEdit={canEdit} value={p.BƯỚC_TIẾP_THEO} colorClass={getNextStepColor(p.BƯỚC_TIẾP_THEO)} ts={ts}>
-                            <select
-                              className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                              value={p.BƯỚC_TIẾP_THEO || ''}
+                            <ModuleSelectField
+                              value={p.BƯỚC_TIẾP_THEO}
                               disabled={!canEdit}
+                              colorClass={getNextStepColor(p.BƯỚC_TIẾP_THEO)}
                               onChange={(e) => handleUpdate(p.id, 'BƯỚC_TIẾP_THEO', e.target.value)}
                             >
                               {!standardSteps.includes(p.BƯỚC_TIẾP_THEO) && p.BƯỚC_TIẾP_THEO && (
@@ -389,15 +399,15 @@ export default function PermitModule({ project, initialData, onProgressChange })
                               {standardSteps.map(step => (
                                 <option key={step} className="bg-[var(--bg-panel)] text-slate-200" value={step}>{step}</option>
                               ))}
-                            </select>
+                            </ModuleSelectField>
                             </ModuleCell>
                           </td>
                           <td className="p-3">
                             <ModuleCell canEdit={canEdit} value={p.KẾT_QUẢ_CUỐI} colorClass={getFinalResultColor(p.KẾT_QUẢ_CUỐI)} ts={ts}>
-                            <select
-                              className={`module-field-select bg-transparent focus:outline-none appearance-none cursor-pointer ${!canEdit ? 'pointer-events-none opacity-70' : ''}`}
-                              value={p.KẾT_QUẢ_CUỐI || ''}
+                            <ModuleSelectField
+                              value={p.KẾT_QUẢ_CUỐI}
                               disabled={!canEdit}
+                              colorClass={getFinalResultColor(p.KẾT_QUẢ_CUỐI)}
                               onChange={(e) => handleUpdate(p.id, 'KẾT_QUẢ_CUỐI', e.target.value)}
                             >
                               {!standardResults.includes(p.KẾT_QUẢ_CUỐI) && p.KẾT_QUẢ_CUỐI && (
@@ -406,8 +416,20 @@ export default function PermitModule({ project, initialData, onProgressChange })
                               {standardResults.map(res => (
                                 <option key={res} className="bg-[var(--bg-panel)] text-slate-200" value={res}>{res === '-' ? '-' : res}</option>
                               ))}
-                            </select>
+                            </ModuleSelectField>
                             </ModuleCell>
+                          </td>
+                          <td className="p-3">
+                            <ModuleNotesCell
+                              value={p.GHI_CHÚ || ''}
+                              canEdit={canEdit}
+                              readDisplay={p.GHI_CHÚ ? ts(p.GHI_CHÚ) : ''}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setPermits(prev => prev.map(item => item.id === p.id ? { ...item, GHI_CHÚ: v } : item));
+                              }}
+                              onBlur={(e) => handleUpdate(p.id, 'GHI_CHÚ', e.target.value)}
+                            />
                           </td>
                         </tr>
                       );

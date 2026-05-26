@@ -8,19 +8,62 @@ import { getPageLabel, updateDashboardContext, resolveProjectFromPath } from '..
 import AIMessageContent from './AIMessageContent';
 
 const WELCOME =
-  'Xin chào! Tôi là AI PXD — trợ lý trên Dashboard VPEG-PXD.\n\n' +
-  'Tôi có thể:\n' +
-  '- Hướng dẫn sử dụng từng màn hình (thêm dự án, công việc, nhật ký site, S-Curve…)\n' +
-  '- Đọc số liệu dự án/công việc bạn đang xem\n' +
-  '- Tư vấn kỹ thuật Solar EPC\n\n' +
-  'Thử hỏi: "Làm sao thêm dự án?" hoặc "Trang này dùng để làm gì?"';
+  'Xin chào! Tôi là AI PXD — trợ lý VPEG Phòng Xây Dựng trên Dashboard solar EPC.\n\n' +
+  'Tôi được huấn luyện để:\n' +
+  '1. Hướng dẫn app (mobile + máy tính): dự án, task, site log, mua sắm, đăng xuất, giao diện…\n' +
+  '2. Đọc data thực: tiến độ %, vật tư X/15, milestone trễ, risk, nhật ký site\n' +
+  '3. Phân tích recovery khi dự án chậm (nguyên nhân + hành động)\n' +
+  '4. Tư vấn Solar EPC: PR, commissioning, zero-export, thi công mái…\n\n' +
+  'Mở chi tiết một dự án rồi hỏi: "Vật tư về mấy %?" hoặc "Vì sao trễ?"';
 
 const QUICK_PROMPTS = [
   'Hướng dẫn trang tôi đang xem',
-  'Làm sao thêm dự án?',
-  'Làm sao thêm công việc?',
+  'Vật tư dự án này về mấy %?',
+  'Dự án trễ — phân tích và đề xuất',
+  'Làm sao ghi nhật ký site?',
   'Giải thích S-Curve và milestone',
+  'Commissioning checklist',
 ];
+
+const DRAG_OFFSET_KEY = 'epc_ai_drag_offset';
+const DRAG_THRESHOLD = 6;
+const FAB_SIZE = 44;
+
+function readDragOffset() {
+  try {
+    const raw = localStorage.getItem(DRAG_OFFSET_KEY);
+    if (!raw) return { x: 0, y: 0 };
+    const parsed = JSON.parse(raw);
+    return {
+      x: Number(parsed?.x) || 0,
+      y: Number(parsed?.y) || 0,
+    };
+  } catch {
+    return { x: 0, y: 0 };
+  }
+}
+
+function getFabAnchor() {
+  const margin = 16;
+  const mobileBottom = window.innerWidth < 768 ? 68 : 16;
+  return {
+    left: window.innerWidth - FAB_SIZE - margin,
+    top: window.innerHeight - FAB_SIZE - mobileBottom,
+  };
+}
+
+function clampDragOffset(offset) {
+  const pad = 8;
+  const anchor = getFabAnchor();
+  const left = anchor.left + offset.x;
+  const top = anchor.top + offset.y;
+  const clampedLeft = Math.max(pad, Math.min(left, window.innerWidth - FAB_SIZE - pad));
+  const clampedTop = Math.max(pad, Math.min(top, window.innerHeight - FAB_SIZE - pad));
+  return {
+    x: clampedLeft - anchor.left,
+    y: clampedTop - anchor.top,
+  };
+}
 
 function readLocalJson(key, fallback = []) {
   if (typeof window === 'undefined') return fallback;
@@ -62,10 +105,101 @@ export default function AIAssistant() {
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
+  const fabRef = useRef(null);
 
-  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [dragOffset, setDragOffset] = useState(readDragOffset);
   const [isDragging, setIsDragging] = useState(false);
-  const dragRef = useRef({ startX: 0, startY: 0 });
+  const dragRef = useRef({
+    active: false,
+    moved: false,
+    startX: 0,
+    startY: 0,
+    startOffsetX: 0,
+    startOffsetY: 0,
+  });
+
+  const persistDragOffset = useCallback((next) => {
+    const clamped = clampDragOffset(next);
+    setDragOffset(clamped);
+    try {
+      localStorage.setItem(DRAG_OFFSET_KEY, JSON.stringify(clamped));
+    } catch {
+      /* ignore */
+    }
+    return clamped;
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => {
+      setDragOffset((prev) => clampDragOffset(prev));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  const beginDrag = (clientX, clientY) => {
+    dragRef.current = {
+      active: true,
+      moved: false,
+      startX: clientX,
+      startY: clientY,
+      startOffsetX: dragOffset.x,
+      startOffsetY: dragOffset.y,
+    };
+    setIsDragging(true);
+  };
+
+  const moveDrag = (clientX, clientY) => {
+    if (!dragRef.current.active) return;
+    const dx = clientX - dragRef.current.startX;
+    const dy = clientY - dragRef.current.startY;
+    if (!dragRef.current.moved && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+      dragRef.current.moved = true;
+    }
+    if (dragRef.current.moved) {
+      persistDragOffset({
+        x: dragRef.current.startOffsetX + dx,
+        y: dragRef.current.startOffsetY + dy,
+      });
+    }
+  };
+
+  const endDrag = () => {
+    const moved = dragRef.current.moved;
+    dragRef.current.active = false;
+    setIsDragging(false);
+    return moved;
+  };
+
+  const handleFabPointerDown = (e) => {
+    e.preventDefault();
+    beginDrag(e.clientX, e.clientY);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleFabPointerMove = (e) => {
+    moveDrag(e.clientX, e.clientY);
+  };
+
+  const handleFabPointerUp = (e) => {
+    const moved = endDrag();
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    if (!moved) setIsOpen(true);
+  };
+
+  const handlePanelPointerDown = (e) => {
+    beginDrag(e.clientX, e.clientY);
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePanelPointerMove = (e) => {
+    moveDrag(e.clientX, e.clientY);
+  };
+
+  const handlePanelPointerUp = (e) => {
+    endDrag();
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
 
   const buildContext = useCallback(() => {
     const data = typeof window !== 'undefined' ? window.__DASHBOARD_DATA__ || {} : {};
@@ -113,26 +247,6 @@ export default function AIAssistant() {
       return context;
     }
   }, [buildContext]);
-
-  const handlePointerDown = (e) => {
-    setIsDragging(true);
-    dragRef.current.startX = e.clientX - position.x;
-    dragRef.current.startY = e.clientY - position.y;
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e) => {
-    if (!isDragging) return;
-    setPosition({
-      x: e.clientX - dragRef.current.startX,
-      y: e.clientY - dragRef.current.startY,
-    });
-  };
-
-  const handlePointerUp = (e) => {
-    setIsDragging(false);
-    e.currentTarget.releasePointerCapture(e.pointerId);
-  };
 
   useEffect(() => {
     if (isOpen) {
@@ -191,34 +305,42 @@ export default function AIAssistant() {
     }
   };
 
+  const fabTransform = `translate(${dragOffset.x}px, ${dragOffset.y}px)`;
+  const panelTransform = isOpen
+    ? `${fabTransform} scale(1)`
+    : `${fabTransform} scale(0.5)`;
+
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
-        className={`fixed bottom-4 right-1 w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full shadow-2xl flex items-center justify-center text-white hover:scale-110 transition-all z-50 print:hidden ${isOpen ? 'scale-0 opacity-0 pointer-events-none' : 'scale-100 opacity-100'}`}
-        title="Trợ lý AI PXD"
+        ref={fabRef}
+        onPointerDown={handleFabPointerDown}
+        onPointerMove={handleFabPointerMove}
+        onPointerUp={handleFabPointerUp}
+        onPointerCancel={handleFabPointerUp}
+        className={`fixed z-40 print:hidden w-11 h-11 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-full shadow-2xl flex items-center justify-center text-white transition-all max-md:right-4 max-md:bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] md:bottom-4 md:right-4 touch-none select-none ${isDragging ? 'cursor-grabbing scale-105' : 'cursor-grab hover:scale-110'} ${isOpen ? 'scale-0 opacity-0 pointer-events-none' : 'opacity-100'}`}
+        style={{ transform: isOpen ? undefined : fabTransform }}
+        title="Trợ lý AI PXD — kéo để di chuyển, bấm để mở"
         type="button"
       >
-        <Sparkles className="w-4 h-4 animate-pulse" />
+        <Sparkles className="w-4 h-4 animate-pulse pointer-events-none" />
       </button>
 
         <div
-        className={`fixed bottom-6 right-6 w-80 md:w-[400px] bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] flex flex-col transition-all duration-300 z-50 print:hidden ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`fixed z-40 print:hidden w-[calc(100vw-1.5rem)] max-w-sm md:w-[400px] bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] flex flex-col transition-all duration-300 max-md:left-3 max-md:right-3 max-md:bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] md:bottom-6 md:right-6 md:left-auto touch-none ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
         style={{
           height: '580px',
           maxHeight: '85vh',
-          transform: isOpen
-            ? `translate(${position.x}px, ${position.y}px) scale(1)`
-            : `translate(${position.x}px, ${position.y}px) scale(0.5)`,
+          transform: panelTransform,
           transformOrigin: 'bottom right',
         }}
       >
         <div
-          className="bg-gradient-to-r from-indigo-600 to-purple-600 p-4 rounded-t-2xl flex items-center justify-between text-white shadow-md relative overflow-hidden cursor-move select-none"
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          className={`bg-gradient-to-r from-indigo-600 to-purple-600 p-4 rounded-t-2xl flex items-center justify-between text-white shadow-md relative overflow-hidden select-none ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          onPointerDown={handlePanelPointerDown}
+          onPointerMove={handlePanelPointerMove}
+          onPointerUp={handlePanelPointerUp}
+          onPointerCancel={handlePanelPointerUp}
         >
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/4" />
           <div className="flex items-center gap-3 relative z-10">

@@ -43,7 +43,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-main)] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-main)] px-4 pb-mobile-nav">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="mb-5">

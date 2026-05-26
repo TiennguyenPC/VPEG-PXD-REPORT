@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart, ReferenceDot, Label } from 'recharts';
-import { Maximize2, Loader2, Minimize2, Flag, FileText, PenTool, Package, Wrench, Zap, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart, ReferenceDot, useXAxisScale, useYAxisScale, usePlotArea } from 'recharts';
+import { Loader2 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useI18n } from '../../context/I18nContext';
 
@@ -28,18 +28,277 @@ const formatMonthLabel = (monthStr, monthPrefix) => {
   return monthStr.replace(/^THÁNG\s/, `${monthPrefix} `);
 };
 
-const getIconForTitle = (title) => {
-  const t = title.toLowerCase();
-  if (t.includes('kickoff')) return Flag;
-  if (t.includes('pháp lý')) return FileText;
-  if (t.includes('thiết kế')) return PenTool;
-  if (t.includes('vật tư')) return Package;
-  if (t.includes('thi công')) return Wrench;
-  if (t.includes('cod')) return Zap;
-  return CheckCircle2;
+/** Trục X: bước đều + đầu/cuối tháng — không chen thêm milestone (tránh lệch nhãn) */
+const buildXAxisTickPlan = (chartData) => {
+  const n = chartData.length;
+  if (!n) return { tickIndices: new Set(), monthLabels: new Map(), tickLabels: new Map() };
+
+  let step = 3;
+  if (n > 120) step = 10;
+  else if (n > 90) step = 7;
+  else if (n > 60) step = 5;
+  else if (n > 30) step = 4;
+
+  const tickIndices = new Set([0, n - 1]);
+  for (let i = 0; i < n; i += step) tickIndices.add(i);
+
+  const monthLabels = new Map();
+  const tickLabels = new Map();
+  let prevMonthKey = null;
+
+  chartData.forEach((d, i) => {
+    const parts = (d.originalDate || '').split('/');
+    if (parts.length < 3) return;
+    const monthKey = `${parts[1]}/${parts[2]}`;
+    if (monthKey !== prevMonthKey) {
+      monthLabels.set(i, d.monthStr);
+      tickIndices.add(i);
+      prevMonthKey = monthKey;
+    }
+  });
+
+  const sortedTicks = [...tickIndices].sort((a, b) => a - b);
+  const filteredTicks = new Set([0, n - 1]);
+  let lastKept = -999;
+  sortedTicks.forEach((idx) => {
+    if (monthLabels.has(idx)) {
+      filteredTicks.add(idx);
+      lastKept = idx;
+      return;
+    }
+    if (idx - lastKept >= 2) {
+      filteredTicks.add(idx);
+      lastKept = idx;
+    }
+  });
+
+  sortedTicks.forEach((idx, tickPos) => {
+    if (!filteredTicks.has(idx)) return;
+    const parts = (chartData[idx].originalDate || '').split('/');
+    if (parts.length < 3) return;
+    const [day, month] = parts;
+    const prevTickIdx = tickPos > 0 ? sortedTicks[tickPos - 1] : null;
+    const prevMonth = prevTickIdx != null
+      ? (chartData[prevTickIdx].originalDate || '').split('/')[1]
+      : null;
+
+    tickLabels.set(
+      idx,
+      monthLabels.has(idx) || month !== prevMonth ? `${day}/${month}` : day
+    );
+  });
+
+  return { tickIndices: filteredTicks, monthLabels, tickLabels };
 };
 
-// Removed mock data
+const DOT_R = 6;
+const BADGE_H = 22;
+const BADGE_PAD_X = 8;
+const CHAR_W = 6.2;
+const EDGE_PAD = 6;
+const LABEL_GAP = 8;
+const STACK_STEP = 22;
+const LABEL_OFFSET_X = 10;
+
+const CHART_MARGIN = { top: 48, right: 36, left: 8, bottom: 44 };
+
+const measureBadge = (title) => ({
+  w: Math.min(148, Math.max(72, title.length * CHAR_W + BADGE_PAD_X * 2)),
+  h: BADGE_H,
+});
+
+const boxesOverlap = (a, b, gap = 5) => !(
+  a.x + a.w + gap <= b.x
+  || b.x + b.w + gap <= a.x
+  || a.y + a.h + gap <= b.y
+  || b.y + b.h + gap <= a.y
+);
+
+const clampBoxInPlot = (box, plot) => {
+  let { x, y, w, h } = box;
+  x = Math.max(plot.left + EDGE_PAD, Math.min(x, plot.right - w - EDGE_PAD));
+  y = Math.max(plot.top + EDGE_PAD, Math.min(y, plot.bottom - h - EDGE_PAD));
+  return { ...box, x, y, w, h };
+};
+
+const prefersBelowDot = (entry, cy, plot) => (
+  entry.planPct >= 78
+  || /cod|handover|bàn giao|đóng điện/i.test(entry.title)
+  || cy < plot.top + plot.height * 0.22
+);
+
+/** Nhãn sát chấm + lệch ngang — zigzag khi gần nhau, không chồng */
+const layoutMilestoneBadges = (entries, plot, bandCenter, yScale, chartLen) => {
+  const placed = [];
+
+  entries.forEach((entry, mIdx) => {
+    const cx = bandCenter(entry.date);
+    const cy = yScale(entry.planPct);
+    if (cx == null || cy == null) return;
+
+    const { w, h } = measureBadge(entry.title);
+    const isRightEdge = entry.index > chartLen - 14;
+    const isLeftEdge = entry.index < 14;
+    const prev = mIdx > 0 ? entries[mIdx - 1] : null;
+    const prevPlaced = prev ? placed.find((p) => p.index === prev.index) : null;
+    const indexGap = prev ? entry.index - prev.index : Infinity;
+    const sameAltitude = prev && Math.abs(entry.planPct - prev.planPct) <= 12;
+
+    let placeAbove = !prefersBelowDot(entry, cy, plot);
+    let stackLevel = 0;
+
+    if (sameAltitude || indexGap <= 12) {
+      placeAbove = prevPlaced ? !prevPlaced.placeAbove : placeAbove;
+      stackLevel = sameAltitude && prevPlaced ? (prevPlaced.stackLevel || 0) + 1 : 0;
+    }
+
+    const makeBox = (above, stack, nudgeX = 0) => {
+      const stackOff = stack * STACK_STEP;
+      const labelY = above
+        ? cy - DOT_R - LABEL_GAP - h - stackOff
+        : cy + DOT_R + LABEL_GAP + stackOff;
+
+      let labelX = cx - w / 2 + nudgeX;
+      if (above) {
+        labelX = cx - w - LABEL_OFFSET_X + nudgeX;
+        if (isLeftEdge) labelX = Math.max(plot.left + EDGE_PAD, cx - w * 0.35);
+        else if (isRightEdge) labelX = Math.min(plot.right - w - EDGE_PAD, cx - w + 8);
+      } else if (isRightEdge) {
+        labelX = cx - w + 6 + nudgeX;
+      }
+
+      return clampBoxInPlot({
+        index: entry.index,
+        cx,
+        cy,
+        x: labelX,
+        y: labelY,
+        w,
+        h,
+        title: entry.title,
+        color: entry.color,
+        placeAbove: above,
+        stackLevel: stack,
+      }, plot);
+    };
+
+    let box = makeBox(placeAbove, stackLevel);
+    let attempts = 0;
+
+    while (placed.some((p) => boxesOverlap(box, p)) && attempts < 14) {
+      attempts += 1;
+      if (attempts % 3 === 1) {
+        placeAbove = !placeAbove;
+        stackLevel = 0;
+      } else if (attempts % 3 === 2) {
+        stackLevel += 1;
+      } else {
+        const nudgeX = (attempts % 2 === 0 ? 1 : -1) * Math.ceil(attempts / 3) * 14;
+        box = makeBox(placeAbove, stackLevel, nudgeX);
+        continue;
+      }
+      box = makeBox(placeAbove, stackLevel);
+    }
+
+    placed.push(box);
+  });
+
+  return placed;
+};
+
+const buildLeaderPoints = (b) => {
+  const anchorX = b.x + b.w / 2;
+  const dotY = b.placeAbove ? b.cy - DOT_R : b.cy + DOT_R;
+  const labelEdgeY = b.placeAbove ? b.y + b.h : b.y;
+
+  if (Math.abs(anchorX - b.cx) < 10) {
+    return `${b.cx},${dotY} ${b.cx},${labelEdgeY}`;
+  }
+
+  const elbowY = b.placeAbove ? b.y + b.h + 3 : b.y - 3;
+  return `${b.cx},${dotY} ${b.cx},${elbowY} ${anchorX},${elbowY} ${anchorX},${labelEdgeY}`;
+};
+
+/** Vẽ nhãn milestone bằng hook Recharts 3 — tọa độ khớp chấm, có đường nối */
+function MilestoneLabelsGroup({ chartData, tr }) {
+  const xScale = useXAxisScale();
+  const yScale = useYAxisScale();
+  const plotArea = usePlotArea();
+
+  if (!xScale || !yScale || !plotArea?.width || !chartData?.length) return null;
+
+  const plot = {
+    left: plotArea.x,
+    top: plotArea.y,
+    right: plotArea.x + plotArea.width,
+    bottom: plotArea.y + plotArea.height,
+  };
+
+  const bandCenter = (date) => {
+    const x = xScale(date, { position: 'middle' });
+    if (x == null || Number.isNaN(x)) return null;
+    return x;
+  };
+
+  const entries = chartData
+    .map((d, index) => (
+      d.milestoneTitle && d.plan != null
+        ? {
+          index,
+          date: d.originalDate,
+          planPct: d.plan,
+          title: translateMilestoneTitle(d.milestoneTitle, tr),
+          color: d.milestoneColor || '#64748b',
+        }
+        : null
+    ))
+    .filter(Boolean);
+
+  if (!entries.length) return null;
+
+  const badges = layoutMilestoneBadges(entries, plot, bandCenter, yScale, chartData.length);
+
+  return (
+    <g className="recharts-milestone-labels">
+      {badges.map((b) => {
+        const labelCenterX = b.x + b.w / 2;
+
+        return (
+          <g key={b.index}>
+            <polyline
+              points={buildLeaderPoints(b)}
+              fill="none"
+              stroke={b.color}
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              opacity={0.8}
+            />
+            <rect
+              x={b.x}
+              y={b.y}
+              width={b.w}
+              height={b.h}
+              rx={6}
+              fill="rgba(15, 23, 42, 0.96)"
+              stroke={b.color}
+              strokeWidth={1}
+            />
+            <text
+              x={labelCenterX}
+              y={b.y + b.h / 2 + 3.5}
+              textAnchor="middle"
+              fill={b.color}
+              fontSize={10}
+              fontWeight={700}
+            >
+              {b.title}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
 
 const CustomTooltip = ({ active, payload, label, tr }) => {
   if (active && payload && payload.length) {
@@ -47,13 +306,20 @@ const CustomTooltip = ({ active, payload, label, tr }) => {
     const actual = data.actual;
     const plan = data.plan;
     const diff = actual !== null ? actual - plan : null;
-    
+
     return (
       <div className="bg-[var(--bg-panel)] border border-[#263554] p-3 rounded-lg shadow-xl shadow-black/50 min-w-[140px]">
         <p className="text-white text-xs font-bold mb-2 pb-2 border-b border-[#263554]">
           {data.originalDate || label}
         </p>
         <div className="space-y-1.5">
+          {data.milestoneTitle && (
+            <div className="flex items-center gap-1.5 text-xs pb-1.5 mb-1 border-b border-[#263554]">
+              <span className="font-medium" style={{ color: data.milestoneColor || '#64748b' }}>
+                {translateMilestoneTitle(data.milestoneTitle, tr)}
+              </span>
+            </div>
+          )}
           {actual !== null && (
             <div className="flex justify-between items-center gap-4 text-xs">
               <span className="text-[#10b981] font-medium">{tr('scurve.actualShort')}:</span>
@@ -371,14 +637,17 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
       const kickoffSheetData = milestonesData?.find(m => String(m.MILESTONE).toUpperCase() === 'KICKOFF');
       const codSheetData = milestonesData?.find(m => String(m.MILESTONE).toUpperCase() === 'COD' || String(m.MILESTONE).toUpperCase() === 'BÀN GIAO & ĐÓNG ĐIỆN (COD)');
 
-      const kDateStr = kickoffSheetData?.NGÀY_KẾ_HOẠCH || project?.kickoffDate || project?.startDate;
+      const startDateStr = project?.startDate || project?.NGÀY_BẮT_ĐẦU;
+      const kDateStr = kickoffSheetData?.NGÀY_KẾ_HOẠCH || project?.kickoffDate || project?.KICKOFF_DATE;
       const cDateStr = codSheetData?.NGÀY_KẾ_HOẠCH || project?.cod || project?.codDate;
 
+      const projectStart = parseD(startDateStr);
       const kickoff = parseD(kDateStr) || new Date(new Date().setMonth(new Date().getMonth() - 1));
       const cod = parseD(cDateStr) || new Date(new Date().setMonth(new Date().getMonth() + 1));
       
       // Ensure global span covers all milestones
       const allDates = [];
+      if (projectStart && !isNaN(projectStart.getTime())) allDates.push(projectStart.getTime());
       if (kickoff && !isNaN(kickoff.getTime())) allDates.push(kickoff.getTime());
       if (cod && !isNaN(cod.getTime())) allDates.push(cod.getTime());
       
@@ -624,27 +893,28 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
 
   // Find latest actual point for reference dot
   const latestActualPoint = [...chartData].reverse().find(p => p.actual !== null && p.actual !== undefined);
+  const xAxisTickPlan = useMemo(() => buildXAxisTickPlan(chartData), [chartData]);
 
-  const renderChartContent = (isModal = false) => (
+  const renderChartContent = () => (
     <>
       <div className="flex justify-between items-center mb-6">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
           {t('scurve.title')}
           {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--text-muted)]" />}
         </h3>
-        
+
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-              <div className="w-4 h-0 border-t-2 border-dashed border-[#64748b]"></div>
+              <div className="w-4 h-0 border-t-2 border-dashed border-[#64748b]" />
               {t('scurve.plan')}
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-              <div className="w-4 h-1 bg-[#10b981] rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
+              <div className="w-4 h-1 bg-[#10b981] rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
               {t('scurve.actual')}
             </div>
             <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-              <div className="w-4 h-1 bg-[#ef4444] rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)] opacity-80"></div>
+              <div className="w-4 h-1 bg-[#ef4444] rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)] opacity-80" />
               {t('scurve.variance')}
             </div>
           </div>
@@ -665,11 +935,11 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
             </div>
           </div>
         ) : (
-        <div style={{ width: '100%', height: '100%' }}>
+        <div className="relative w-full h-full">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartData}
-            margin={{ top: 60, right: 30, left: -10, bottom: 20 }}
+            margin={CHART_MARGIN}
           >
             <defs>
               <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
@@ -682,57 +952,57 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="var(--border-main)" vertical={false} />
-            <XAxis 
-              dataKey="originalDate" 
-              stroke="#4d5e7a" 
+            <XAxis
+              dataKey="originalDate"
+              stroke="#4d5e7a"
               tickMargin={10}
               axisLine={false}
               tickLine={false}
               interval={0}
               height={60}
               tick={(props) => {
-                const { x, y, payload, index } = props;
-                if (!payload || !payload.value) return null;
-                const dataPoint = chartData[index];
-                
-                const dayString = payload.value.split('/')[0];
-                
-                const hasMilestone = dataPoint && dataPoint.milestoneColor;
-                const showText = hasMilestone || (index % 3 === 0);
-                
+                const { x, y, payload } = props;
+                if (!payload?.value) return null;
+
+                const dataIndex = chartData.findIndex((d) => d.originalDate === payload.value);
+                if (dataIndex < 0 || !xAxisTickPlan.tickIndices.has(dataIndex)) return null;
+
+                const dataPoint = chartData[dataIndex];
+                const label = xAxisTickPlan.tickLabels.get(dataIndex) || payload.value.split('/')[0];
+                const monthLabel = xAxisTickPlan.monthLabels.get(dataIndex);
+                const hasMilestone = Boolean(dataPoint?.milestoneColor);
+
                 return (
                   <g>
-                    {showText && (
-                      <text 
-                        x={x} 
-                        y={y + 15} 
-                        fill={hasMilestone ? dataPoint.milestoneColor : "var(--text-muted)"} 
-                        fontSize={9} 
-                        fontWeight={hasMilestone ? 700 : 500} 
+                    <text
+                      x={x}
+                      y={y + 14}
+                      fill={hasMilestone ? dataPoint.milestoneColor : 'var(--text-muted)'}
+                      fontSize={9}
+                      fontWeight={hasMilestone ? 700 : 500}
+                      textAnchor="middle"
+                    >
+                      {label}
+                    </text>
+                    {monthLabel && (
+                      <text
+                        x={x}
+                        y={y + 28}
+                        fill="#64748b"
+                        fontSize={9}
+                        fontWeight={700}
                         textAnchor="middle"
+                        className="uppercase tracking-wider"
                       >
-                        {dayString}
-                      </text>
-                    )}
-                    {dataPoint && dayString === '15' && (
-                      <text 
-                        x={x} 
-                        y={y + 35} 
-                        fill="#64748b" 
-                        fontSize={10} 
-                        fontWeight={700} 
-                        textAnchor="middle"
-                        className="uppercase tracking-widest"
-                      >
-                        {formatMonthLabel(dataPoint.monthStr, t('scurve.monthPrefix'))}
+                        {formatMonthLabel(monthLabel, t('scurve.monthPrefix'))}
                       </text>
                     )}
                   </g>
                 );
               }}
             />
-            <YAxis 
-              stroke="#4d5e7a" 
+            <YAxis
+              stroke="#4d5e7a"
               tick={{ fill: 'var(--text-muted)', fontSize: 10, fontWeight: 600 }}
               tickFormatter={(val) => `${val}%`}
               axisLine={false}
@@ -741,146 +1011,73 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
               ticks={[0, 25, 50, 75, 100]}
             />
             <Tooltip content={<CustomTooltip tr={t} />} />
-            
-            <Area 
-              type="monotone" 
-              dataKey="delayRange" 
+
+            <Area
+              type="monotone"
+              dataKey="delayRange"
               name={t('scurve.varianceShort')}
-              stroke="none" 
-              fillOpacity={1} 
-              fill="url(#colorDelay)" 
-              isAnimationActive={true}
+              stroke="none"
+              fillOpacity={1}
+              fill="url(#colorDelay)"
+              isAnimationActive
               animationDuration={1500}
             />
-            
-            <Line 
-              type="monotone" 
-              dataKey="plan" 
-              name={t('scurve.planShort')} 
-              stroke="#64748b" 
+
+            <Line
+              type="monotone"
+              dataKey="plan"
+              name={t('scurve.planShort')}
+              stroke="#64748b"
               strokeWidth={2}
-              strokeDasharray="6 4" 
+              strokeDasharray="6 4"
               dot={false}
-              isAnimationActive={true}
+              isAnimationActive
               animationDuration={1500}
               activeDot={{ r: 4, fill: '#64748b', stroke: 'var(--bg-panel)', strokeWidth: 2 }}
             />
-            
-            <Area 
-              type="monotone" 
-              dataKey="actual" 
+
+            <Area
+              type="monotone"
+              dataKey="actual"
               name={t('scurve.actualShort')}
-              stroke="#10b981" 
+              stroke="#10b981"
               strokeWidth={3}
-              fillOpacity={1} 
-              fill="url(#colorActual)" 
+              fillOpacity={1}
+              fill="url(#colorActual)"
               dot={{ r: 3, fill: '#10b981', stroke: 'none' }}
-              isAnimationActive={true}
+              isAnimationActive
               animationDuration={1500}
               activeDot={{ r: 6, fill: '#10b981', stroke: 'var(--bg-panel)', strokeWidth: 2, className: 'animate-pulse shadow-[0_0_10px_rgba(16,185,129,0.8)]' }}
             />
-            
+
             {chartData.map((d, index) => {
-                if (d.milestoneTitle) {
-                  return (
-                    <ReferenceDot 
-                      key={index}
-                      x={d.originalDate} 
-                      y={d.plan} 
-                      r={4} 
-                      fill={d.milestoneColor} 
-                      stroke="var(--bg-panel)" 
-                      strokeWidth={2}
-                      className="z-50"
-                    >
-                      <Label 
-                        content={(props) => {
-                           const { viewBox } = props;
-                           const isRightEdge = index > chartData.length - 12;
-                           const isLeftEdge = index < 12;
-                           
-                           // Determine if dot is in upper or lower half of the drawing area (max ~360)
-                           const isUpper = viewBox.y < 200;
-                           
-                           // Deterministically calculate mIndex to avoid React closure bugs with Recharts
-                           const currentMIndex = chartData.slice(0, index + 1).filter(item => item.milestoneTitle).length - 1;
-                           
-                           // 4 Absolute Y-Lanes to mathematically guarantee zero vertical overlap
-                           const slot = currentMIndex % 4;
-                           let fy;
-                           if (isUpper) {
-                               // Upper safe zone (sky)
-                               fy = 15 + (slot * 30); // 15, 45, 75, 105
-                           } else {
-                               // Lower safe zone (above X-axis)
-                               fy = 210 + (slot * 30); // 210, 240, 270, 300
-                           }
-                           
-                           // Dynamic width based on text length
-                           const fw = d.milestoneTitle.length * 6.5 + 40;
-                           const fh = 26;
-                           
-                           let fx = viewBox.x - (fw / 2); // Center horizontally by default
-                           
-                           // Edge protection
-                           if (isLeftEdge) {
-                             fx = viewBox.x - 5; // Shift right so left edge is inside SVG
-                           } else if (isRightEdge) {
-                             fx = viewBox.x - fw + 5; // Shift left so right edge is inside SVG
-                           }
-                           
-                           // Perfectly vertical line
-                           const lineX = viewBox.x;
-                           const lineY2 = viewBox.y < fy ? fy : fy + fh; // Connect to top or bottom of badge
-                           
-                           const IconComponent = getIconForTitle(d.milestoneTitle);
-                           
-                           return (
-                             <g className="animate-in fade-in zoom-in duration-500 delay-1000 fill-mode-both">
-                               <line 
-                                 x1={lineX} 
-                                 y1={viewBox.y} 
-                                 x2={lineX} 
-                                 y2={lineY2} 
-                                 stroke={d.milestoneColor} 
-                                 strokeWidth={1} 
-                                 strokeDasharray="3 3" 
-                                 opacity={0.6} 
-                               />
-                               <foreignObject x={fx} y={fy} width={fw} height={fh} className="overflow-visible">
-                                 <div 
-                                   className="flex items-center justify-center gap-1.5 px-2 py-1 rounded-md border backdrop-blur-md shadow-lg"
-                                   style={{ 
-                                     borderColor: d.milestoneColor, 
-                                     color: d.milestoneColor, 
-                                     backgroundColor: 'rgba(15, 23, 42, 0.85)' 
-                                   }}
-                                 >
-                                   <IconComponent className="w-3.5 h-3.5" />
-                                   <span className="text-[10px] font-bold whitespace-nowrap">{translateMilestoneTitle(d.milestoneTitle, t)}</span>
-                                 </div>
-                               </foreignObject>
-                             </g>
-                           );
-                        }}
-                      />
-                    </ReferenceDot>
-                  );
-                }
-                return null;
-              })}
-            
-            {/* Current status point */}
+              if (!d.milestoneTitle) return null;
+              return (
+                <ReferenceDot
+                  key={`dot-${index}`}
+                  x={d.originalDate}
+                  y={d.plan}
+                  r={5}
+                  fill={d.milestoneColor}
+                  stroke="var(--bg-panel)"
+                  strokeWidth={2}
+                  isFront
+                />
+              );
+            })}
+
             {latestActualPoint && (
-              <ReferenceDot 
-                x={latestActualPoint.name} 
-                y={latestActualPoint.actual} 
-                r={5} 
-                fill="#10b981" 
-                stroke="var(--bg-panel)" 
-                strokeWidth={2} 
+              <ReferenceDot
+                x={latestActualPoint.originalDate}
+                y={latestActualPoint.actual}
+                r={5}
+                fill="#10b981"
+                stroke="var(--bg-panel)"
+                strokeWidth={2}
               />
             )}
+
+            <MilestoneLabelsGroup chartData={chartData} tr={t} />
           </ComposedChart>
         </ResponsiveContainer>
         </div>
@@ -892,17 +1089,17 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
   return (
     <>
       <div className="glass-panel p-6 rounded-xl shadow-lg border border-[var(--border-main)] h-[500px] flex flex-col print:break-inside-avoid relative">
-        {renderChartContent(false)}
+        {renderChartContent()}
       </div>
 
       {isFullscreen && (
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-8">
-          <div 
-            className="absolute inset-0" 
-            onClick={() => setIsFullscreen(false)} 
+          <div
+            className="absolute inset-0"
+            onClick={() => setIsFullscreen(false)}
           />
           <div className="glass-panel w-full max-w-[95vw] h-[85vh] p-6 sm:p-8 rounded-2xl shadow-2xl border border-[var(--border-main)] flex flex-col relative bg-[#0b1120] z-10 animate-in fade-in zoom-in-95 duration-200">
-            {renderChartContent(true)}
+            {renderChartContent()}
           </div>
         </div>
       )}

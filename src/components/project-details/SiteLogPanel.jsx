@@ -9,6 +9,16 @@ import {
   serializeDailyNote,
 } from '../../utils/sitePhotoCache';
 import {
+  buildConstructionOptions,
+  formatEntriesAsSummaryLines,
+  getRemainingPercentForTask,
+  parseProgressEntries,
+  serializeProgressEntries,
+  sumProgressDeltasFromLogs,
+  taskProgressKey,
+  validateProgressEntries,
+} from '../../utils/siteLogConstructionProgress';
+import {
   parseFlexibleDate as parseDateStr,
   formatDateStr,
   getMondayOfDate,
@@ -16,6 +26,11 @@ import {
   fromInputDateValue,
   toInputDateValue,
 } from '../../utils/timelineDates';
+import {
+  calcDailyActualProjectPercent,
+  calcDailyPlannedProjectPercent,
+  getPlannedWorkLabelsForDay,
+} from '../../utils/dailyPlannedProgress';
 import { useProjectCanEdit } from '../../context/ProjectEditContext';
 import { useI18n } from '../../context/I18nContext';
 
@@ -133,7 +148,10 @@ export default function SiteLogPanel({
   setSelectedMonth,
   activeLog,
   onUpdateLog,
+  onSaveLogImmediate,
   saveStatus,
+  constructions = [],
+  moduleBundles = {},
 }) {
   const canEdit = useProjectCanEdit();
   const { t, tf, ts } = useI18n();
@@ -141,7 +159,10 @@ export default function SiteLogPanel({
   const datePickerRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState(null);
+  const [progressSaveError, setProgressSaveError] = useState('');
   const [liveWeather, setLiveWeather] = useState(null);
+
+  const constructionOptions = buildConstructionOptions(constructions);
 
   useEffect(() => {
     const fetchWeather = async () => {
@@ -199,9 +220,11 @@ export default function SiteLogPanel({
 
   const handleStartEdit = () => {
     if (!canEdit) return;
-    const parsedNote = parseDailyNote(getLogNoteText(activeLog));
+    const noteText = getLogNoteText(activeLog);
+    const parsedNote = parseDailyNote(noteText);
     const parsedW = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
-    
+    const progressEntries = parseProgressEntries(noteText);
+
     setEditData({
       manpower: activeLog?.MANPOWER !== undefined ? activeLog?.MANPOWER : (activeLog?.NHÂN_LỰC_SITE || 0),
       engineers: activeLog?.ENGINEERS !== undefined ? activeLog?.ENGINEERS : (activeLog?.KỸ_SƯ_GS || 0),
@@ -212,23 +235,83 @@ export default function SiteLogPanel({
       congViecChinh: parsedNote.congViecChinh,
       congViecNgayMai: parsedNote.congViecNgayMai,
       vanDeRuiRo: parsedNote.vanDeRuiRo,
-      progressActual: parsedNote.progressActual,
-      progressPlanned: parsedNote.progressPlanned,
       dayStatus: parsedNote.dayStatus,
       dayStatusSubtext: parsedNote.dayStatusSubtext,
+      progressEntries: progressEntries.length
+        ? progressEntries
+        : [{ taskCode: '', taskName: '', deltaPercent: '', note: '' }],
     });
+    setProgressSaveError('');
     setIsEditing(true);
   };
 
-  const handleSaveEdit = () => {
+  const addProgressEntryRow = () => {
+    setEditData((prev) => ({
+      ...prev,
+      progressEntries: [...(prev.progressEntries || []), { taskCode: '', taskName: '', deltaPercent: '', note: '' }],
+    }));
+  };
+
+  const updateProgressEntryRow = (index, patch) => {
+    setEditData((prev) => ({
+      ...prev,
+      progressEntries: (prev.progressEntries || []).map((entry, i) => (i === index ? { ...entry, ...patch } : entry)),
+    }));
+    setProgressSaveError('');
+  };
+
+  const removeProgressEntryRow = (index) => {
+    setEditData((prev) => ({
+      ...prev,
+      progressEntries: (prev.progressEntries || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleProgressTaskPick = (index, optionValue) => {
+    const option = constructionOptions.find((item) => taskProgressKey(item) === optionValue);
+    if (!option) {
+      updateProgressEntryRow(index, { taskCode: '', taskName: '' });
+      return;
+    }
+    updateProgressEntryRow(index, {
+      taskCode: option.taskCode,
+      taskName: option.taskName,
+    });
+  };
+
+  const handleSaveEdit = async () => {
     if (!canEdit) return;
+
+    const normalizedEntries = (editData.progressEntries || [])
+      .map((entry) => ({
+        taskCode: String(entry.taskCode || '').trim(),
+        taskName: String(entry.taskName || '').trim(),
+        deltaPercent: Number(entry.deltaPercent || 0),
+        note: String(entry.note || '').trim(),
+      }))
+      .filter((entry) => entry.taskCode && entry.taskName);
+
+    const validationErrors = validateProgressEntries(normalizedEntries, logs, selectedDate);
+    if (validationErrors.length) {
+      const first = validationErrors[0];
+      setProgressSaveError(
+        `${first.taskName}: tối đa còn ${first.maxAllowed}% (đã ghi ${first.prior}%, nhập thêm ${first.attempted}% → ${first.total}%)`
+      );
+      return;
+    }
+
+    const activeEntries = normalizedEntries.filter((entry) => entry.deltaPercent > 0);
+    const serializedProgress = serializeProgressEntries(activeEntries);
+    const autoCongViecChinh = formatEntriesAsSummaryLines(activeEntries);
+
     const serializedNote = serializeDailyNote({
       ghiChu: editData.ghiChu,
-      congViecChinh: editData.congViecChinh,
+      congViecChinh: autoCongViecChinh || editData.congViecChinh,
       congViecNgayMai: editData.congViecNgayMai,
       vanDeRuiRo: editData.vanDeRuiRo,
-      progressActual: editData.progressActual,
-      progressPlanned: editData.progressPlanned,
+      progressActual: '',
+      progressPlanned: '',
+      progressEntries: serializedProgress,
       dayStatus: editData.dayStatus,
       dayStatusSubtext: editData.dayStatusSubtext,
     });
@@ -240,14 +323,36 @@ export default function SiteLogPanel({
       detail: editData.weatherDetail,
     });
 
-    onUpdateLog({
+    const payload = {
+      MANPOWER: editData.manpower,
       NHÂN_LỰC_SITE: editData.manpower,
+      ENGINEERS: editData.engineers,
       KỸ_SƯ_GS: editData.engineers,
+      INCIDENT_COUNT: editData.incidentCount,
       SỰ_CỐ: editData.incidentCount,
+      WEATHER: serializedW,
       THỜI_TIẾT: serializedW,
-      GHI_CHÚ_HIỆN_TRƯỜNG: serializedNote
-    });
+      GHI_CHÚ_HIỆN_TRƯỜNG: serializedNote,
+      DAILY_NOTE: serializedNote,
+    };
 
+    setProgressSaveError('');
+    setIsEditing(false);
+
+    try {
+      if (onSaveLogImmediate) {
+        await onSaveLogImmediate(payload);
+      } else {
+        onUpdateLog(payload);
+      }
+    } catch (err) {
+      setProgressSaveError(err?.message || 'Không lưu được nhật ký. Thử lại.');
+      setIsEditing(true);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setProgressSaveError('');
     setIsEditing(false);
   };
 
@@ -411,8 +516,41 @@ export default function SiteLogPanel({
           </div>
         </div>
         
-        {/* Day/Week Tabs */}
-        <div className="flex rounded-lg bg-[var(--bg-panel)] p-0.5 border border-[var(--border-main)] self-start sm:self-auto">
+        {/* Day/Week Tabs + Edit */}
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {selectedView === 'day' && canEdit && (
+            isEditing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  disabled={saveStatus === 'Saving...'}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all disabled:opacity-50"
+                >
+                  <X className="w-3.5 h-3.5" /> Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveEdit}
+                  disabled={saveStatus === 'Saving...'}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg bg-[#5252ff] hover:bg-[#4040ff] text-white transition-all disabled:opacity-50"
+                >
+                  <Check className="w-3.5 h-3.5" /> Lưu ngay
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={handleStartEdit}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg bg-[#18233a] border border-[#2b3a5c] text-slate-200 hover:text-white hover:bg-[#243250] transition-all"
+                title="Chỉnh sửa toàn bộ nhật ký ngày"
+              >
+                <Pencil className="w-3.5 h-3.5" /> Sửa nhật ký
+              </button>
+            )
+          )}
+
+          <div className="flex rounded-lg bg-[var(--bg-panel)] p-0.5 border border-[var(--border-main)]">
           <button
             onClick={() => setSelectedView('day')}
             className={`px-3 py-1 text-[10px] font-bold rounded-md transition-all ${
@@ -429,6 +567,7 @@ export default function SiteLogPanel({
           >
             {t('siteLog.week')}
           </button>
+          </div>
         </div>
       </div>
 
@@ -504,6 +643,7 @@ export default function SiteLogPanel({
           {(() => {
             const parsedNote = parseDailyNote(getLogNoteText(activeLog));
             const parsedW = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
+            const progressEntries = parseProgressEntries(getLogNoteText(activeLog));
             
             const manpower = activeLog?.MANPOWER !== undefined ? activeLog?.MANPOWER : (activeLog?.NHÂN_LỰC_SITE || 0);
             const engineers = activeLog?.ENGINEERS !== undefined ? activeLog?.ENGINEERS : (activeLog?.KỸ_SƯ_GS || 0);
@@ -513,29 +653,58 @@ export default function SiteLogPanel({
             
             const incidents = activeLog?.INCIDENT_COUNT !== undefined ? activeLog?.INCIDENT_COUNT : (parseInt(activeLog?.SỰ_CỐ) || 0);
 
-            const listChinh = parsedNote.congViecChinh.split('\n').map(line => line.replace(/^-\s*/, '').trim()).filter(Boolean);
+            const listChinh = progressEntries.length
+              ? progressEntries
+                  .filter((entry) => Number(entry.deltaPercent) > 0)
+                  .map((entry) => `[${entry.taskCode}] ${entry.taskName}: +${Number(entry.deltaPercent)}%`)
+              : parsedNote.congViecChinh.split('\n').map(line => line.replace(/^-\s*/, '').trim()).filter(Boolean);
             const listGhiChu = parsedNote.ghiChu.split('\n').map(line => line.replace(/^-\s*/, '').trim()).filter(Boolean);
             const listNgayMai = parsedNote.congViecNgayMai.split('\n').map(line => line.replace(/^-\s*/, '').trim()).filter(Boolean);
+
+            const projectId = project?.PROJECT_ID || project?.id;
+            const bundles = {
+              permits: moduleBundles.permits,
+              designs: moduleBundles.designs,
+              procurements: moduleBundles.procurements,
+              constructions: constructions.length ? constructions : moduleBundles.constructions,
+              handovers: moduleBundles.handovers,
+            };
+            const summaryPlanned = calcDailyPlannedProjectPercent(selectedDate, projectId, bundles);
+            const summaryActual = calcDailyActualProjectPercent(progressEntries, bundles.constructions || []);
+            const plannedLabels = getPlannedWorkLabelsForDay(selectedDate, projectId, bundles);
+            const impactHint =
+              parsedNote.dayStatusSubtext ||
+              (plannedLabels.length
+                ? `${plannedLabels.length} việc KH trong ngày`
+                : summaryPlanned > 0
+                  ? 'Theo lịch hạng mục'
+                  : '-');
 
             if (isEditing && editData) {
               return (
                 <div className="bg-[var(--bg-panel)]/80 border border-[var(--border-main)] rounded-xl p-5 mb-4 space-y-4">
-                  <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-3">
-                    <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      📝 Chỉnh sửa nhật ký ngày {selectedDate}
-                    </h4>
-                    <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between border-b border-[var(--border-main)] pb-3 gap-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                        📝 Chỉnh sửa nhật ký ngày {selectedDate}
+                      </h4>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
-                        onClick={() => setIsEditing(false)}
-                        className="px-2.5 py-1 text-[10px] font-bold rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all flex items-center gap-1"
+                        type="button"
+                        onClick={handleCancelEdit}
+                        disabled={saveStatus === 'Saving...'}
+                        className="px-2.5 py-1 text-[10px] font-bold rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all flex items-center gap-1 disabled:opacity-50"
                       >
                         <X className="w-3.5 h-3.5" /> Hủy
                       </button>
                       <button
+                        type="button"
                         onClick={handleSaveEdit}
-                        className="px-2.5 py-1 text-[10px] font-bold rounded bg-[#5252ff] hover:bg-[#4040ff] text-white transition-all flex items-center gap-1"
+                        disabled={saveStatus === 'Saving...'}
+                        className="px-2.5 py-1 text-[10px] font-bold rounded bg-[#5252ff] hover:bg-[#4040ff] text-white transition-all flex items-center gap-1 disabled:opacity-50"
                       >
-                        <Check className="w-3.5 h-3.5" /> Lưu nháp
+                        <Check className="w-3.5 h-3.5" /> Lưu ngay
                       </button>
                     </div>
                   </div>
@@ -605,28 +774,8 @@ export default function SiteLogPanel({
                       />
                     </div>
 
-                    {/* Row 3: Progress and Status */}
-                    <div>
-                      <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Tiến độ thực tế (%)</label>
-                      <input
-                        type="text"
-                        placeholder="4.20%"
-                        value={editData.progressActual}
-                        onChange={(e) => setEditData(prev => ({ ...prev, progressActual: e.target.value }))}
-                        className="w-full bg-[#141d30] border border-[var(--border-main)] rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#5252ff]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Tiến độ kế hoạch (%)</label>
-                      <input
-                        type="text"
-                        placeholder="5.00%"
-                        value={editData.progressPlanned}
-                        onChange={(e) => setEditData(prev => ({ ...prev, progressPlanned: e.target.value }))}
-                        className="w-full bg-[#141d30] border border-[var(--border-main)] rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-[#5252ff]"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
+                    {/* Row 3: Status */}
+                    <div className="md:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Trạng thái ngày</label>
                         <select
@@ -651,17 +800,104 @@ export default function SiteLogPanel({
                     </div>
                   </div>
 
-                  {/* Textareas for Tasks and notes */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Công việc chính (Mỗi dòng là 1 công việc)</label>
-                      <textarea
-                        value={editData.congViecChinh}
-                        onChange={(e) => setEditData(prev => ({ ...prev, congViecChinh: e.target.value }))}
-                        rows={4}
-                        className="w-full bg-[#141d30] border border-[var(--border-main)] rounded-md p-2 text-xs text-white focus:outline-none focus:border-[#5252ff] resize-y"
-                      />
+                  {/* Tiến độ hạng mục thi công hôm nay */}
+                  <div className="border border-[var(--border-main)] rounded-lg p-3 bg-[#0f1628] space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div>
+                        <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider">
+                          Tiến độ hạng mục thi công hôm nay
+                        </label>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          Nhập % cộng thêm trong ngày — hệ thống tự cộng dồn vào bảng Thi công (tối đa 100%/hạng mục).
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={addProgressEntryRow}
+                        disabled={!constructionOptions.length}
+                        className="px-2.5 py-1 text-[10px] font-bold rounded bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40"
+                      >
+                        + Thêm hạng mục
+                      </button>
                     </div>
+
+                    {!constructionOptions.length && (
+                      <p className="text-[11px] text-amber-400/90">
+                        Chưa có dữ liệu hạng mục thi công. Mở tab Thi công để khởi tạo danh sách trước.
+                      </p>
+                    )}
+
+                    {(editData.progressEntries || []).map((entry, index) => {
+                      const selectedKey = taskProgressKey(entry);
+                      const priorSum = sumProgressDeltasFromLogs(logs, { excludeDate: selectedDate });
+                      const prior = priorSum[selectedKey] || 0;
+                      const remaining = selectedKey
+                        ? getRemainingPercentForTask(entry, logs, selectedDate, editData.progressEntries, index)
+                        : 100;
+
+                      return (
+                        <div key={index} className="grid grid-cols-1 md:grid-cols-[minmax(0,1.6fr)_88px_minmax(0,1fr)_auto] gap-2 items-end">
+                          <div>
+                            <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Hạng mục</label>
+                            <select
+                              value={selectedKey}
+                              onChange={(e) => handleProgressTaskPick(index, e.target.value)}
+                              className="w-full bg-[#141d30] border border-[var(--border-main)] rounded-md px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[#5252ff]"
+                            >
+                              <option value="">-- Chọn hạng mục --</option>
+                              {constructionOptions.map((option) => (
+                                <option key={taskProgressKey(option)} value={taskProgressKey(option)}>
+                                  [{option.taskCode}] {option.taskName} ({Math.round(option.currentPercent)}%)
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">% hôm nay</label>
+                            <input
+                              type="number"
+                              min="0"
+                              max={remaining || 100}
+                              step="0.1"
+                              value={entry.deltaPercent}
+                              onChange={(e) => updateProgressEntryRow(index, { deltaPercent: e.target.value })}
+                              className="w-full bg-[#141d30] border border-[var(--border-main)] rounded-md px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[#5252ff]"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1">Ghi chú</label>
+                            <input
+                              type="text"
+                              value={entry.note || ''}
+                              onChange={(e) => updateProgressEntryRow(index, { note: e.target.value })}
+                              className="w-full bg-[#141d30] border border-[var(--border-main)] rounded-md px-2 py-1.5 text-xs text-white focus:outline-none focus:border-[#5252ff]"
+                              placeholder="Tùy chọn"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeProgressEntryRow(index)}
+                            className="px-2 py-1.5 text-[10px] font-bold rounded bg-red-500/10 text-red-300 hover:bg-red-500/20"
+                          >
+                            Xóa
+                          </button>
+                          {selectedKey && (
+                            <p className="md:col-span-4 text-[10px] text-slate-500">
+                              Đã tích lũy trước ngày này: <span className="text-slate-300 font-semibold">{Math.round(prior)}%</span>
+                              {' · '}Còn tối đa hôm nay: <span className="text-emerald-300 font-semibold">{Math.round(remaining)}%</span>
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {progressSaveError && (
+                      <p className="text-[11px] text-red-400 font-semibold">{progressSaveError}</p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Ghi chú hiện trường (Mỗi dòng là 1 ghi chú)</label>
                       <textarea
@@ -690,21 +926,6 @@ export default function SiteLogPanel({
                         placeholder="Nhập vấn đề/rủi ro hoặc bỏ trống nếu không có..."
                       />
                     </div>
-                  </div>
-                  
-                  <div className="flex justify-end gap-2 border-t border-[var(--border-main)] pt-3">
-                    <button
-                      onClick={() => setIsEditing(false)}
-                      className="px-4 py-2 text-xs font-bold rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all"
-                    >
-                      Hủy bỏ
-                    </button>
-                    <button
-                      onClick={handleSaveEdit}
-                      className="px-4 py-2 text-xs font-bold rounded bg-[#5252ff] hover:bg-[#4040ff] text-white transition-all"
-                    >
-                      Lưu thay đổi
-                    </button>
                   </div>
                 </div>
               );
@@ -787,15 +1008,6 @@ export default function SiteLogPanel({
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                       <CalendarClock className="w-3.5 h-3.5 text-cyan-400" /> {t('siteLog.siteNotes')}
                     </p>
-                    {canEdit && (
-                    <button 
-                      onClick={handleStartEdit}
-                      className="w-7 h-7 rounded-md bg-[#18233a] border border-[#2b3a5c] text-slate-300 hover:text-white flex items-center justify-center hover:bg-[#243250] transition-all"
-                      title="Chỉnh sửa nhật ký"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    )}
                   </div>
                   <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4 leading-relaxed min-h-[38px]">
                     {listGhiChu.map((item, idx) => (
@@ -817,18 +1029,20 @@ export default function SiteLogPanel({
                       <div className="grid grid-cols-3 gap-2 text-center mb-3">
                         <div>
                           <p className="text-[9px] text-slate-500">{t('siteLog.actualProgress')}</p>
-                          <p className="text-sm font-bold text-white mt-0.5">{parsedNote.progressActual || '-'}</p>
+                          <p className="text-sm font-bold text-white mt-0.5">
+                            {(Number(summaryActual) || 0).toFixed(2)}%
+                          </p>
                         </div>
                         <div>
                           <p className="text-[9px] text-slate-500">{t('siteLog.variance')}</p>
                           {(() => {
-                            const actual = parseFloat(parsedNote.progressActual) || 0;
-                            const planned = parseFloat(parsedNote.progressPlanned) || 0;
-                            const diff = Math.round(actual - planned);
+                            const actual = Number(summaryActual) || 0;
+                            const planned = Number(summaryPlanned) || 0;
+                            const diff = actual - planned;
                             const isNeg = diff < 0;
                             return (
-                              <p className={`text-sm font-bold mt-0.5 ${isNeg ? 'text-red-400' : 'text-green-400'}`}>
-                                {isNeg ? '' : '+'}{diff}%
+                              <p className={`text-sm font-bold mt-0.5 ${isNeg ? 'text-red-400' : diff > 0 ? 'text-green-400' : 'text-slate-300'}`}>
+                                {diff > 0 ? '+' : ''}{diff.toFixed(2)}%
                               </p>
                             );
                           })()}
@@ -848,12 +1062,14 @@ export default function SiteLogPanel({
                       <div className="w-full bg-[#141d30] rounded-full h-2 mb-1.5 border border-[#22304a] overflow-hidden">
                         <div 
                           className="bg-gradient-to-r from-emerald-500 to-cyan-400 h-2 rounded-full" 
-                          style={{ width: `${Math.min(100, Math.max(0, ((parseFloat(parsedNote.progressActual) || 0) / (parseFloat(parsedNote.progressPlanned) || 1)) * 100))}%` }}
+                          style={{
+                            width: `${Math.min(100, Math.max(0, ((Number(summaryActual) || 0) / Math.max(Number(summaryPlanned) || 0, 0.01)) * 100))}%`,
+                          }}
                         />
                       </div>
                       <div className="flex justify-between text-[9px] text-slate-500 gap-3">
-                        <span>{t('siteLog.planned')}: {parsedNote.progressPlanned || '-'}</span>
-                        <span className="truncate">{t('siteLog.impactVariance')}: {parsedNote.dayStatusSubtext || '-'}</span>
+                        <span>{t('siteLog.planned')}: {(Number(summaryPlanned) || 0).toFixed(2)}%</span>
+                        <span className="truncate">{t('siteLog.impactVariance')}: {impactHint}</span>
                       </div>
                     </div>
                   </div>

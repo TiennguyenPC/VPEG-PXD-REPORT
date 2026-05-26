@@ -16,8 +16,8 @@ export default function SettingsLayout({ activeTab, title, subtitle, children, h
     <div className="flex min-h-screen bg-[var(--bg-main)]">
       <Sidebar activeItem="settings" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
-      <main className="flex-1 min-w-0 overflow-x-hidden">
-        <header className="sticky top-0 z-20 bg-[var(--bg-panel)]/95 backdrop-blur border-b border-[var(--border-main)] px-6 py-4">
+      <main className="flex-1 min-w-0 overflow-x-hidden pb-mobile-nav">
+        <header className="sticky top-0 z-20 bg-[var(--bg-panel)]/95 backdrop-blur border-b border-[var(--border-main)] px-4 md:px-6 py-3 md:py-4 max-md:mobile-header-offset">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div className="flex items-center gap-3">
@@ -52,7 +52,7 @@ export default function SettingsLayout({ activeTab, title, subtitle, children, h
             </nav>
           </div>
         </header>
-        <div className="p-6">{children}</div>
+        <div className="p-4 md:p-6 max-md:pb-8 mobile-content-compact">{children}</div>
       </main>
     </div>
   );

@@ -266,6 +266,13 @@ function ShareProjectPageContent() {
               project={project}
               milestonesData={data.milestones || []}
               initialData={data.scurve || []}
+              moduleBundles={{
+                permits: data.permits,
+                designs: data.designs,
+                procurements: data.procurements,
+                constructions: data.constructions,
+                handovers: data.handovers,
+              }}
             />
           </section>
 

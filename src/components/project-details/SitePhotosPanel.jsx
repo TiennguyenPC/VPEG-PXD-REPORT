@@ -17,7 +17,6 @@ import {
   formatDateStr,
   fromInputDateValue,
   toInputDateValue,
-  formatDateDMY,
 } from '../../utils/timelineDates';
 import { useProjectCanEdit } from '../../context/ProjectEditContext';
 import { useI18n } from '../../context/I18nContext';
@@ -383,9 +382,6 @@ export default function SitePhotosPanel({
             <h3 className="text-sm font-black text-[var(--text-strong)] uppercase tracking-wider">
               📷 {t('siteLog.sitePhotos')}
             </h3>
-            <p className="mt-1 text-[10px] text-slate-500 max-w-md">
-              {t('sitePhotos.subtitle')}
-            </p>
           </div>
         </div>
 
@@ -489,7 +485,6 @@ export default function SitePhotosPanel({
               </div>
               <div>
                 <p className="text-sm font-semibold text-[var(--text-main)]">{t('siteLog.noPhotos')}</p>
-                <p className="text-xs text-[var(--text-muted)] mt-1 max-w-[360px]">{t('sitePhotos.emptyHint')}</p>
               </div>
             </div>
           ) : (
@@ -510,9 +505,8 @@ export default function SitePhotosPanel({
           )}
         </div>
 
-        <div className="px-3 py-2 bg-[var(--bg-hover)]/50 flex items-center justify-between text-[9px] text-[var(--text-muted)]">
-          <span>{t('sitePhotos.noLogRequired')}</span>
-          <span>{formatDateDMY(new Date())} · {activeLog?.UPDATED_BY || t('siteLog.supervisor')}</span>
+        <div className="px-3 py-2 bg-[var(--bg-hover)]/50 flex items-center justify-end text-[9px] text-[var(--text-muted)]">
+          <span>{selectedDate} · {activeLog?.UPDATED_BY || t('siteLog.supervisor')}</span>
         </div>
       </div>
     </div>

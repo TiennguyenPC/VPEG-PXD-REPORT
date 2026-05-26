@@ -2,12 +2,27 @@ import { StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom'
 import './index.css'
-import AIAssistant from './components/AIAssistant.jsx'
 import { ErrorBoundary } from './ErrorBoundary.jsx'
 import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import AdminRoute from './components/AdminRoute.jsx'
 import { lazyWithRetry } from './utils/lazyWithRetry.js'
+import { registerSW } from 'virtual:pwa-register'
+import PwaInstallPrompt from './components/PwaInstallPrompt.jsx'
+import { Capacitor } from '@capacitor/core'
+
+registerSW({ immediate: true })
+
+function applyViewportInsets() {
+  const root = document.documentElement
+  if (Capacitor.isNativePlatform()) {
+    root.classList.add('capacitor-native')
+  }
+  if (window.matchMedia('(display-mode: standalone)').matches) {
+    root.classList.add('pwa-standalone')
+  }
+}
+applyViewportInsets()
 
 const App = lazyWithRetry(() => import('./App.jsx'))
 const ProjectDetailPage = lazyWithRetry(() => import('./pages/ProjectDetailPage.jsx'))
@@ -18,6 +33,7 @@ const AccountPage = lazyWithRetry(() => import('./pages/AccountPage.jsx'))
 const UserSettingsPage = lazyWithRetry(() => import('./pages/UserSettingsPage.jsx'))
 const AuditLogPage = lazyWithRetry(() => import('./pages/AuditLogPage.jsx'))
 const ShareProjectPage = lazyWithRetry(() => import('./pages/ShareProjectPage.jsx'))
+const AIAssistant = lazyWithRetry(() => import('./components/AIAssistant.jsx'))
 
 window.addEventListener('vite:preloadError', (event) => {
   event.preventDefault()
@@ -31,7 +47,11 @@ function AuthenticatedAssistant() {
   const { user } = useAuth();
   const location = useLocation();
   if (!user || location.pathname.startsWith('/share/')) return null;
-  return <AIAssistant />;
+  return (
+    <Suspense fallback={null}>
+      <AIAssistant />
+    </Suspense>
+  );
 }
 
 // Loading fallback component
@@ -64,6 +84,7 @@ createRoot(document.getElementById('root')).render(
           </ErrorBoundary>
         </Suspense>
         <AuthenticatedAssistant />
+        <PwaInstallPrompt />
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

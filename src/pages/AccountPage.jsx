@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   KeyRound,
   Eye,
@@ -9,8 +10,11 @@ import {
   Mail,
   FolderKanban,
   Shield,
+  LogOut,
+  Palette,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
+import ThemeModePicker from '../components/ThemeModePicker';
 import { useSidebar } from '../hooks/useSidebar';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
@@ -78,7 +82,8 @@ function SectionCard({ title, description, icon: Icon, children }) {
 
 export default function AccountPage() {
   const { isCollapsed, toggleSidebar } = useSidebar();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -127,12 +132,17 @@ export default function AccountPage() {
     }
   };
 
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login');
+  };
+
   return (
     <div className="min-h-screen flex bg-[var(--bg-main)] text-[var(--text-main)]">
       <Sidebar activeItem="account" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
-      <main className="flex-1 min-w-0 overflow-y-auto">
-        <header className="sticky top-0 z-20 bg-[var(--bg-panel)]/95 backdrop-blur border-b border-[var(--border-main)] px-6 py-4">
+      <main className="flex-1 min-w-0 overflow-y-auto pb-mobile-nav">
+        <header className="sticky top-0 z-20 bg-[var(--bg-panel)]/95 backdrop-blur border-b border-[var(--border-main)] px-4 md:px-6 py-3 md:py-4 max-md:mobile-header-offset">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-[#5252ff]/10 text-[#7373ff]">
               <User className="w-5 h-5" />
@@ -144,7 +154,7 @@ export default function AccountPage() {
           </div>
         </header>
 
-        <div className="p-6 max-w-4xl mx-auto space-y-6">
+        <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6 max-md:pb-8 mobile-content-compact">
           {/* Profile hero */}
           <div className="rounded-2xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] overflow-hidden shadow-lg shadow-black/5">
             <div className="h-28 bg-gradient-to-r from-[#5252ff]/25 via-[#3b82f6]/15 to-transparent" />
@@ -241,6 +251,22 @@ export default function AccountPage() {
               </form>
             </SectionCard>
           </div>
+
+          <SectionCard
+            title="Giao diện & phiên đăng nhập"
+            description="Chế độ sáng/tối và đăng xuất khỏi hệ thống"
+            icon={Palette}
+          >
+            <ThemeModePicker />
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="w-full mt-2 mb-2 flex items-center justify-center gap-2 px-4 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:bg-red-500/20 hover:border-red-500/45 transition-colors text-sm font-semibold"
+            >
+              <LogOut className="w-4 h-4" />
+              Đăng xuất
+            </button>
+          </SectionCard>
         </div>
       </main>
     </div>

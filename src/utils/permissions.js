@@ -50,9 +50,32 @@ export function isAssignedToProject(user, projectId) {
   return assigned.some((id) => String(id).trim() === pid);
 }
 
-export function canEditProject(user, projectId) {
+export function canEditProject(user, projectId, project = null) {
   if (isAdmin(user)) return true;
+  if (project && isProjectCreator(user, project)) return true;
   return isAssignedToProject(user, projectId);
+}
+
+export function getProjectCreator(project) {
+  return String(project?.NGƯỜI_TẠO || project?.NGUOI_TAO || project?.CREATED_BY || project?.creator || '').trim();
+}
+
+export function isProjectCreator(user, project) {
+  const creator = getProjectCreator(project);
+  if (!creator || !user?.displayName) return false;
+  return namesMatch(user.displayName, creator);
+}
+
+/** Mọi user đăng nhập đều được tạo dự án mới */
+export function canCreateProject(user) {
+  return Boolean(user?.username || user?.displayName);
+}
+
+/** Admin toàn quyền, còn lại chỉ người tạo dự án */
+export function canDeleteProject(user, project) {
+  if (!project || !user) return false;
+  if (isAdmin(user)) return true;
+  return isProjectCreator(user, project);
 }
 
 function parseAssigneeNames(raw) {
@@ -125,14 +148,38 @@ export function canViewTaskDetail(user, task) {
   return Boolean(user && task);
 }
 
-/** Admin, người được gán, hoặc PM/SM của dự án / văn phòng */
-export function canEditTask(user, task, context = {}) {
+/** Cột người nhận việc được sửa (tên, mô tả, dự án) */
+export const ASSIGNEE_EDITABLE_TASK_FIELDS = new Set([
+  'TÁC_VỤ',
+  'GHI_CHÚ',
+  'MÔ_TẢ',
+  'MO_TA',
+  'TÊN_DỰ_ÁN',
+  'PROJECT_ID',
+]);
+
+export function getTaskCreator(task) {
+  return String(task?.NGƯỜI_TẠO || task?.NGUOI_TAO || task?.CREATED_BY || '').trim();
+}
+
+export function isTaskCreator(user, task) {
+  const creator = getTaskCreator(task);
+  if (!creator || !user?.displayName) return false;
+  return namesMatch(user.displayName, creator);
+}
+
+export function isTaskAssignee(user, task) {
+  if (!task || !user?.displayName) return false;
+  const assignees = parseAssigneeNames(task.NHÂN_SỰ);
+  if (assignees.some((name) => namesMatch(user.displayName, name))) return true;
+  return namesMatch(user.displayName, task.NHÂN_SỰ);
+}
+
+/** Admin, người tạo task, hoặc PM/SM quản lý dự án / văn phòng */
+export function hasFullTaskEditRights(user, task, context = {}) {
   if (isAdmin(user)) return true;
   if (!task) return false;
-
-  const assignees = parseAssigneeNames(task.NHÂN_SỰ);
-  if (assignees.some((name) => namesMatch(user?.displayName, name))) return true;
-  if (namesMatch(user?.displayName, task.NHÂN_SỰ)) return true;
+  if (isTaskCreator(user, task)) return true;
 
   if (isProjectEditorRole(user?.role)) {
     const { projects = [] } = context;
@@ -143,13 +190,34 @@ export function canEditTask(user, task, context = {}) {
   return false;
 }
 
+/** Admin, người tạo, PM/SM dự án, hoặc người được phân công */
+export function canEditTask(user, task, context = {}) {
+  if (!task || !user) return false;
+  if (hasFullTaskEditRights(user, task, context)) return true;
+  return isTaskAssignee(user, task);
+}
+
+export function canEditTaskField(user, task, field, context = {}) {
+  if (!canEditTask(user, task, context)) return false;
+  if (hasFullTaskEditRights(user, task, context)) return true;
+  return ASSIGNEE_EDITABLE_TASK_FIELDS.has(field);
+}
+
+/** Chỉ bấm hoàn thành / bỏ hoàn thành — người nhận việc cũng được */
+export function canToggleTaskComplete(user, task, context = {}) {
+  return canEditTask(user, task, context);
+}
+
 export function canCreateTask(user) {
   if (isAdmin(user)) return true;
   return isProjectEditorRole(user?.role);
 }
 
+/** Admin toàn quyền, còn lại chỉ người tạo task */
 export function canDeleteTask(user, task, context = {}) {
-  return canEditTask(user, task, context);
+  if (!task || !user) return false;
+  if (isAdmin(user)) return true;
+  return isTaskCreator(user, task);
 }
 
 export function getRoleLabel(role) {
@@ -172,6 +240,20 @@ export function canShareProjectWithClient(user) {
 
 export function isProjectEditorRole(role) {
   return PROJECT_EDITOR_ROLES.includes(String(role || '').toLowerCase());
+}
+
+/** Theo dõi HĐ & sơ đồ quy trình — nội bộ, không chia sẻ khách; chỉ SM/PM/Admin được gán dự án */
+export function canViewContractTracking(user, projectId, project = null) {
+  if (!user) return false;
+  if (isAdmin(user)) return true;
+  const role = String(user?.role || '').toLowerCase();
+  if (role !== 'pm' && role !== 'sm') return false;
+  return isAssignedToProject(user, projectId || project?.id || project?.PROJECT_ID);
+}
+
+export function canEditContractTracking(user, projectId, project = null) {
+  if (!canViewContractTracking(user, projectId, project)) return false;
+  return canEditProject(user, projectId, project);
 }
 
 /** Mọi role (trừ Admin) đều có thể được gán dự án */

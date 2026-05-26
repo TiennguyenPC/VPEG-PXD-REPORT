@@ -14,17 +14,23 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import DateInputDMY from '../components/DateInputDMY';
 import { updateDashboardContext } from '../utils/dashboardContext';
-import { getTaskDescription, isSameTask, UI_ONLY_TASK_FIELDS, enrichTaskForUI, applyTaskFieldUpdate, buildAssigneeOptionList, enrichTaskProjectIds } from '../utils/taskFields';
+import { getTaskDescription, isSameTask, UI_ONLY_TASK_FIELDS, enrichTaskForUI, applyTaskFieldUpdate, enrichTaskProjectIds, parseAssignees, getAssigneeGivenName } from '../utils/taskFields';
+import { buildAssigneeOptionList } from '../utils/assigneeHelpers';
 import AssigneeDisplay from '../components/AssigneeDisplay';
-import AssigneeSelect from '../components/AssigneeSelect';
+import AssigneeMultiSelect from '../components/AssigneeMultiSelect';
+import TaskMobileCard from '../components/TaskMobileCard';
 import { compareDateStrings, normalizeToDMY } from '../utils/timelineDates';
 import { useAuth } from '../context/AuthContext';
-import { canEditTask, canCreateTask, canDeleteTask, canViewTaskDetail } from '../utils/permissions';
+import { canEditTask, canEditTaskField, canCreateTask, canDeleteTask, canViewTaskDetail, canToggleTaskComplete, hasFullTaskEditRights, normalizePersonName } from '../utils/permissions';
+
+const NEW_TASK_PROJECT_CUSTOM = '__custom__';
 
 const thCell = 'py-2 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider align-middle';
 const tdCell = 'py-2 px-2.5 text-xs align-middle overflow-hidden';
 const tdClip = `${tdCell} max-w-0`;
+const tdWrap = 'py-2 px-2.5 text-xs align-top';
 const textClip = 'block truncate';
+const textWrapCell = 'block text-[11px] leading-snug break-words whitespace-pre-wrap';
 
 export default function TaskList() {
   const navigate = useNavigate();
@@ -174,6 +180,8 @@ export default function TaskList() {
   useEffect(() => () => clearTimeout(saveTimerRef.current), []);
 
   const [taskType, setTaskType] = useState('project'); // 'project' or 'office'
+  const [newTaskProjectPicker, setNewTaskProjectPicker] = useState('');
+  const [newTaskCustomProject, setNewTaskCustomProject] = useState('');
   const [newTask, setNewTask] = useState({
     TÊN_DỰ_ÁN: '',
     TÁC_VỤ: '',
@@ -190,48 +198,135 @@ export default function TaskList() {
 
   const taskContext = useMemo(() => ({ projects }), [projects]);
 
-  const assigneeOptions = useMemo(
-    () => buildAssigneeOptionList(employees, tasks, [user?.displayName]),
-    [employees, tasks, user?.displayName]
+  const getActiveTask = useCallback(
+    () => taskMatchRef.current || draftTask,
+    [draftTask]
   );
-
-  const isDraftEditable = draftTask
-    ? canEditTask(user, taskMatchRef.current || draftTask, taskContext)
-    : false;
 
   const canEditTaskRow = useCallback(
     (task) => canEditTask(user, task, taskContext),
     [user, taskContext]
   );
 
-  const handleAddTask = async (e) => {
+  const canFullyEditTaskRow = useCallback(
+    (task) => hasFullTaskEditRights(user, task, taskContext),
+    [user, taskContext]
+  );
+
+  const canEditDraftField = useCallback(
+    (field) => {
+      const task = getActiveTask();
+      return task ? canEditTaskField(user, task, field, taskContext) : false;
+    },
+    [user, taskContext, getActiveTask]
+  );
+
+  const canFullyEditDraft = useCallback(
+    () => {
+      const task = getActiveTask();
+      return task ? hasFullTaskEditRights(user, task, taskContext) : false;
+    },
+    [user, taskContext, getActiveTask]
+  );
+
+  const canToggleCompleteDraft = useCallback(
+    () => {
+      const task = getActiveTask();
+      return task ? canToggleTaskComplete(user, task, taskContext) : false;
+    },
+    [user, taskContext, getActiveTask]
+  );
+
+  const canDeleteDraft = useCallback(
+    () => {
+      const task = getActiveTask();
+      return task ? canDeleteTask(user, task, taskContext) : false;
+    },
+    [user, taskContext, getActiveTask]
+  );
+
+  const assigneeOptions = useMemo(
+    () => buildAssigneeOptionList(employees, tasks, [user?.displayName]),
+    [employees, tasks, user?.displayName]
+  );
+
+  const commitTasksLocal = useCallback((nextTasks) => {
+    setTasks(nextTasks);
+    try {
+      localStorage.setItem('epc_tasks_cache', JSON.stringify(nextTasks));
+    } catch {
+      /* quota / private mode */
+    }
+  }, []);
+
+  const resetNewTaskForm = useCallback(() => {
+    setNewTaskOpen(false);
+    setNewTaskProjectPicker('');
+    setNewTaskCustomProject('');
+    setNewTask({
+      TÊN_DỰ_ÁN: '',
+      TÁC_VỤ: '',
+      GHI_CHÚ: '',
+      NHÂN_SỰ: '',
+      NGÀY_BẮT_ĐẦU: '',
+      NGÀY_KẾT_THÚC: '',
+      BỘ_CHỨA: 'DỰ ÁN',
+      TRẠNG_THÁI: 'Chưa bắt đầu',
+      ƯU_TIÊN: 'Medium',
+    });
+  }, []);
+
+  const handleAddTask = (e) => {
     e.preventDefault();
     if (!newTask.TÁC_VỤ) return;
-    
+
     let projectId = '';
     let projectName = '';
     let container = newTask.BỘ_CHỨA;
 
     if (taskType === 'project') {
-      const project = projects.find(p => p.name === newTask.TÊN_DỰ_ÁN);
+      projectName = newTaskProjectPicker === NEW_TASK_PROJECT_CUSTOM
+        ? newTaskCustomProject.trim()
+        : (newTaskProjectPicker || newTask.TÊN_DỰ_ÁN || '').trim();
+      if (!projectName) {
+        alert('Vui lòng chọn dự án hoặc nhập tên dự án (khác / defect / bảo hành…)');
+        return;
+      }
+      const project = projects.find(p => p.name === projectName);
       projectId = project ? (project.id || project.PROJECT_ID) : '';
-      projectName = newTask.TÊN_DỰ_ÁN;
     } else {
       projectName = 'VĂN PHÒNG';
-      container = newTask.BỘ_CHỨA === 'DỰ ÁN' ? 'VĂN PHÒNG' : newTask.BỘ_CHỨA; // default to VĂN PHÒNG if user didn't change it
+      container = newTask.BỘ_CHỨA === 'DỰ ÁN' ? 'VĂN PHÒNG' : newTask.BỘ_CHỨA;
     }
 
-    const taskToAdd = { ...newTask, PROJECT_ID: projectId, TÊN_DỰ_ÁN: projectName, BỘ_CHỨA: container };
-    
-    try {
-      const data = await api.createTask(taskToAdd);
-      setTasks(data || []);
-      setNewTaskOpen(false);
-      setNewTask({ ...newTask, TÁC_VỤ: '', GHI_CHÚ: '' });
-    } catch (err) {
-      console.error(err);
-      alert('Lỗi khi thêm công việc');
-    }
+    const taskToAdd = {
+      ...newTask,
+      PROJECT_ID: projectId,
+      TÊN_DỰ_ÁN: projectName,
+      BỘ_CHỨA: container,
+      NGƯỜI_TẠO: user?.displayName || '',
+    };
+    const pendingKey = `_pending_${Date.now()}`;
+    const optimisticTask = { ...taskToAdd, _rowIndex: pendingKey, _pendingSync: true };
+
+    commitTasksLocal([...tasks, optimisticTask]);
+    resetNewTaskForm();
+
+    api.createTask(taskToAdd)
+      .then((data) => commitTasksLocal(data || []))
+      .catch((err) => {
+        console.error(err);
+        setTasks((prev) => {
+          const next = prev.filter((t) => t._rowIndex !== pendingKey);
+          try {
+            localStorage.setItem('epc_tasks_cache', JSON.stringify(next));
+          } catch {
+            /* ignore */
+          }
+          return next;
+        });
+        alert('Không đồng bộ được lên Google Sheet. Công việc đã được gỡ khỏi danh sách.');
+      });
   };
 
   const openTaskDetail = useCallback((task) => {
@@ -301,7 +396,14 @@ export default function TaskList() {
   }, [persistTaskUpdate]);
 
   const handleTaskUpdate = (task, field, value) => {
-    if (!canEditTask(user, taskMatchRef.current || task, taskContext)) return;
+    const activeTask = taskMatchRef.current || task;
+    if (field === 'TRẠNG_THÁI') {
+      if (!canToggleTaskComplete(user, activeTask, taskContext)) return;
+    } else if (field === 'PINNED') {
+      if (!hasFullTaskEditRights(user, activeTask, taskContext)) return;
+    } else if (!canEditTaskField(user, activeTask, field, taskContext)) {
+      return;
+    }
 
     const updatedTask = applyTaskFieldUpdate(task, field, value);
 
@@ -318,13 +420,27 @@ export default function TaskList() {
     queueTaskSave(originalForApi, updatedTask);
   };
 
-  const updateTaskStatus = async (task, newStatus) => {
-    return handleTaskUpdate(task, 'TRẠNG_THÁI', newStatus);
+  const updateTaskStatus = (task, newStatus) => handleTaskUpdate(task, 'TRẠNG_THÁI', newStatus);
+
+  const handleTaskProjectUpdate = (task, projectName) => {
+    const activeTask = taskMatchRef.current || task;
+    if (!canEditTaskField(user, activeTask, 'TÊN_DỰ_ÁN', taskContext)) return;
+
+    const project = projects.find((p) => p.name === projectName);
+    const projectId = project ? (project.id || project.PROJECT_ID) : '';
+    let updatedTask = applyTaskFieldUpdate(task, 'TÊN_DỰ_ÁN', projectName);
+    updatedTask = applyTaskFieldUpdate(updatedTask, 'PROJECT_ID', projectId);
+
+    setTasks(tasks.map((t) => (isSameTask(t, task) ? { ...updatedTask } : t)));
+    if (draftTask && isSameTask(draftTask, task)) setDraftTask(updatedTask);
+
+    const originalForApi = taskMatchRef.current || task;
+    queueTaskSave(originalForApi, updatedTask);
   };
 
   const handleTaskDelete = async (task) => {
     if (!canDeleteTask(user, taskMatchRef.current || task, taskContext)) {
-      alert('Bạn chỉ được xóa công việc được phân công cho mình');
+      alert('Chỉ người tạo task mới được xóa (Admin có toàn quyền)');
       return;
     }
     if (!window.confirm("Bạn có chắc chắn muốn xóa tác vụ này?")) return;
@@ -352,50 +468,50 @@ export default function TaskList() {
     <div className="min-h-screen flex bg-[var(--bg-main)] text-slate-100 font-sans">
       <Sidebar activeItem="tasks" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
       
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        <header className="px-6 pt-3 pb-2 border-b border-[var(--border-main)]/30 flex justify-between items-center shrink-0">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden pb-mobile-nav">
+        <header className="px-4 md:px-6 pt-2 md:pt-3 pb-2 border-b border-[var(--border-main)]/30 flex justify-between items-center shrink-0 max-md:mobile-header-offset">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-lg font-bold text-white tracking-tight uppercase">CÔNG VIỆC</h1>
+              <h1 className="text-base md:text-lg font-bold text-white tracking-tight uppercase">CÔNG VIỆC</h1>
               <p className="text-[11px] text-[var(--text-muted)] mt-0.5 font-medium">Quản lý và theo dõi tiến độ các tác vụ</p>
             </div>
           </div>
         </header>
 
       {/* CONTENT AREA */}
-      <div className="flex-1 overflow-y-auto bg-[var(--bg-main)] p-6 pt-0">
+      <div className="flex-1 overflow-y-auto bg-[var(--bg-main)] p-4 md:p-6 pt-0 max-md:pb-28 mobile-content-compact">
         
         {/* CONTROLS (Row 2) */}
-        <div className="sticky top-0 z-40 -mx-6 mb-3 space-y-2 bg-[var(--bg-main)] px-6 pt-2 pb-1.5 border-b border-[var(--border-main)]/60 shadow-sm">
-        <div className="flex justify-between items-center">
-          <div className="flex bg-[var(--bg-panel)] p-1 rounded-md border border-[var(--border-main)] shadow-sm">
+        <div className="sticky top-0 z-40 -mx-4 md:-mx-6 mb-3 space-y-2 bg-[var(--bg-main)] px-4 md:px-6 pt-2 pb-1.5 border-b border-[var(--border-main)]/60 shadow-sm">
+        <div className="flex flex-col gap-2 md:flex-row md:justify-between md:items-center">
+          <div className="flex bg-[var(--bg-panel)] p-1 rounded-md border border-[var(--border-main)] shadow-sm overflow-x-auto max-w-full">
             <button 
               onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-2 px-5 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'grid' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#1e293b]'}`}
+              className={`flex items-center gap-1.5 px-3 md:px-5 py-1.5 rounded-md text-xs font-semibold transition-all shrink-0 ${viewMode === 'grid' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#1e293b]'}`}
             >
               <LayoutGrid className="w-4 h-4" /> Lưới
             </button>
             <button 
               onClick={() => setViewMode('board')}
-              className={`flex items-center gap-2 px-5 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'board' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#1e293b]'}`}
+              className={`flex items-center gap-1.5 px-3 md:px-5 py-1.5 rounded-md text-xs font-semibold transition-all shrink-0 ${viewMode === 'board' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#1e293b]'}`}
             >
               <Columns className="w-4 h-4" /> Bảng
             </button>
             <button 
               onClick={() => setViewMode('calendar')}
-              className={`flex items-center gap-2 px-5 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'calendar' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#1e293b]'}`}
+              className={`flex items-center gap-1.5 px-3 md:px-5 py-1.5 rounded-md text-xs font-semibold transition-all shrink-0 ${viewMode === 'calendar' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#1e293b]'}`}
             >
               <CalendarIcon className="w-4 h-4" /> Lịch
             </button>
             <button 
               onClick={() => setViewMode('chart')}
-              className={`flex items-center gap-2 px-5 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'chart' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#1e293b]'}`}
+              className={`flex items-center gap-1.5 px-3 md:px-5 py-1.5 rounded-md text-xs font-semibold transition-all shrink-0 ${viewMode === 'chart' ? 'bg-[#5252ff] text-white shadow-md' : 'text-slate-400 hover:text-white hover:bg-[#1e293b]'}`}
             >
               <BarChart3 className="w-4 h-4" /> Biểu đồ
             </button>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-4">
             <div className="relative">
               <input 
                 type="text" 
@@ -413,7 +529,11 @@ export default function TaskList() {
             {canCreateTask(user) && (
             <div className="flex rounded-md shadow-[0_0_15px_rgba(82,82,255,0.3)]">
               <button 
-                onClick={() => setNewTaskOpen(true)}
+                onClick={() => {
+                  setNewTaskProjectPicker('');
+                  setNewTaskCustomProject('');
+                  setNewTaskOpen(true);
+                }}
                 className="bg-[#5252ff] hover:bg-[#4141d6] text-white text-xs font-medium px-4 py-2 rounded-l-md flex items-center gap-2 transition-all border-r border-[#4141d6]"
               >
                 <Plus className="w-4 h-4" />
@@ -427,55 +547,82 @@ export default function TaskList() {
           </div>
         </div>
 
+        <div className="flex md:hidden items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <input
+              type="text"
+              placeholder="Tìm kiếm..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-3 pr-9 py-2 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-md text-xs text-slate-200 focus:border-[#5252ff] outline-none"
+            />
+            <Search className="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2" />
+          </div>
+          {canCreateTask(user) && (
+            <button
+              type="button"
+              onClick={() => {
+                setNewTaskProjectPicker('');
+                setNewTaskCustomProject('');
+                setNewTaskOpen(true);
+              }}
+              className="shrink-0 bg-[#5252ff] hover:bg-[#4141d6] text-white p-2.5 rounded-md shadow-md"
+              title="Thêm tác vụ"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+
         {/* STAT CARDS (Row 3) */}
-        <div className="grid grid-cols-5 gap-0 rounded-xl overflow-hidden border border-[var(--border-main)] bg-[var(--bg-panel)] shadow-sm">
-          <div className="p-2.5 border-r border-[var(--border-main)] flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#5252ff] shrink-0">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-0 rounded-xl overflow-hidden border border-[var(--border-main)] bg-[var(--bg-panel)] shadow-sm max-md:scale-[0.97] max-md:origin-top">
+          <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#5252ff] shrink-0">
               <ClipboardList className="w-3.5 h-3.5" />
             </div>
             <div>
-              <div className="text-[10px] text-slate-400 font-medium mb-0.5">Tổng công việc</div>
-              <div className="text-lg font-bold text-white leading-none">{processedTasks.length}</div>
+              <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Tổng công việc</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.length}</div>
             </div>
           </div>
-          <div className="p-2.5 border-r border-[var(--border-main)] flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#3b82f6] shrink-0">
+          <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#3b82f6] shrink-0">
               <PlayCircle className="w-3.5 h-3.5" />
             </div>
             <div>
-              <div className="text-[10px] text-slate-400 font-medium mb-0.5">Đang diễn ra</div>
-              <div className="text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length}</div>
-              <div className="text-[9px] text-[#3b82f6] font-semibold mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
+              <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Đang diễn ra</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length}</div>
+              <div className="text-[8px] md:text-[9px] text-[#3b82f6] font-semibold mt-0.5 md:mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
             </div>
           </div>
-          <div className="p-2.5 border-r border-[var(--border-main)] flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-red-400 shrink-0">
+          <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-red-400 shrink-0">
               <Clock className="w-3.5 h-3.5" />
             </div>
             <div>
-              <div className="text-[10px] text-slate-400 font-medium mb-0.5">Trễ hạn</div>
-              <div className="text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Trễ').length}</div>
-              <div className="text-[9px] text-red-400 font-semibold mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Trễ').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
+              <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Trễ hạn</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Trễ').length}</div>
+              <div className="text-[8px] md:text-[9px] text-red-400 font-semibold mt-0.5 md:mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Trễ').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
             </div>
           </div>
-          <div className="p-2.5 border-r border-[var(--border-main)] flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#10b981] shrink-0">
+          <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#10b981] shrink-0">
               <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
             <div>
-              <div className="text-[10px] text-slate-400 font-medium mb-0.5">Hoàn thành</div>
-              <div className="text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length}</div>
-              <div className="text-[9px] text-[#10b981] font-semibold mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
+              <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Hoàn thành</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length}</div>
+              <div className="text-[8px] md:text-[9px] text-[#10b981] font-semibold mt-0.5 md:mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
             </div>
           </div>
-          <div className="p-2.5 flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-yellow-500 shrink-0">
+          <div className="p-2 md:p-2.5 flex items-center gap-2 max-md:gap-1.5 col-span-2 md:col-span-1">
+            <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-yellow-500 shrink-0">
               <Flag className="w-3.5 h-3.5" />
             </div>
             <div>
-              <div className="text-[10px] text-slate-400 font-medium mb-0.5">Ưu tiên cao</div>
-              <div className="text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length}</div>
-              <div className="text-[9px] text-yellow-500 font-semibold mt-1">{Math.round((processedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
+              <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Ưu tiên cao</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length}</div>
+              <div className="text-[8px] md:text-[9px] text-yellow-500 font-semibold mt-0.5 md:mt-1">{Math.round((processedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
             </div>
           </div>
         </div>
@@ -521,22 +668,49 @@ export default function TaskList() {
           <div className="flex justify-center py-12 text-slate-400 text-sm">Đang tải công việc...</div>
         ) : (
           <>
-            {/* GRID VIEW */}
+            {/* GRID VIEW — mobile: cards; desktop: table */}
             {viewMode === 'grid' && (
-              <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] shadow-xl overflow-hidden min-w-0">
+              <>
+              <div className="md:hidden space-y-2.5">
+                {processedTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((task) => {
+                  const taskEditable = canEditTaskRow(task);
+                  const taskFullyEditable = canFullyEditTaskRow(task);
+                  const canOpenTask = canViewTaskDetail(user, task);
+                  return (
+                    <TaskMobileCard
+                      key={task._rowIndex ?? `${task.TÁC_VỤ}-${task.PROJECT_ID}`}
+                      task={task}
+                      taskEditable={taskEditable}
+                      taskFullyEditable={taskFullyEditable}
+                      canOpenTask={canOpenTask}
+                      onOpen={() => openTaskDetail(task)}
+                      onTogglePin={() => handleTaskUpdate(task, 'PINNED', !task.PINNED)}
+                      onToggleComplete={() =>
+                        updateTaskStatus(
+                          task,
+                          task.computedStatus === 'Đã hoàn thành' ? '' : 'Đã hoàn thành'
+                        )
+                      }
+                    />
+                  );
+                })}
+                {processedTasks.length === 0 && (
+                  <div className="py-10 text-center text-slate-400 text-sm">Chưa có công việc</div>
+                )}
+              </div>
+              <div className="hidden md:block border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] shadow-xl overflow-hidden min-w-0">
                 <div className="overflow-x-auto">
                 <table className="w-full table-fixed border-collapse">
                   <colgroup>
                     <col style={{ width: '14%' }} />
-                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '24%' }} />
                     <col style={{ width: '10%' }} />
                     <col style={{ width: '14%' }} />
                     <col style={{ width: '9%' }} />
                     <col style={{ width: '9%' }} />
+                    <col style={{ width: '11%' }} />
                     <col style={{ width: '9%' }} />
-                    <col style={{ width: '10%' }} />
-                    <col style={{ width: '9%' }} />
-                    <col style={{ width: '4%' }} />
+                    <col style={{ width: '5%' }} />
                   </colgroup>
                   <thead>
                     <tr className="bg-[#0c1221] border-b border-[var(--border-main)] text-slate-300">
@@ -546,7 +720,6 @@ export default function TaskList() {
                       <th className={`${thCell} text-left cursor-pointer hover:text-white`} onClick={() => handleSort('NHÂN_SỰ')}>Phân công <ChevronDown className={`w-3 h-3 inline-block ml-0.5 transition-transform ${sortConfig.key === 'NHÂN_SỰ' ? 'opacity-100' : 'opacity-40'} ${sortConfig.key === 'NHÂN_SỰ' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} /></th>
                       <th className={`${thCell} text-center cursor-pointer hover:text-white`} onClick={() => handleSort('NGÀY_BẮT_ĐẦU_LOCAL')}>Bắt đầu <ChevronDown className={`w-3 h-3 inline-block ml-0.5 transition-transform ${sortConfig.key === 'NGÀY_BẮT_ĐẦU_LOCAL' ? 'opacity-100' : 'opacity-40'} ${sortConfig.key === 'NGÀY_BẮT_ĐẦU_LOCAL' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} /></th>
                       <th className={`${thCell} text-center cursor-pointer hover:text-white`} onClick={() => handleSort('NGÀY_KẾT_THÚC_LOCAL')}>Đến hạn <ChevronDown className={`w-3 h-3 inline-block ml-0.5 transition-transform ${sortConfig.key === 'NGÀY_KẾT_THÚC_LOCAL' ? 'opacity-100' : 'opacity-40'} ${sortConfig.key === 'NGÀY_KẾT_THÚC_LOCAL' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} /></th>
-                      <th className={`${thCell} text-center cursor-pointer hover:text-white`} onClick={() => handleSort('BỘ_CHỨA')}>Bộ chứa <ChevronDown className={`w-3 h-3 inline-block ml-0.5 transition-transform ${sortConfig.key === 'BỘ_CHỨA' ? 'opacity-100' : 'opacity-40'} ${sortConfig.key === 'BỘ_CHỨA' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} /></th>
                       <th className={`${thCell} text-center cursor-pointer hover:text-white`} onClick={() => handleSort('computedStatus')}>Trạng thái <ChevronDown className={`w-3 h-3 inline-block ml-0.5 transition-transform ${sortConfig.key === 'computedStatus' ? 'opacity-100' : 'opacity-40'} ${sortConfig.key === 'computedStatus' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} /></th>
                       <th className={`${thCell} text-center cursor-pointer hover:text-white`} onClick={() => handleSort('ƯU_TIÊN')}>Ưu tiên <ChevronDown className={`w-3 h-3 inline-block ml-0.5 transition-transform ${sortConfig.key === 'ƯU_TIÊN' ? 'opacity-100' : 'opacity-40'} ${sortConfig.key === 'ƯU_TIÊN' && sortConfig.direction === 'desc' ? 'rotate-180' : ''}`} /></th>
                       <th className={thCell} />
@@ -555,13 +728,14 @@ export default function TaskList() {
                   <tbody className="divide-y divide-[var(--border-main)]/50 bg-[#0e1628]">
                     {processedTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((task) => {
                       const taskEditable = canEditTaskRow(task);
+                      const taskFullyEditable = canFullyEditTaskRow(task);
                       const canOpenTask = canViewTaskDetail(user, task);
                       return (
                       <tr key={task._rowIndex ?? `${task.TÁC_VỤ}-${task.PROJECT_ID}`} className={`hover:bg-[#141c2f] transition-colors group ${canOpenTask ? 'cursor-pointer' : ''}`} onClick={canOpenTask ? () => openTaskDetail(task) : undefined}>
                         <td className={tdClip}>
                           <div className="flex items-center gap-1.5 min-w-0">
                             <button 
-                              className={`shrink-0 transition-colors ${task.PINNED ? 'text-yellow-400' : 'text-slate-500 hover:text-yellow-400'} ${!taskEditable ? 'opacity-40 pointer-events-none' : ''}`}
+                              className={`shrink-0 transition-colors ${task.PINNED ? 'text-yellow-400' : 'text-slate-500 hover:text-yellow-400'} ${!taskFullyEditable ? 'opacity-40 pointer-events-none' : ''}`}
                               onClick={e => { e.stopPropagation(); handleTaskUpdate(task, 'PINNED', !task.PINNED); }}
                             >
                               <Star className={`w-3.5 h-3.5 ${task.PINNED ? 'fill-current' : ''}`} />
@@ -572,8 +746,8 @@ export default function TaskList() {
                             </span>
                           </div>
                         </td>
-                        <td className={tdClip}>
-                          <span className={`${textClip} text-slate-400`} title={task.taskDescription}>
+                        <td className={tdWrap}>
+                          <span className={`${textWrapCell} text-slate-400`}>
                             {task.taskDescription || '—'}
                           </span>
                         </td>
@@ -582,24 +756,12 @@ export default function TaskList() {
                             {task.TÊN_DỰ_ÁN || '—'}
                           </span>
                         </td>
-                        <td className={tdCell} onClick={(e) => e.stopPropagation()}>
-                          {taskEditable ? (
-                            <AssigneeSelect
-                              value={task.NHÂN_SỰ}
-                              onChange={(val) => handleTaskUpdate(task, 'NHÂN_SỰ', val)}
-                              options={assigneeOptions}
-                              variant="dark"
-                            />
-                          ) : (
-                            <AssigneeDisplay assignees={task.NHÂN_SỰ} variant="dark" />
-                          )}
+                        <td className={tdClip}>
+                          <AssigneeDisplay assignees={task.NHÂN_SỰ} variant="dark" className="max-w-full" />
                         </td>
                         <td className={`${tdCell} text-center text-slate-400 tabular-nums whitespace-nowrap`}>{task.NGÀY_BẮT_ĐẦU_LOCAL || normalizeToDMY(task.NGÀY_BẮT_ĐẦU) || '—'}</td>
                         <td className={`${tdCell} text-center font-semibold tabular-nums whitespace-nowrap ${task.computedStatus === 'Trễ' ? 'text-red-400' : 'text-emerald-400'}`}>
                           {task.NGÀY_KẾT_THÚC_LOCAL || normalizeToDMY(task.NGÀY_KẾT_THÚC) || '—'}
-                        </td>
-                        <td className={`${tdCell} text-center`}>
-                          <span className={`${textClip} text-slate-400 text-[10px] uppercase`} title={task.BỘ_CHỨA}>{task.BỘ_CHỨA}</span>
                         </td>
                         <td className={`${tdCell} text-center`}>
                           <span className={`inline-flex items-center justify-center gap-0.5 max-w-full px-1.5 py-0.5 rounded-md text-[9px] font-bold border whitespace-nowrap ${
@@ -667,16 +829,42 @@ export default function TaskList() {
                   </div>
                 </div>
               </div>
+              <div className="md:hidden flex items-center justify-between text-xs text-slate-400 py-3 px-1">
+                <span>
+                  {Math.min((currentPage - 1) * itemsPerPage + 1, processedTasks.length)}-
+                  {Math.min(currentPage * itemsPerPage, processedTasks.length)} / {processedTasks.length}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    className={`px-2 py-1 rounded ${currentPage === 1 ? 'opacity-40' : 'bg-[var(--bg-panel)] border border-[var(--border-main)]'}`}
+                    disabled={currentPage === 1}
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  >
+                    Trước
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-2 py-1 rounded ${currentPage >= Math.ceil(processedTasks.length / itemsPerPage) ? 'opacity-40' : 'bg-[var(--bg-panel)] border border-[var(--border-main)]'}`}
+                    disabled={currentPage >= Math.ceil(processedTasks.length / itemsPerPage)}
+                    onClick={() => setCurrentPage(Math.min(Math.ceil(processedTasks.length / itemsPerPage), currentPage + 1))}
+                  >
+                    Sau
+                  </button>
+                </div>
+              </div>
+              </>
             )}
 
             {/* BOARD VIEW */}
             {viewMode === 'board' && (
+              <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0 md:overflow-visible pb-2">
               <div
-                className="grid gap-3 min-h-[calc(100vh-190px)] pb-3 items-start"
+                className="flex md:grid gap-3 min-h-0 md:min-h-[calc(100vh-190px)] pb-3 items-start"
                 style={{ gridTemplateColumns: `repeat(${Math.max(containers.length, 1)}, minmax(280px, 1fr))` }}
               >
                 {containers.length > 0 ? containers.map(container => (
-                  <div key={container} className="bg-[var(--bg-panel)] rounded-xl border border-[var(--border-main)] flex flex-col min-h-[calc(100vh-200px)] shadow-sm">
+                  <div key={container} className="bg-[var(--bg-panel)] rounded-xl border border-[var(--border-main)] flex flex-col min-h-[200px] md:min-h-[calc(100vh-200px)] shadow-sm min-w-[280px] shrink-0 md:min-w-0 md:shrink">
                     <div className="p-2.5 space-y-2">
                       {processedTasks.filter(t => t.BỘ_CHỨA === container).map((task, idx) => {
                         const taskEditable = canEditTaskRow(task);
@@ -686,7 +874,7 @@ export default function TaskList() {
                           <div className="flex items-start gap-2 mb-2">
                             <button
                               className={!taskEditable ? 'opacity-40 pointer-events-none' : ''}
-                              onClick={(e) => { e.stopPropagation(); updateTaskStatus(task, task.computedStatus === 'Đã hoàn thành' ? 'Chưa bắt đầu' : 'Đã hoàn thành'); }}
+                              onClick={(e) => { e.stopPropagation(); updateTaskStatus(task, task.computedStatus === 'Đã hoàn thành' ? '' : 'Đã hoàn thành'); }}
                             >
                               {task.computedStatus === 'Đã hoàn thành' ? <CheckCircle2 className="w-4 h-4 text-[#10b981] shrink-0 mt-0.5" /> : <Circle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />}
                             </button>
@@ -695,7 +883,7 @@ export default function TaskList() {
                                 {task.TÁC_VỤ}
                               </h4>
                               {task.taskDescription ? (
-                                <p className="text-[10px] text-slate-500 mt-1 line-clamp-2" title={task.taskDescription}>{task.taskDescription}</p>
+                                <p className="text-[10px] text-slate-500 mt-1 leading-snug break-words whitespace-pre-wrap">{task.taskDescription}</p>
                               ) : null}
                             </div>
                           </div>
@@ -724,6 +912,7 @@ export default function TaskList() {
                 )) : (
                   <div className="w-full text-center py-10 text-slate-400">Chưa có dữ liệu. Hãy thêm tác vụ và gắn "Bộ chứa" (VĂN PHÒNG, DỰ ÁN...)</div>
                 )}
+              </div>
               </div>
             )}
 
@@ -890,28 +1079,34 @@ export default function TaskList() {
                 };
               });
 
-              const containerData = containers.map(c => {
-                const pts = processedTasks.filter(t => t.BỘ_CHỨA === c);
-                return {
-                  name: c,
-                  'Chưa bắt đầu': pts.filter(t => t.computedStatus === 'Chưa bắt đầu').length,
-                  'Đang diễn ra': pts.filter(t => t.computedStatus === 'Đang diễn ra').length,
-                  'Trễ': pts.filter(t => t.computedStatus === 'Trễ').length,
-                  'Đã hoàn thành': pts.filter(t => t.computedStatus === 'Đã hoàn thành').length
-                };
+              const memberMap = new Map();
+              processedTasks.forEach((task) => {
+                const people = parseAssignees(task.NHÂN_SỰ);
+                const list = people.length ? people : ['Chưa chỉ định'];
+                list.forEach((person) => {
+                  const key = person === 'Chưa chỉ định'
+                    ? '__unassigned__'
+                    : (normalizePersonName(person) || person.toLowerCase());
+                  if (!memberMap.has(key)) {
+                    memberMap.set(key, {
+                      name: person === 'Chưa chỉ định' ? person : getAssigneeGivenName(person),
+                      fullName: person,
+                      'Chưa bắt đầu': 0,
+                      'Đang diễn ra': 0,
+                      'Trễ': 0,
+                      'Đã hoàn thành': 0,
+                    });
+                  }
+                  const entry = memberMap.get(key);
+                  const status = task.computedStatus;
+                  if (Object.prototype.hasOwnProperty.call(entry, status)) {
+                    entry[status] += 1;
+                  }
+                });
               });
-
-              const assignees = Array.from(new Set(processedTasks.map(t => t.NHÂN_SỰ || 'Chưa chỉ định')));
-              const assigneeData = assignees.map(a => {
-                const pts = processedTasks.filter(t => (t.NHÂN_SỰ || 'Chưa chỉ định') === a);
-                return {
-                  name: a,
-                  'Chưa bắt đầu': pts.filter(t => t.computedStatus === 'Chưa bắt đầu').length,
-                  'Đang diễn ra': pts.filter(t => t.computedStatus === 'Đang diễn ra').length,
-                  'Trễ': pts.filter(t => t.computedStatus === 'Trễ').length,
-                  'Đã hoàn thành': pts.filter(t => t.computedStatus === 'Đã hoàn thành').length
-                };
-              });
+              const assigneeData = [...memberMap.values()].sort((a, b) =>
+                a.name.localeCompare(b.name, 'vi')
+              );
 
               return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full overflow-y-auto pb-4 pr-2">
@@ -971,11 +1166,11 @@ export default function TaskList() {
                     </div>
                   </div>
 
-                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 shadow-lg">
-                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Bộ chứa</h3>
-                    <div className="h-64 overflow-visible">
+                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 lg:col-span-3 shadow-lg">
+                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Thành viên</h3>
+                    <div className="h-72 overflow-visible">
                       <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={containerData} margin={chartStyles.margin}>
+                        <BarChart data={assigneeData} margin={chartStyles.margin}>
                           <CartesianGrid strokeDasharray="3 3" stroke={chartStyles.grid} vertical={false} />
                           <XAxis
                             dataKey="name"
@@ -989,37 +1184,7 @@ export default function TaskList() {
                             cursor={chartStyles.cursor}
                             contentStyle={chartStyles.tooltip}
                             itemStyle={chartStyles.tooltipItem}
-                          />
-                          <Bar dataKey="Chưa bắt đầu" stackId="a" fill="#a0a0ff" radius={[0, 0, 4, 4]} maxBarSize={30} />
-                          <Bar dataKey="Đang diễn ra" stackId="a" fill="#3b82f6" maxBarSize={30} />
-                          <Bar dataKey="Trễ" stackId="a" fill="#ef4444" maxBarSize={30} />
-                          <Bar dataKey="Đã hoàn thành" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={30} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 lg:col-span-2 shadow-lg">
-                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Thành viên</h3>
-                    <div className="h-72 overflow-visible">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={assigneeData} margin={chartStyles.marginRotated}>
-                          <CartesianGrid strokeDasharray="3 3" stroke={chartStyles.grid} vertical={false} />
-                          <XAxis
-                            dataKey="name"
-                            stroke={chartStyles.axis}
-                            tick={{ ...chartStyles.tick, fontSize: 10 }}
-                            tickLine={false}
-                            interval={0}
-                            angle={-35}
-                            textAnchor="end"
-                            height={48}
-                          />
-                          <YAxis stroke={chartStyles.axis} tick={{ ...chartStyles.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
-                          <RechartsTooltip
-                            cursor={chartStyles.cursor}
-                            contentStyle={chartStyles.tooltip}
-                            itemStyle={chartStyles.tooltipItem}
+                            labelFormatter={(_label, payload) => payload?.[0]?.payload?.fullName || _label}
                           />
                           <Legend wrapperStyle={chartStyles.legend} />
                           <Bar dataKey="Chưa bắt đầu" stackId="a" fill="#a0a0ff" radius={[0, 0, 4, 4]} maxBarSize={40} />
@@ -1055,7 +1220,9 @@ export default function TaskList() {
                     checked={taskType === 'project'} 
                     onChange={() => {
                       setTaskType('project');
-                      setNewTask({ ...newTask, BỘ_CHỨA: 'DỰ ÁN' });
+                      setNewTaskProjectPicker('');
+                      setNewTaskCustomProject('');
+                      setNewTask({ ...newTask, BỘ_CHỨA: 'DỰ ÁN', TÊN_DỰ_ÁN: '' });
                     }}
                     className="accent-[#5252ff]"
                   />
@@ -1068,7 +1235,9 @@ export default function TaskList() {
                     checked={taskType === 'office'} 
                     onChange={() => {
                       setTaskType('office');
-                      setNewTask({ ...newTask, BỘ_CHỨA: 'VĂN PHÒNG' });
+                      setNewTaskProjectPicker('');
+                      setNewTaskCustomProject('');
+                      setNewTask({ ...newTask, BỘ_CHỨA: 'VĂN PHÒNG', TÊN_DỰ_ÁN: '' });
                     }}
                     className="accent-[#5252ff]"
                   />
@@ -1101,18 +1270,44 @@ export default function TaskList() {
 
               <div className="grid grid-cols-2 gap-4">
                 {taskType === 'project' ? (
-                  <div>
+                  <div className="space-y-1.5">
                     <label className="text-xs text-slate-400 font-bold uppercase mb-1 block">Dự án</label>
-                    <select 
+                    <select
                       className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] rounded p-2 text-white text-xs focus:border-[#5252ff] outline-none"
-                      value={newTask.TÊN_DỰ_ÁN}
-                      onChange={e => setNewTask({ ...newTask, TÊN_DỰ_ÁN: e.target.value })}
+                      value={newTaskProjectPicker}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setNewTaskProjectPicker(v);
+                        if (v === NEW_TASK_PROJECT_CUSTOM) {
+                          setNewTask({ ...newTask, TÊN_DỰ_ÁN: newTaskCustomProject.trim() });
+                        } else {
+                          setNewTaskCustomProject('');
+                          setNewTask({ ...newTask, TÊN_DỰ_ÁN: v });
+                        }
+                      }}
                     >
                       <option value="">-- Chọn dự án --</option>
-                      {projects.map(p => (
+                      {projects.map((p) => (
                         <option key={p.id} value={p.name}>{p.name}</option>
                       ))}
+                      <option value={NEW_TASK_PROJECT_CUSTOM}>Khác — tự nhập tên dự án</option>
                     </select>
+                    {newTaskProjectPicker === NEW_TASK_PROJECT_CUSTOM && (
+                      <input
+                        type="text"
+                        className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] rounded p-2 text-white text-xs focus:border-[#5252ff] outline-none"
+                        value={newTaskCustomProject}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setNewTaskCustomProject(v);
+                          setNewTask({ ...newTask, TÊN_DỰ_ÁN: v.trim() });
+                        }}
+                        placeholder="VD: SOLAR HOME A — defect / bảo hành sau COD"
+                      />
+                    )}
+                    <p className="text-[10px] text-slate-500 leading-snug">
+                      Dự án đã xong hoặc không còn trên danh sách: chọn &quot;Khác&quot; và gõ tên.
+                    </p>
                   </div>
                 ) : (
                   <div>
@@ -1127,7 +1322,7 @@ export default function TaskList() {
                 )}
                 <div>
                   <label className="text-xs text-slate-400 font-bold uppercase mb-1 block">Nhân sự</label>
-                  <AssigneeSelect
+                  <AssigneeMultiSelect
                     value={newTask.NHÂN_SỰ}
                     onChange={(val) => setNewTask({ ...newTask, NHÂN_SỰ: val })}
                     options={assigneeOptions}
@@ -1141,6 +1336,8 @@ export default function TaskList() {
                 <div>
                   <label className="text-xs text-slate-400 font-bold uppercase mb-1 block">Bắt đầu</label>
                   <DateInputDMY
+                    showCalendar
+                    calendarTitle="Chọn ngày bắt đầu"
                     className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] rounded p-2 text-white text-xs focus:border-[#5252ff] outline-none"
                     value={newTask.NGÀY_BẮT_ĐẦU}
                     onChange={(val) => setNewTask({ ...newTask, NGÀY_BẮT_ĐẦU: val })}
@@ -1149,6 +1346,8 @@ export default function TaskList() {
                 <div>
                   <label className="text-xs text-slate-400 font-bold uppercase mb-1 block">Đến hạn</label>
                   <DateInputDMY
+                    showCalendar
+                    calendarTitle="Chọn ngày đến hạn"
                     className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] rounded p-2 text-white text-xs focus:border-[#5252ff] outline-none"
                     value={newTask.NGÀY_KẾT_THÚC}
                     onChange={(val) => setNewTask({ ...newTask, NGÀY_KẾT_THÚC: val })}
@@ -1156,17 +1355,7 @@ export default function TaskList() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs text-slate-400 font-bold uppercase mb-1 block">Bộ chứa</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] rounded p-2 text-white text-xs focus:border-[#5252ff] outline-none"
-                    value={newTask.BỘ_CHỨA}
-                    onChange={e => setNewTask({ ...newTask, BỘ_CHỨA: e.target.value })}
-                    placeholder="VD: DỰ ÁN"
-                  />
-                </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs text-slate-400 font-bold uppercase mb-1 block">Trạng thái</label>
                   <select 
@@ -1220,7 +1409,7 @@ export default function TaskList() {
             
             {/* Header Actions */}
             <div className="absolute top-4 right-4 flex items-center gap-2 z-10">
-              {isDraftEditable && (
+              {(canFullyEditDraft() || canDeleteDraft()) && (
               <div className="relative">
                 <button 
                   onClick={() => setIsTaskMenuOpen(!isTaskMenuOpen)}
@@ -1230,12 +1419,16 @@ export default function TaskList() {
                 </button>
                 {isTaskMenuOpen && (
                   <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-50">
+                    {canFullyEditDraft() && (
                     <button className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2" onClick={() => { setIsTaskMenuOpen(false); handleTaskUpdate(draftTask, 'PINNED', true); }}>
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Ghim yêu thích
                     </button>
-                    <button className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 border-t border-slate-100 mt-1 pt-2" onClick={() => handleTaskDelete(draftTask)}>
+                    )}
+                    {canDeleteDraft() && (
+                    <button className={`w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 ${canFullyEditDraft() ? 'border-t border-slate-100 mt-1 pt-2' : ''}`} onClick={() => handleTaskDelete(draftTask)}>
                       <AlertTriangle className="w-4 h-4 text-red-400" /> Xóa tác vụ
                     </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1262,9 +1455,9 @@ export default function TaskList() {
             <div className="flex-1 p-8 pb-10">
               <div className="flex items-start gap-3 mb-6">
                 <button 
-                  onClick={() => isDraftEditable && updateTaskStatus(draftTask, draftTask.computedStatus === 'Đã hoàn thành' ? 'Chưa bắt đầu' : 'Đã hoàn thành')}
-                  className={`mt-1 flex-shrink-0 ${!isDraftEditable ? 'cursor-default opacity-60' : ''}`}
-                  disabled={!isDraftEditable}
+                  onClick={() => canToggleCompleteDraft() && updateTaskStatus(draftTask, draftTask.computedStatus === 'Đã hoàn thành' ? '' : 'Đã hoàn thành')}
+                  className={`mt-1 flex-shrink-0 ${!canToggleCompleteDraft() ? 'cursor-default opacity-60' : ''}`}
+                  disabled={!canToggleCompleteDraft()}
                 >
                   {draftTask.computedStatus === 'Đã hoàn thành' ? (
                     <CheckCircle2 className="w-6 h-6 text-green-500" />
@@ -1277,36 +1470,39 @@ export default function TaskList() {
                     type="text" 
                     value={draftTask.TÁC_VỤ || ''}
                     onChange={(e) => handleTaskUpdate(draftTask, 'TÁC_VỤ', e.target.value)}
-                    readOnly={!isDraftEditable}
-                    className={`text-2xl font-semibold text-slate-800 w-full outline-none rounded px-1 -ml-1 transition-colors ${isDraftEditable ? 'hover:bg-slate-50 focus:bg-slate-50' : 'cursor-default'}`}
+                    readOnly={!canEditDraftField('TÁC_VỤ')}
+                    className={`text-2xl font-semibold text-slate-800 w-full outline-none rounded px-1 -ml-1 transition-colors ${canEditDraftField('TÁC_VỤ') ? 'hover:bg-slate-50 focus:bg-slate-50' : 'cursor-default'}`}
                     placeholder="Nhập tên tác vụ"
                   />
-                  <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                    <span>{draftTask.TÊN_DỰ_ÁN ? `Dự án: ${draftTask.TÊN_DỰ_ÁN}` : 'Nhiệm vụ chung'}</span>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {canEditDraftField('TÊN_DỰ_ÁN') ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="shrink-0">Dự án:</span>
+                        <select
+                          value={draftTask.TÊN_DỰ_ÁN || ''}
+                          onChange={(e) => handleTaskProjectUpdate(draftTask, e.target.value)}
+                          className="bg-white border border-slate-300 text-slate-700 py-1 pl-2 pr-7 rounded text-xs hover:border-slate-400 focus:outline-none focus:border-blue-500 max-w-full"
+                        >
+                          <option value="">Nhiệm vụ chung</option>
+                          {projects.map((p) => (
+                            <option key={p.id} value={p.name}>{p.name}</option>
+                          ))}
+                          {draftTask.TÊN_DỰ_ÁN && !projects.some((p) => p.name === draftTask.TÊN_DỰ_ÁN) ? (
+                            <option value={draftTask.TÊN_DỰ_ÁN}>{draftTask.TÊN_DỰ_ÁN}</option>
+                          ) : null}
+                        </select>
+                      </div>
+                    ) : (
+                      <span>{draftTask.TÊN_DỰ_ÁN ? `Dự án: ${draftTask.TÊN_DỰ_ÁN}` : 'Nhiệm vụ chung'}</span>
+                    )}
                   </div>
                 </div>
               </div>
 
               <div className="flex items-center gap-4 mb-6 ml-9">
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400"><Columns className="w-4 h-4" /></span>
-                  <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-                    {draftTask.BỘ_CHỨA || 'VĂN PHÒNG'}
-                  </span>
-                </div>
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-slate-400 shrink-0"><LayoutGrid className="w-4 h-4" /></span>
-                  {isDraftEditable ? (
-                    <AssigneeSelect
-                      value={draftTask.NHÂN_SỰ}
-                      onChange={(val) => handleTaskUpdate(draftTask, 'NHÂN_SỰ', val)}
-                      options={assigneeOptions}
-                      variant="light"
-                      className="flex-1"
-                    />
-                  ) : (
-                    <AssigneeDisplay assignees={draftTask.NHÂN_SỰ} variant="light" />
-                  )}
+                  <AssigneeDisplay assignees={draftTask.NHÂN_SỰ} variant="light" />
                 </div>
               </div>
 
@@ -1322,18 +1518,16 @@ export default function TaskList() {
               <div className="ml-9 grid grid-cols-2 gap-x-6 gap-y-4 mb-8">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Trạng thái</label>
-                  <div className="relative">
-                    <select 
-                      value={draftTask.TRẠNG_THÁI || 'Chưa bắt đầu'}
-                      onChange={(e) => handleTaskUpdate(draftTask, 'TRẠNG_THÁI', e.target.value)}
-                      disabled={!isDraftEditable}
-                      className="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      <option value="Chưa bắt đầu">Chưa bắt đầu</option>
-                      <option value="Đang diễn ra">Đang diễn ra</option>
-                      <option value="Đã hoàn thành">Đã hoàn thành</option>
-                    </select>
-                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <div className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-2 px-3 rounded text-sm flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold border ${
+                      draftTask.computedStatus === 'Đã hoàn thành' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                      draftTask.computedStatus === 'Đang diễn ra' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                      draftTask.computedStatus === 'Trễ' ? 'bg-red-50 text-red-700 border-red-200' :
+                      'bg-slate-100 text-slate-600 border-slate-200'
+                    }`}>
+                      {draftTask.computedStatus || 'Chưa bắt đầu'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">Tự động theo ngày — bấm vòng tròn để hoàn thành</span>
                   </div>
                 </div>
                 <div>
@@ -1342,7 +1536,7 @@ export default function TaskList() {
                     <select 
                       value={draftTask.ƯU_TIÊN || 'Medium'}
                       onChange={(e) => handleTaskUpdate(draftTask, 'ƯU_TIÊN', e.target.value)}
-                      disabled={!isDraftEditable}
+                      disabled={!canEditDraftField('ƯU_TIÊN')}
                       className="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <option value="Khẩn cấp">🚨 Khẩn cấp</option>
@@ -1357,19 +1551,23 @@ export default function TaskList() {
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Ngày bắt đầu</label>
                   <DateInputDMY
+                    showCalendar
+                    calendarTitle="Chọn ngày bắt đầu"
                     className="w-full bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     value={draftTask.NGÀY_BẮT_ĐẦU_LOCAL || draftTask.NGÀY_BẮT_ĐẦU || ''}
                     onChange={(val) => handleTaskUpdate(draftTask, 'NGÀY_BẮT_ĐẦU', val)}
-                    disabled={!isDraftEditable}
+                    disabled={!canEditDraftField('NGÀY_BẮT_ĐẦU')}
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Ngày đến hạn</label>
                   <DateInputDMY
+                    showCalendar
+                    calendarTitle="Chọn ngày đến hạn"
                     className="w-full bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     value={draftTask.NGÀY_KẾT_THÚC_LOCAL || draftTask.NGÀY_KẾT_THÚC || ''}
                     onChange={(val) => handleTaskUpdate(draftTask, 'NGÀY_KẾT_THÚC', val)}
-                    disabled={!isDraftEditable}
+                    disabled={!canEditDraftField('NGÀY_KẾT_THÚC')}
                   />
                 </div>
 
@@ -1377,7 +1575,8 @@ export default function TaskList() {
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1">Lặp lại <AlertTriangle className="w-3 h-3 text-slate-400" /></label>
                   <div className="relative">
                     <select 
-                      className="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      disabled={!canFullyEditDraft()}
+                      className="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <option>Không lặp lại</option>
                       <option>Hàng ngày</option>
@@ -1388,8 +1587,8 @@ export default function TaskList() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Phân công</label>
-                  {isDraftEditable ? (
-                    <AssigneeSelect
+                  {canEditDraftField('NHÂN_SỰ') ? (
+                    <AssigneeMultiSelect
                       value={draftTask.NHÂN_SỰ}
                       onChange={(val) => handleTaskUpdate(draftTask, 'NHÂN_SỰ', val)}
                       options={assigneeOptions}
@@ -1401,20 +1600,6 @@ export default function TaskList() {
                     </div>
                   )}
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1.5 flex items-center gap-1">Bộ chứa <AlertTriangle className="w-3 h-3 text-slate-400" /></label>
-                  <div className="relative">
-                    <select 
-                      value={draftTask.BỘ_CHỨA || 'VĂN PHÒNG'}
-                      onChange={(e) => handleTaskUpdate(draftTask, 'BỘ_CHỨA', e.target.value)}
-                      disabled={!isDraftEditable}
-                      className="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {containers.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                    <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                  </div>
-                </div>
               </div>
 
               <div className="ml-9">
@@ -1424,7 +1609,7 @@ export default function TaskList() {
                   placeholder="Mô tả chi tiết công việc..."
                   value={getTaskDescription(draftTask)}
                   onChange={(e) => handleTaskUpdate(draftTask, 'GHI_CHÚ', e.target.value)}
-                  readOnly={!isDraftEditable}
+                  readOnly={!canEditDraftField('GHI_CHÚ')}
                 />
                 <p className="text-[10px] text-slate-400 mt-1">Tự lưu sau khi bạn ngừng gõ ~1 giây. Hiển thị ở cột Mô tả trên bảng và trang Tổng quan.</p>
               </div>

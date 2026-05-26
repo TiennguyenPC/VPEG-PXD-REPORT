@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">VPEG PXD</string>
+    <string name="title_activity_main">VPEG PXD</string>
+    <string name="package_name">com.vuphong.vpegpxd</string>
+    <string name="custom_url_scheme">com.vuphong.vpegpxd</string>
+</resources>

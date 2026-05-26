@@ -37,12 +37,21 @@ export function normalizeToDMY(val) {
   if (s.includes('/')) {
     const parts = s.split('/');
     if (parts.length === 3) {
-      const day = parts[0].padStart(2, '0');
-      const month = parts[1].padStart(2, '0');
-      let year = parts[2];
-      if (year.length === 2) year = `20${year}`;
-      return `${day}/${month}/${year}`;
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const yearRaw = parts[2];
+      if (!Number.isFinite(day) || !Number.isFinite(month) || !yearRaw) return '';
+      let year = parseInt(yearRaw, 10);
+      if (!Number.isFinite(year)) return '';
+      if (yearRaw.length === 2) year = 2000 + year;
+      else if (yearRaw.length !== 4) return '';
+      if (year < 1990 || year > 2100) return '';
+      const d = new Date(year, month - 1, day);
+      if (Number.isNaN(d.getTime()) || d.getDate() !== day || d.getMonth() !== month - 1) return '';
+      return formatDateDMY(d);
     }
+    if (parts.length <= 2) return s.replace(/[^\d/]/g, '');
+    return '';
   }
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
     const [y, m, d] = s.split('T')[0].split('-');
@@ -51,6 +60,39 @@ export function normalizeToDMY(val) {
   const d = new Date(s);
   if (!Number.isNaN(d.getTime())) return formatDateDMY(d);
   return s;
+}
+
+/** Hiển thị gọn dd/mm (ẩn năm) — dùng trong bảng module trên mobile */
+export function toDisplayDM(val) {
+  if (val == null || val === '' || val === '-') return val === '-' ? '-' : '';
+  const dmy = normalizeToDMY(val);
+  if (!dmy) return '';
+  const [day, month] = dmy.split('/');
+  return `${day}/${month}`;
+}
+
+/** Gõ dd/mm → bổ sung năm từ giá trị cũ hoặc năm hiện tại */
+export function completePartialDMY(raw, previousFullValue) {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return '';
+  if (trimmed === '-') return '-';
+
+  const asFull = normalizeToDMY(trimmed);
+  if (asFull && asFull.split('/').length === 3 && !/^\d{1,2}\/\d{1,2}$/.test(trimmed.replace(/\s/g, ''))) {
+    return asFull;
+  }
+
+  const cleaned = trimmed.replace(/[^\d/]/g, '');
+  const parts = cleaned.split('/').filter(Boolean);
+  if (parts.length >= 2) {
+    const prev = parseFlexibleDate(previousFullValue);
+    const year = prev ? prev.getFullYear() : new Date().getFullYear();
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    return normalizeToDMY(`${day}/${month}/${year}`);
+  }
+
+  return normalizeToDMY(trimmed) || '';
 }
 
 /** yyyy-mm-dd cho input[type=date] ẩn */
@@ -132,7 +174,7 @@ export function calcEndFromModuleStorage(projectId, moduleKey) {
   }
 }
 
-/** Xác định ngày bắt đầu / kết thúc trục timeline (Kickoff → Bàn giao, fallback COD) */
+/** Xác định ngày bắt đầu / kết thúc trục timeline (Ngày triển khai → Bàn giao/COD) */
 export function resolveTimelineBounds(project, milestones = [], milestonesData = []) {
   const projectId = project?.PROJECT_ID || project?.id;
 
@@ -144,12 +186,13 @@ export function resolveTimelineBounds(project, milestones = [], milestonesData =
   const handoverRow = milestonesData.find((m) => String(m.MILESTONE || '').toUpperCase().includes('BÀN GIAO'));
 
   let startDate =
+    parseFlexibleDate(project?.startDate) ||
+    parseFlexibleDate(project?.NGÀY_BẮT_ĐẦU) ||
+    parseFlexibleDate(project?.NGAY_BAT_DAU) ||
     parseFlexibleDate(kickoffM?.date) ||
     parseFlexibleDate(kickoffRow?.NGÀY_KẾ_HOẠCH) ||
     parseFlexibleDate(project?.kickoffDate) ||
-    parseFlexibleDate(project?.KICKOFF_DATE) ||
-    parseFlexibleDate(project?.startDate) ||
-    parseFlexibleDate(project?.NGÀY_BẮT_ĐẦU);
+    parseFlexibleDate(project?.KICKOFF_DATE);
 
   let endDate =
     parseFlexibleDate(handoverM?.date) ||

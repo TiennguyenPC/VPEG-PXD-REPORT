@@ -43,6 +43,7 @@ export function parseDailyNote(noteText) {
     vanDeRuiRo: '',
     progressActual: '',
     progressPlanned: '',
+    progressEntries: '',
     dayStatus: 'Bình thường',
     dayStatusSubtext: '',
     images: '',
@@ -64,6 +65,7 @@ export function parseDailyNote(noteText) {
   const vanDeRuiRo = extractSection(noteText, 'VẤN ĐỀ / RỦI RO');
   const progressActual = extractSection(noteText, 'TIẾN ĐỘ THỰC TẾ');
   const progressPlanned = extractSection(noteText, 'TIẾN ĐỘ KẾ HOẠCH');
+  const progressEntries = extractSection(noteText, 'TIẾN ĐỘ HẠNG MỤC');
   const dayStatus = extractSection(noteText, 'TRẠNG THÁI NGÀY');
   const dayStatusSubtext = extractSection(noteText, 'ẢNH HƯỞNG');
   const images = extractSection(noteText, 'HÌNH ẢNH');
@@ -74,6 +76,7 @@ export function parseDailyNote(noteText) {
   if (vanDeRuiRo !== null) result.vanDeRuiRo = vanDeRuiRo;
   if (progressActual !== null) result.progressActual = progressActual;
   if (progressPlanned !== null) result.progressPlanned = progressPlanned;
+  if (progressEntries !== null) result.progressEntries = progressEntries;
   if (dayStatus !== null) result.dayStatus = dayStatus;
   if (dayStatusSubtext !== null) result.dayStatusSubtext = dayStatusSubtext;
   if (images !== null) result.images = images;
@@ -86,7 +89,8 @@ export function parseDailyNote(noteText) {
 }
 
 export function serializeDailyNote(sections) {
-  return `### GHI CHÚ HIỆN TRƯỜNG\n${sections.ghiChu}\n\n### CÔNG VIỆC CHÍNH\n${sections.congViecChinh}\n\n### CÔNG VIỆC NGÀY MAI\n${sections.congViecNgayMai}\n\n### VẤN ĐỀ / RỦI RO\n${sections.vanDeRuiRo}\n\n### TIẾN ĐỘ THỰC TẾ\n${sections.progressActual}\n\n### TIẾN ĐỘ KẾ HOẠCH\n${sections.progressPlanned}\n\n### TRẠNG THÁI NGÀY\n${sections.dayStatus}\n\n### ẢNH HƯỞNG\n${sections.dayStatusSubtext}\n\n### HÌNH ẢNH\n${sections.images || ''}`;
+  const progressEntries = sections.progressEntries ? `\n\n### TIẾN ĐỘ HẠNG MỤC\n${sections.progressEntries}` : '';
+  return `### GHI CHÚ HIỆN TRƯỜNG\n${sections.ghiChu}\n\n### CÔNG VIỆC CHÍNH\n${sections.congViecChinh}\n\n### CÔNG VIỆC NGÀY MAI\n${sections.congViecNgayMai}\n\n### VẤN ĐỀ / RỦI RO\n${sections.vanDeRuiRo}\n\n### TIẾN ĐỘ THỰC TẾ\n${sections.progressActual}\n\n### TIẾN ĐỘ KẾ HOẠCH\n${sections.progressPlanned}${progressEntries}\n\n### TRẠNG THÁI NGÀY\n${sections.dayStatus}\n\n### ẢNH HƯỞNG\n${sections.dayStatusSubtext}\n\n### HÌNH ẢNH\n${sections.images || ''}`;
 }
 
 function photoUrlKey(url) {

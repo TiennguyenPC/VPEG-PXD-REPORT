@@ -1,0 +1,13 @@
+{
+  "appId": "com.vuphong.vpegpxd",
+  "appName": "VPEG PXD",
+  "webDir": "dist",
+  "server": {
+    "url": "https://vpeg-pxd-dashboard.vercel.app",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

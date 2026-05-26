@@ -86,6 +86,33 @@ export const SOLAR_EPC_KNOWLEDGE = `
 - S-Curve: đường tiến độ kế hoạch vs thực tế theo thời gian.
 - Zero export: không phát ngược lên lưới — cần meter + CT/inverter setting.
 - String: chuỗi module nối tiếp; MPPT: tracker điểm công suất tối đa.
+
+## Dashboard VPEG-PXD — AI cần biết
+- KPI tổng: cộng kWp các site active; đếm dự án status thi công.
+- % module: Permit/Design/Procurement/Construction/Handover có trọng số — tick hạng mục con cập nhật % cha.
+- Procurement: 15 hạng mục; TÌNH_TRẠNG "Đã tới site" = vật tư về; so sánh NGÀY_VỀ_DỰ_KIẾN vs THỰC TẾ.
+- Site log: MANPOWER, ENGINEERS, WEATHER, DAILY_NOTE — phân tích trễ/mưa/nhân lực.
+- Task: NGÀY_KẾT_THÚC → Quá hạn/Trễ; PINNED = quan trọng; GHI_CHÚ = mô tả.
+- Risk module: MỨC ĐỘ Cao/Trung bình/Thấp; BIỆN_PHÁP = action.
+
+## Recovery tiến độ (gợi ý PM)
+1. Xác định gap % (thực tế − kế hoạch).
+2. Liệt kê milestone delay âm + procurement chưa "Đã tới site".
+3. Đọc site log 3 ngày gần nhất (mưa, nhân lực, ghi chú).
+4. Ưu tiên đường găng: khung → pin → DC → inverter → đấu nối.
+5. Action log risk: owner + deadline 24–48h.
+6. Bù tiến độ: tăng ca khi khô, giao sản lượng/ngày, không dồn commissioning cuối COD.
+
+## Đấu nối EVN (rooftop VN — tóm tắt)
+- Hồ sơ: sơ đồ một sợi, datasheet, PCCC, biên bản nghiệm thu.
+- Đồng hồ hai chiều / giới hạn export theo hợp đồng.
+- Thời gian xử lý phụ thuộc điện lực địa phương — theo dõi trong module Permit.
+
+## An toàn thi công mái
+- Dây an toàn, lan can hoàn chỉnh trước khi lên mái.
+- Không làm việc khi mưa/sấm sét; kiểm tra mái ướt trơn.
+- Lock-out tag-out khi làm ACDB/inverter.
+- MC4 đúng tool, không mix hãng không tương thích.
 `;
 
 /** FAQ offline — trả lời ngắn, không cần API */
@@ -178,6 +205,99 @@ export const SOLAR_FAQ = [
     match: /trangnay|trangdangxem|huongdantrang/,
     answer: null,
   },
+  {
+    match: /dangxuat|logout|thoat/,
+    answer:
+      'Đăng xuất:\n' +
+      '- Điện thoại: Tài khoản (thanh dưới) → Giao diện & phiên đăng nhập → Đăng xuất.\n' +
+      '- Máy tính: Sidebar trái → icon thoát ở khung user.',
+  },
+  {
+    match: /sang|toi|giaodien|theme|che do/,
+    answer:
+      'Chế độ giao diện:\n' +
+      '- Điện thoại: icon mặt trời/trăng góc phải trên → Sáng / Tối / Hệ thống.\n' +
+      '- Hoặc: Tài khoản → 3 nút Sáng / Tối / Hệ thống.',
+  },
+  {
+    match: /voc|isc|insulation|noi dia|ground/,
+    answer:
+      'Test DC trước nối inverter:\n' +
+      '- Voc/Isc từng string so datasheet (nhiệt độ mái ảnh hưởng Voc).\n' +
+      '- Polarity đúng (+/-).\n' +
+      '- Insulation resistance theo quy định EPC (thường >1MΩ).\n' +
+      '- Tiếp địa: khung, tủ, inverter theo bản vẽ.',
+  },
+  {
+    match: /dcacratio|tyle dc|clipping|cat cong/,
+    answer:
+      'DC/AC ratio 1.1–1.3 rooftop: pin nhiều hơn inverter một chút để bù suy hao, tránh clipping quá cao (>1.4) trừ khi có lý do kinh tế.\n' +
+      'Clipping: inverter đạt Pmax trước khi pin hết — kiểm tra sản lượng thực vs mô phỏng.',
+  },
+  {
+    match: /soiling|bui|vesinh|wash/,
+    answer:
+      'Soiling làm giảm PR: vệ sinh pin định kỳ (1–4 lần/năm tùy môi trường).\n' +
+      'Dashboard có hạng mục "Hệ thống vệ sinh pin" trong Procurement.',
+  },
+  {
+    match: /shading|chebong|bongroi/,
+    answer:
+      'Shading: tách MPPT, tránh chuỗi có bóng râm khác nhau, dùng bypass diode trong module.\n' +
+      'Thiết kế: khảo sát bóng theo giờ (sáng/chiều), cây/lô gần.',
+  },
+  {
+    match: /ivcurve|curvedo|eltest/,
+    answer:
+      'IV curve: đo mẫu string/module để phát hiện suy giảm, mismatch.\n' +
+      'EL test (điện luminescence): phát hiện micro-crack, hot spot tiềm ẩn trước/sau lắp.',
+  },
+  {
+    match: /osaka|val|vpeg|phong xay dung|pxd/,
+    answer:
+      'VPEG Phòng Xây Dựng (PXD) quản lý dự án solar rooftop trên Dashboard VPEG-PXD.\n' +
+      'Mỗi dự án (vd OSAKA, VAL) có kWp riêng; xem KPI tổng ở Tổng quan hoặc chi tiết từng dự án.',
+  },
+  {
+    match: /tre|cham|delay|laylai|recovery|kehoachkeolai/,
+    answer:
+      'Khi dự án trễ (delay âm, thực tế < kế hoạch):\n' +
+      '1. Xem S-Curve + milestone trễ.\n' +
+      '2. Procurement: hạng mục chưa "Đã tới site".\n' +
+      '3. Site log: mưa, nhân lực, ghi chú.\n' +
+      '4. Risk/vướng mắc mở — gán owner + deadline.\n' +
+      '5. Bù: tăng ca, ưu tiên đường găng, giao sản lượng/ngày.\n\n' +
+      'Hỏi AI trên app khi đang mở chi tiết dự án để phân tích theo data thực.',
+  },
+  {
+    match: /themduan|themda|taoduan/,
+    answer: 'Thêm dự án: menu Dự án → nút "+ Thêm dự án" (admin). Điền tên, khách hàng, PM, kWp, COD...',
+  },
+  {
+    match: /themtacvu|themcongviec|themviec/,
+    answer: 'Thêm công việc: Công việc → "+ Thêm tác vụ" → chọn dự án, người, hạn, ưu tiên. Có thể chọn "Khác" để tự nhập tên dự án.',
+  },
+  {
+    match: /nhatky|sitelog|ghinhanttruong/,
+    answer:
+      'Nhật ký site: Chi tiết dự án → Nhật ký → tab Ngày/Tuần/Tháng.\n' +
+      'Nhập nhân lực, thời tiết, sự cố — tự lưu ~1 giây. Có thể đính kèm ảnh.',
+  },
+  {
+    match: /module|accordion|hangmuc|tick/,
+    answer:
+      'Module accordion (Risk, Permit, Design, Procurement, Construction, Handover):\n' +
+      'Mở từng mục → tick hoàn thành hạng mục con → % module và % tổng dự án cập nhật.',
+  },
+  {
+    match: /ai|troly|chatbot|hoi gi/,
+    answer:
+      'AI PXD (nút tím góc phải dưới):\n' +
+      '- Hướng dẫn dùng app từng trang\n' +
+      '- Đọc số liệu dự án/task/risk/vật tư bạn đang xem\n' +
+      '- Tư vấn Solar EPC (PR, commissioning, zero-export...)\n\n' +
+      'Thử: "Hướng dẫn trang này", "Vật tư về mấy %", "Dự án trễ vì sao".',
+  },
 ];
 
 /**
@@ -211,5 +331,5 @@ export function isSolarTechnicalQuestion(userMessage) {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 
-  return /solar|nangluongmattroi|pv|inverter|bientan|module|pinmatroi|mppt|string|commissioning|pr|performanceratio|zeroexport|hotspot|pid|mismatch|tcvn|iec61215|leadtime|epc|cod|ghi|yield|tiendoidien|dau noi|daunoi|evn|pccc|tiepdia|grounding|scurve|khungdo|rail|mc4|combiner|spd|acdb|dcdb/.test(q);
+  return /solar|nangluongmattroi|pv|inverter|bientan|module|pinmatroi|mppt|string|commissioning|pr|performanceratio|zeroexport|hotspot|pid|mismatch|tcvn|iec61215|leadtime|epc|cod|ghi|yield|tiendoidien|daunoi|evn|pccc|tiepdia|grounding|scurve|khungdo|rail|mc4|combiner|spd|acdb|dcdb|voc|isc|insulation|shading|soiling|ivcurve|eltest|recovery|clipping|dcac|vpeg|pxd|osaka|val|nhatky|sitelog|muasam|vattu|milestone|permits|handover|thicong|danang|luongdien|kwp|wattpeak|trolyai|aipxd/.test(q);
 }

@@ -6,12 +6,21 @@ export const APP_USAGE_GUIDE = `
 ## Tổng quan
 Ứng dụng web quản lý dự án điện mặt trời EPC của Phòng Xây Dựng (PXD). Dữ liệu đồng bộ Google Sheets qua Google Apps Script.
 
-## Điều hướng (Sidebar trái — logo VPEG-PXD)
+## Điều hướng
+### Máy tính (sidebar trái — logo VPEG-PXD)
 - **TỔNG QUAN** (\`/\`): KPI tổng thể, top dự án, rủi ro, công việc quan trọng.
 - **CÔNG VIỆC** (\`/tasks\`): Quản lý tác vụ đa chế độ xem.
 - **DỰ ÁN** (\`/projects\`): Bảng danh sách dự án, lọc, xuất Excel, thêm/sửa dự án.
-- **Chi tiết dự án** (\`/projects/:id\`): Mở bằng cách click một dòng dự án ở Tổng quan hoặc Danh sách dự án.
-- Nút **mũi tên** dưới cùng sidebar: thu gọn / mở rộng menu.
+- **TÀI KHOẢN** (\`/account\`): Thông tin cá nhân, đổi mật khẩu, giao diện Sáng/Tối, đăng xuất.
+- **CÀI ĐẶT** (\`/settings/users\`): Chỉ Admin — quản lý user, audit log.
+- **Chi tiết dự án** (\`/projects/:id\`): Click dòng dự án ở Tổng quan hoặc Danh sách dự án.
+- Cuối sidebar: thông báo, chế độ sáng/tối, đăng xuất, thu gọn menu.
+
+### Điện thoại (thanh dưới + góc phải trên)
+- Thanh dưới: Tổng quan | Công việc | Dự án | Tài khoản | Cài đặt (admin).
+- Góc phải trên: chuông thông báo + icon mặt trời/trăng (Sáng / Tối / Hệ thống).
+- **Tài khoản** → cuộn xuống **Giao diện & phiên đăng nhập** → Đăng xuất.
+- Cài app: APK nội bộ hoặc PWA "Thêm vào màn hình chính" (tự cập nhật từ web Vercel).
 
 ## Trợ lý AI (góc phải dưới — nút tím lấp lánh)
 - Bấm icon để mở chat; kéo header để di chuyển cửa sổ.
@@ -20,14 +29,17 @@ export const APP_USAGE_GUIDE = `
 ---
 
 ## 1. Trang TỔNG QUAN (\`/\`)
-- **KPI**: Tổng công suất (kWp), số dự án đang thi công, rủi ro trung bình/cao, công việc quan trọng.
-- **Tiến độ dự án**: Top 5 dự án active — click dòng để vào chi tiết.
-- **Vấn đề / Rủi ro**: "Xem tất cả" → chuyển sang Danh sách dự án.
-- **Công việc quan trọng**: "Xem tất cả" → trang Công việc.
+- **KPI**: Tổng công suất (kWp), số dự án đang thi công, rủi ro cần xử lý, task quan trọng. Trên mobile: lưới 2×2 full width.
+- Click thẻ **Risk** hoặc **Task** → cuộn tới khối tương ứng.
+- **Tiến độ dự án**: Mobile = thẻ từng dự án (Kế hoạch / Thực tế / Chậm-Đạt); Desktop = bảng.
+- **Vấn đề / Rủi ro**: Mobile = thẻ; "Xem tất cả" → Danh sách dự án.
+- **Công việc quan trọng**: Kanban 4 cột — mobile vuốt ngang từng cột.
 
 ---
 
 ## 2. Trang DANH SÁCH DỰ ÁN (\`/projects\`)
+- **Mobile**: Danh sách thẻ (PM, kWp, % thực tế, Δ kế hoạch, vướng mắc); Desktop: bảng đầy đủ cột.
+
 ### Thao tác chính
 - **Tìm kiếm**: Ô "Tìm kiếm dự án, khách hàng..." phía trên bảng.
 - **Lọc**: Nút "Lọc" — lọc theo trạng thái, PM, risk, v.v. (panel nhiều tab).
@@ -73,6 +85,8 @@ export const APP_USAGE_GUIDE = `
 ---
 
 ## 4. Trang CÔNG VIỆC (\`/tasks\`)
+- **Mobile**: Tab Lưới/Bảng/Lịch/Biểu đồ + tìm kiếm + nút + thêm tác vụ; thẻ thống kê 2×2.
+
 ### Chế độ xem (tab trên cùng)
 - **Lưới**: Bảng danh sách (Tên tác vụ, **Mô tả**, Dự án…), sort cột, phân trang. Mô tả lưu cột GHI_CHÚ trên Sheet.
 - **Bảng (Kanban)**: Cột theo **Bộ chứa** (VĂN PHÒNG, DỰ ÁN, ...).
@@ -98,12 +112,28 @@ export const APP_USAGE_GUIDE = `
 
 ---
 
-## 6. Câu hỏi mẫu người dùng hay hỏi
+## 6. Trang TÀI KHOẢN (\`/account\`)
+- Xem email, vai trò, số dự án được gán.
+- **Đổi mật khẩu**: Mật khẩu hiện tại + mới + xác nhận → Cập nhật.
+- **Giao diện**: Sáng / Tối / Hệ thống (mobile cũng có icon góc phải trên).
+- **Đăng xuất**: Nút đỏ cuối trang Tài khoản (hoặc sidebar desktop).
+
+## 7. PXD — quy ước nội bộ VPEG
+- Dự án rooftop C&I: OSAKA, VAL, v.v. — công suất kWp trên KPI tổng.
+- Module tiến độ: Permit 10%, Design 15%, Procurement 25%, Construction 40%, Handover 10%.
+- 15 hạng mục mua sắm chuẩn (xem Procurement).
+- PM/SM ghi nhật ký site hàng ngày; delay âm = trễ.
+
+## 8. Câu hỏi mẫu người dùng hay hỏi
 - "Làm sao thêm dự án?" → /projects → **+ Thêm dự án**.
 - "Làm sao thêm việc?" → /tasks → **+ Thêm tác vụ**.
 - "Xem tiến độ một dự án?" → Click dự án → S-Curve + Milestone + module.
 - "Ghi nhật ký site?" → Chi tiết dự án → Site Log → tab Ngày.
 - "Xuất báo cáo?" → Chi tiết dự án → Export (in PDF) hoặc Danh sách dự án → Xuất Excel.
+- "Đăng xuất?" → Tài khoản → Đăng xuất (mobile) hoặc sidebar desktop.
+- "Đổi giao diện sáng tối?" → Icon mặt trời/trăng góc phải trên (mobile) hoặc sidebar.
+- "Vật tư dự án X về mấy %?" → Hỏi khi đang mở chi tiết dự án X hoặc gọi tên dự án.
+- "Dự án trễ vì sao?" → AI đọc milestone, procurement, site log, risk → đề xuất recovery.
 `;
 
 // Danh sách 15 hạng mục mua sắm chuẩn (đồng bộ với ProcurementModule)
@@ -761,6 +791,13 @@ export function getLocalDataAnswer(userMessage, context = {}, messages = []) {
     if (pageHint) return pageHint;
   }
 
+  if (/dangxuat|logout|thoat/.test(q)) {
+    return 'Đăng xuất: Tài khoản (mobile) hoặc icon thoát sidebar (desktop).';
+  }
+  if (/sang|toi|giaodien|theme|chedo/.test(q)) {
+    return 'Giao diện: icon mặt trời/trăng góc phải trên (Sáng/Tối/Hệ thống) hoặc trang Tài khoản.';
+  }
+
   const solarFaq = getSolarFaqAnswer(userMessage);
   if (solarFaq) return solarFaq;
 
@@ -768,10 +805,12 @@ export function getLocalDataAnswer(userMessage, context = {}, messages = []) {
 }
 
 const PAGE_HINTS = {
-  'Tổng quan': 'KPI tổng thể, top dự án, rủi ro, công việc quan trọng. Click dòng dự án để vào chi tiết.',
-  'Danh sách dự án': 'Tìm kiếm, lọc, + Thêm dự án, Xuất Excel. Click dòng để xem chi tiết.',
-  'Chi tiết dự án': 'Milestone, S-Curve, Site Log, module Risk/Permit/Design/Procurement/Construction/Handover.',
-  'Danh sách công việc': 'Tab Lưới/Kanban/Lịch/Biểu đồ. + Thêm tác vụ góc phải.',
+  'Tổng quan': 'KPI 2×2 (mobile), thẻ tiến độ/rủi ro, kanban công việc. Góc phải trên: thông báo + giao diện.',
+  'Danh sách dự án': 'Mobile: thẻ dự án. Desktop: bảng + lọc + Thêm dự án + Xuất Excel.',
+  'Chi tiết dự án': 'Tab KPI/Milestone/Nhật ký/S-Curve/Hạng mục. Site Log tự lưu. Module accordion tick %.',
+  'Danh sách công việc': 'Lưới/Kanban/Lịch/Biểu đồ. + Thêm tác vụ. Thẻ thống kê tổng/trễ/hoàn thành.',
+  'Tài khoản': 'Đổi mật khẩu, chọn Sáng/Tối/Hệ thống, nút Đăng xuất.',
+  'Cài đặt': 'Admin: quản lý user, nhật ký hệ thống.',
 };
 
 function getCurrentPageHint(context) {
@@ -987,6 +1026,24 @@ export function getOfflineAppHint(userMessage) {
   }
   if (/lọc|filter|tìm/.test(q)) {
     return 'Dự án: ô tìm kiếm + nút Lọc trên bảng. Công việc: ô Tìm kiếm tác vụ trên trang Công việc.';
+  }
+  if (/đăng xuất|logout|thoát|sign out/.test(q)) {
+    return 'Mobile: Tài khoản (thanh dưới) → cuộn xuống → Đăng xuất.\nDesktop: icon thoát ở khung user cuối sidebar trái.';
+  }
+  if (/sáng|tối|giao diện|theme|dark|light|chế độ/.test(q)) {
+    return 'Mobile: icon mặt trời/trăng góc phải trên → Sáng / Tối / Hệ thống.\nHoặc: Tài khoản → Giao diện & phiên đăng nhập → chọn 1 trong 3 nút.';
+  }
+  if (/apk|cài app|pwa|điện thoại|mobile/.test(q)) {
+    return 'Android: cài file APK nội bộ VPEG-PXD (WebView trỏ Vercel, tự cập nhật giao diện).\niPhone: Safari → Chia sẻ → Thêm vào Màn hình chính.';
+  }
+  if (/gán|assignee|phụ trách|nhân sự task/.test(q)) {
+    return 'Công việc → mở task → chỉnh NHÂN_SỰ (multi-select). Cột hiển thị tên ngắn gọn.';
+  }
+  if (/ảnh|hình|photo|site.*ảnh/.test(q)) {
+    return 'Chi tiết dự án → Nhật ký site → tab Ngày → đính kèm ảnh hiện trường trong form.';
+  }
+  if (/pin|ghim|star/.test(q)) {
+    return 'Trang Công việc → icon sao trên thẻ/lưới để ghim task quan trọng.';
   }
   return null;
 }

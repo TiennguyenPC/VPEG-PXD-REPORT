@@ -56,7 +56,7 @@ export function rememberWorkingImageUrl(fileId, variant, url) {
   } catch { /* quota / private mode */ }
 }
 
-/** URL hiển thị grid — thumbnail nhỏ, load nhanh hơn GAS proxy */
+/** URL hiển thị grid — ưu tiên GAS proxy (ổn định trên production) rồi Drive thumbnail */
 export function toDisplayableImageUrl(url, size = 640) {
   if (!url) return url;
   if (url.startsWith('blob:') || url.startsWith('data:')) return url;
@@ -65,7 +65,7 @@ export function toDisplayableImageUrl(url, size = 640) {
   if (fileId) {
     const cached = getRememberedImageUrl(fileId, 'thumb');
     if (cached) return cached;
-    return buildDriveThumbnailUrl(fileId, size);
+    return buildGasImageProxyUrl(fileId);
   }
   return url;
 }
@@ -92,10 +92,10 @@ export function getImageFallbackUrls(url, { variant = 'thumb' } = {}) {
   }
 
   return [
+    buildGasImageProxyUrl(fileId),
     buildDriveThumbnailUrl(fileId, 640),
     buildDriveThumbnailUrl(fileId, 320),
     `https://lh3.googleusercontent.com/d/${fileId}=w640-h480`,
-    buildGasImageProxyUrl(fileId),
     `https://drive.google.com/uc?export=view&id=${fileId}`,
     url,
   ];

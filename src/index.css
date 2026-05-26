@@ -2,6 +2,67 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  /* Tránh nội dung bị che bởi thanh trạng thái / navigation bar (Android tablet, APK) */
+  .pb-mobile-nav {
+    padding-top: max(36px, env(safe-area-inset-top, 0px));
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  }
+  @media (min-width: 768px) {
+    .pb-mobile-nav {
+      padding-top: max(0px, env(safe-area-inset-top, 0px));
+      padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    }
+  }
+
+  .safe-area-bottom {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+  }
+
+  .app-height-screen {
+    height: 100dvh;
+    height: 100vh;
+  }
+
+  @supports (height: 100dvh) {
+    .app-height-screen {
+      height: 100dvh;
+    }
+  }
+
+  /* Ẩn nút tăng/giảm của input number — tránh che số trong ô hẹp */
+  .input-no-spin {
+    -moz-appearance: textfield;
+    appearance: textfield;
+    text-align: center;
+  }
+  .input-no-spin::-webkit-outer-spin-button,
+  .input-no-spin::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  /* Thu nhẹ typography/spacing vùng dữ liệu trên điện thoại */
+  @media (max-width: 767px) {
+    .mobile-content-compact {
+      font-size: 0.9375rem;
+    }
+    .mobile-content-compact .text-xl {
+      font-size: 1.125rem;
+      line-height: 1.35;
+    }
+    .mobile-content-compact .text-lg {
+      font-size: 1rem;
+      line-height: 1.3;
+    }
+    /* Chỉ offset tiêu đề — không lệch lưới KPI / nội dung full-width */
+    .mobile-header-offset {
+      padding-right: 4.5rem;
+      padding-left: 0;
+    }
+  }
+}
+
 @layer base {
   :root {
     --bg-main: #060a13;
@@ -34,6 +95,24 @@
     color: var(--text-main);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     @apply antialiased font-sans selection:bg-brand-purple/30 selection:text-white transition-colors duration-300;
+    min-height: 100dvh;
+    min-height: 100vh;
+  }
+
+  /* APK / PWA: fallback khi env(safe-area-inset-*) = 0 trên Android */
+  html.capacitor-native .pb-mobile-nav,
+  html.pwa-standalone .pb-mobile-nav {
+    padding-bottom: calc(4.5rem + max(28px, env(safe-area-inset-bottom, 28px)));
+  }
+  @media (min-width: 768px) {
+    html.capacitor-native .pb-mobile-nav,
+    html.pwa-standalone .pb-mobile-nav {
+      padding-bottom: max(28px, env(safe-area-inset-bottom, 28px));
+    }
+  }
+  html.capacitor-native .safe-area-bottom,
+  html.pwa-standalone .safe-area-bottom {
+    padding-bottom: max(28px, env(safe-area-inset-bottom, 28px));
   }
 
   h1, h2, h3, h4 {

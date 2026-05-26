@@ -20,6 +20,38 @@ export function setAuthToken(token) {
   }
 }
 
+const SESSION_USER_CACHE_KEY = 'epc_session_user';
+
+export function readSessionUserCache() {
+  try {
+    const raw = localStorage.getItem(SESSION_USER_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeSessionUserCache(user) {
+  try {
+    if (user) localStorage.setItem(SESSION_USER_CACHE_KEY, JSON.stringify(user));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearSessionUserCache() {
+  try {
+    localStorage.removeItem(SESSION_USER_CACHE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Prefetch route chunk so landing page after login opens faster. */
+export function prefetchOverviewRoute() {
+  return import('../pages/Overview.jsx').catch(() => {});
+}
+
 /** Mở link này 1 lần (đăng nhập ngductien14@gmail.com) để Web App được quyền Drive */
 export function getDriveAuthUrl() {
   return `${GAS_URL}?action=test-drive`;
@@ -27,12 +59,14 @@ export function getDriveAuthUrl() {
 
 import { buildTaskPayload } from '../utils/taskFields';
 import { normalizeToDMY } from '../utils/timelineDates';
+import { parseContractTracking, serializeContractTracking } from '../utils/contractTracking';
 import { refreshNotificationsBell } from '../utils/notifications';
 
 function normalizeProject(project) {
   if (!project) return null;
   const codRaw = project.KẾ_HOẠCH_COD || project.COD_PLAN || project.cod || "-";
   const kickoffRaw = project.KICKOFF_DATE || project.NGÀY_KICKOFF || project.KICKOFF || "-";
+  const startRaw = project.NGÀY_BẮT_ĐẦU || project.NGAY_BAT_DAU || project.PROJECT_START || project.startDate || "-";
   const forecastRaw = project.DỰ_BÁO_COD || project.forecastCod || "";
   return {
     id: String(project.PROJECT_ID || project.id || ""),
@@ -44,6 +78,10 @@ function normalizeProject(project) {
     cod: codRaw === "-" ? "-" : (normalizeToDMY(codRaw) || codRaw),
     codDate: codRaw === "-" ? "" : (normalizeToDMY(codRaw) || codRaw),
     kickoffDate: kickoffRaw === "-" ? "-" : (normalizeToDMY(kickoffRaw) || kickoffRaw),
+    startDate: startRaw === "-" ? "" : (normalizeToDMY(startRaw) || startRaw),
+    NGÀY_BẮT_ĐẦU: startRaw === "-" ? "" : (normalizeToDMY(startRaw) || startRaw),
+    THEO_DÕI_HĐ: project.THEO_DÕI_HĐ || project.THEO_DOI_HD || '',
+    contractTracking: parseContractTracking(project.THEO_DÕI_HĐ || project.THEO_DOI_HD || project.contractTracking),
     forecastCod: forecastRaw ? (normalizeToDMY(forecastRaw) || forecastRaw) : "",
     planProgress: Number(project.TIẾN_ĐỘ_KẾ_HOẠCH || project.PLAN_PROGRESS || project.planProgress || 0),
     actualProgress: Number(project.TIẾN_ĐỘ_THỰC_TẾ || project.ACTUAL_PROGRESS || project.actualProgress || 0),
@@ -55,6 +93,8 @@ function normalizeProject(project) {
     priorityColor: project.priorityColor || "green",
     issue: project.VƯỚNG_MẮC_CHÍNH || project.issue || "Không có",
     issueType: project.issueType || "success",
+    creator: project.NGƯỜI_TẠO || project.NGUOI_TAO || project.CREATED_BY || project.creator || "",
+    NGƯỜI_TẠO: project.NGƯỜI_TẠO || project.NGUOI_TAO || project.CREATED_BY || "",
     _rowIndex: project._rowIndex
   };
 }
@@ -74,10 +114,17 @@ function mapProjectToSheet(project) {
     TIẾN_ĐỘ_THỰC_TẾ: project.actualProgress,
     DELAY: project.delay,
     KICKOFF_DATE: project.kickoffDate ? normalizeToDMY(project.kickoffDate) || project.kickoffDate : project.kickoffDate,
+    NGÀY_BẮT_ĐẦU: project.startDate || project.NGÀY_BẮT_ĐẦU
+      ? normalizeToDMY(project.startDate || project.NGÀY_BẮT_ĐẦU) || project.startDate || project.NGÀY_BẮT_ĐẦU
+      : "",
+    THEO_DÕI_HĐ: project.contractTracking
+      ? JSON.stringify(serializeContractTracking(project.contractTracking))
+      : (project.THEO_DÕI_HĐ || ''),
     TRẠNG_THÁI: project.status,
     RISK_LEVEL: project.risk,
     VƯỚNG_MẮC_CHÍNH: project.issue || "Không có",
     CẬP_NHẬT_CUỐI: project.updatedAt || new Date().toLocaleString(),
+    NGƯỜI_TẠO: project.NGƯỜI_TẠO || project.creator || "",
     _rowIndex: project._rowIndex
   };
 }
@@ -255,8 +302,14 @@ function isOverviewCacheComplete(cached) {
   return (cached?.projects?.length > 0) && (cached?.tasks?.length > 0);
 }
 
+let overviewNetworkPromise = null;
+
 async function fetchOverviewFromNetwork() {
-  return fetchFromGAS('overview', {}, true);
+  if (overviewNetworkPromise) return overviewNetworkPromise;
+  overviewNetworkPromise = fetchFromGAS('overview', {}, true).finally(() => {
+    overviewNetworkPromise = null;
+  });
+  return overviewNetworkPromise;
 }
 
 async function refreshOverviewInBackground() {
@@ -277,6 +330,7 @@ export const clearCache = () => {
   localStorage.removeItem('epc_projects_cache');
   localStorage.removeItem('epc_tasks_cache');
   localStorage.removeItem('epc_risks_cache');
+  clearSessionUserCache();
 };
 
 export const api = {

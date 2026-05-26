@@ -30,3 +30,11 @@ dist-ssr
 backend/_v67/
 
 .vercel
+
+# Capacitor / Android build artifacts
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+# APK build output (optional: commit releases/VPEG-PXD.apk for team download)
+# releases/*.apk

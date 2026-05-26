@@ -15,6 +15,7 @@ import {
   FileText,
   MessageSquare,
   MoreHorizontal,
+  Trash2,
   ChevronLeft,
   ChevronRight,
   X,
@@ -31,19 +32,19 @@ import {
   MapPin,
   Clock,
   Send,
-  Trash2,
   Menu
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { api } from "./services/api";
 import { useSidebar } from "./hooks/useSidebar";
 import Sidebar from "./components/Sidebar";
+import ProjectListMobileCard from "./components/mobile/ProjectListMobileCard";
 import DateInputDMY from "./components/DateInputDMY";
 import { updateDashboardContext } from "./utils/dashboardContext";
 import { enrichProjectsProgress } from "./utils/projectProgress";
 import { parseFlexibleDate, normalizeToDMY } from "./utils/timelineDates";
 import { useAuth } from "./context/AuthContext";
-import { canEditProject, isAdmin } from "./utils/permissions";
+import { canEditProject, canCreateProject, canDeleteProject } from "./utils/permissions";
 
 export default function App() {
   const navigate = useNavigate();
@@ -67,6 +68,8 @@ export default function App() {
   const [employees, setEmployees] = useState([]);
   const [isLoading, setIsLoading] = useState(() => projects.length === 0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [projectMenuId, setProjectMenuId] = useState(null);
+  const projectMenuRef = useRef(null);
 
   // Fetch from GAS
   useEffect(() => {
@@ -131,6 +134,9 @@ export default function App() {
     function handleClickOutside(event) {
       if (filterRef.current && !filterRef.current.contains(event.target)) {
         setIsFilterOpen(false);
+      }
+      if (projectMenuRef.current && !projectMenuRef.current.contains(event.target)) {
+        setProjectMenuId(null);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -252,7 +258,7 @@ export default function App() {
   const [editIssueValue, setEditIssueValue] = useState("");
 
   const handleIssueEditSave = async (p) => {
-    if (!canEditProject(user, p.id || p.PROJECT_ID)) return;
+    if (!canEditProject(user, p.id || p.PROJECT_ID, p)) return;
     if (editIssueValue === p.issue) {
       setEditingIssueId(null);
       return;
@@ -328,7 +334,9 @@ export default function App() {
       status: newProject.status,
       updatedAt: "Vừa xong",
       priorityColor,
-      issue: newProject.issue
+      issue: newProject.issue,
+      NGƯỜI_TẠO: user?.displayName || '',
+      creator: user?.displayName || '',
     };
 
     try {
@@ -362,8 +370,14 @@ export default function App() {
     }
   };
 
-  const handleDeleteProject = async (id, e) => {
-    e.stopPropagation();
+  const handleDeleteProject = async (project, e) => {
+    e?.stopPropagation?.();
+    setProjectMenuId(null);
+    const id = project?.id || project?.PROJECT_ID;
+    if (!id || !canDeleteProject(user, project)) {
+      alert('Chỉ người tạo dự án mới được xóa (Admin có toàn quyền)');
+      return;
+    }
     if (window.confirm("Bạn có chắc chắn muốn xóa dự án này? Toàn bộ dữ liệu liên quan trong tất cả các module sẽ bị xóa vĩnh viễn và không thể khôi phục.")) {
       try {
         await api.deleteProject(id);
@@ -636,28 +650,28 @@ export default function App() {
       <Sidebar activeItem="projects" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-mobile-nav">
         
         {/* 2. TOP HEADER */}
-        <header className="px-6 pt-3 pb-2 border-b border-[var(--border-main)]/30 flex justify-between items-center bg-[var(--bg-panel)]/60 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <div>
-              <h1 className="text-lg font-bold text-[var(--text-strong)] tracking-tight">DANH SÁCH DỰ ÁN</h1>
-              <p className="text-[11px] text-[var(--text-muted)] mt-0.5 font-medium">Theo dõi và điều phối toàn bộ dự án đang triển khai</p>
+        <header className="px-4 md:px-6 pt-3 pb-2 border-b border-[var(--border-main)]/30 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-[var(--bg-panel)]/60 backdrop-blur-md max-md:mobile-header-offset">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="min-w-0">
+              <h1 className="text-base md:text-lg font-bold text-[var(--text-strong)] tracking-tight">DANH SÁCH DỰ ÁN</h1>
+              <p className="text-[10px] md:text-[11px] text-[var(--text-muted)] mt-0.5 font-medium line-clamp-2">Theo dõi và điều phối toàn bộ dự án đang triển khai</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto">
             <button 
               onClick={handleExportCSV}
-              className="border border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-[var(--text-main)] text-xs px-3.5 py-2 rounded flex items-center gap-2 shadow-sm transition-all cursor-pointer font-medium"
+              className="border border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-[var(--text-main)] text-xs px-2.5 md:px-3.5 py-2 rounded flex items-center gap-2 shadow-sm transition-all cursor-pointer font-medium"
             >
               <Download className="w-3.5 h-3.5 text-slate-400" />
               <span>Xuất Excel</span>
             </button>
-            {isAdmin(user) && (
+            {canCreateProject(user) && (
             <button 
               onClick={() => setIsAddDrawerOpen(true)}
-              className="bg-[#5252ff] hover:bg-[#4141d6] text-white text-xs font-medium px-3.5 py-2 rounded flex items-center gap-2 shadow-[0_0_15px_rgba(82,82,255,0.3)] hover:shadow-[0_0_20px_rgba(82,82,255,0.5)] transition-all cursor-pointer"
+              className="bg-[#5252ff] hover:bg-[#4141d6] text-white text-xs font-medium px-2.5 md:px-3.5 py-2 rounded flex items-center gap-2 shadow-[0_0_15px_rgba(82,82,255,0.3)] hover:shadow-[0_0_20px_rgba(82,82,255,0.5)] transition-all cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Thêm dự án</span>
@@ -667,10 +681,10 @@ export default function App() {
         </header>
 
         {/* 3. SEARCH + FILTER BAR */}
-        <section className="px-6 py-2 flex justify-between items-center bg-[var(--bg-main)] relative z-20 border-b border-[var(--border-main)]/20">
+        <section className="px-4 md:px-6 py-2 flex flex-col gap-2 md:flex-row md:justify-between md:items-center bg-[var(--bg-main)] relative z-20 border-b border-[var(--border-main)]/20">
           
           {/* Left: Search input + Filter button */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto">
             
             {/* Search Input */}
             <div className="relative">
@@ -682,7 +696,7 @@ export default function App() {
                   setCurrentPage(1);
                 }}
                 placeholder="Tìm kiếm dự án, khách hàng..."
-                className="bg-[var(--bg-panel)] border border-[var(--border-main)] text-slate-200 pl-4 pr-10 py-1.5 rounded text-xs focus:outline-none focus:border-[#5252ff] w-72 placeholder-[#4d5e7a] transition-all"
+                className="bg-[var(--bg-panel)] border border-[var(--border-main)] text-slate-200 pl-4 pr-10 py-1.5 rounded text-xs focus:outline-none focus:border-[#5252ff] w-full min-w-0 md:w-72 placeholder-[#4d5e7a] transition-all"
               />
               <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#4d5e7a] pointer-events-none" />
             </div>
@@ -811,7 +825,7 @@ export default function App() {
         </section>
 
         {/* 4. KPI SUMMARY CARDS */}
-        <section className="px-6 py-1.5 grid grid-cols-1 md:grid-cols-4 gap-3 bg-[var(--bg-main)]">
+        <section className="px-4 md:px-6 py-1.5 grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-3 bg-[var(--bg-main)]">
           
           {/* Card 1: Total projects */}
           <div className="glass-panel rounded-lg p-3 flex items-center gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group">
@@ -869,7 +883,7 @@ export default function App() {
         </section>
 
         {/* 5. PROJECT TABLE SECTION */}
-        <section className="px-6 py-3 bg-[var(--bg-main)] flex-1">
+        <section className="px-4 md:px-6 py-3 bg-[var(--bg-main)] flex-1 mobile-content-compact">
           {/* Table Header Section */}
           <div className="mb-2 flex justify-between items-center">
             <h2 className="text-xs font-bold text-[var(--text-strong)] uppercase tracking-wider flex items-center gap-2">
@@ -880,8 +894,29 @@ export default function App() {
             </h2>
           </div>
 
-          {/* Main Table Card */}
-          <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] overflow-hidden shadow-2xl flex flex-col">
+          {/* Mobile card list */}
+          <div className="md:hidden space-y-3 mb-3">
+            {paginatedProjects.length === 0 ? (
+              <p className="text-center py-10 text-slate-400 text-xs font-medium">
+                Không tìm thấy dự án nào khớp với điều kiện lọc.
+              </p>
+            ) : (
+              paginatedProjects.map((p) => (
+                <ProjectListMobileCard
+                  key={p.id}
+                  project={p}
+                  onOpen={() =>
+                    navigate('/projects/' + encodeURIComponent(p.name || p.id || p.PROJECT_ID))
+                  }
+                  canDelete={canDeleteProject(user, p)}
+                  onDelete={(e) => handleDeleteProject(p, e)}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Main Table Card — desktop */}
+          <div className="hidden md:flex border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] overflow-hidden shadow-2xl flex-col">
             
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -1067,13 +1102,13 @@ export default function App() {
                           <td 
                             className={`align-middle py-2 px-2.5 max-w-[200px] truncate transition-colors group relative ${
                               sortField === "issue" ? "bg-[var(--bg-hover)]" : "bg-inherit"
-                            } ${canEditProject(user, p.id || p.PROJECT_ID) ? 'cursor-text hover:bg-[var(--bg-hover)]' : ''}`}
+                            } ${canEditProject(user, p.id || p.PROJECT_ID, p) ? 'cursor-text hover:bg-[var(--bg-hover)]' : ''}`}
                             onDoubleClick={() => {
-                              if (!canEditProject(user, p.id || p.PROJECT_ID)) return;
+                              if (!canEditProject(user, p.id || p.PROJECT_ID, p)) return;
                               setEditingIssueId(p.id);
                               setEditIssueValue(p.issue && p.issue !== "Không có" && p.issue !== "-" ? p.issue : "");
                             }}
-                            title={canEditProject(user, p.id || p.PROJECT_ID) ? "Click đúp để chỉnh sửa" : undefined}
+                            title={canEditProject(user, p.id || p.PROJECT_ID, p) ? "Click đúp để chỉnh sửa" : undefined}
                           >
                             {editingIssueId === p.id ? (
                               <div className="flex items-center gap-1">
@@ -1094,7 +1129,7 @@ export default function App() {
                               <div className="flex items-center gap-1.5 text-[var(--text-main)] font-medium">
                                 <span className={`w-1.5 h-1.5 rounded-full ${issueDotClass} inline-block`}></span>
                                 <span className="truncate">{p.issue || '-'}</span>
-                                {canEditProject(user, p.id || p.PROJECT_ID) && (
+                                {canEditProject(user, p.id || p.PROJECT_ID, p) && (
                                 <span className="absolute right-2 opacity-0 group-hover:opacity-100 text-[#5252ff] text-[10px] italic pointer-events-none">Sửa</span>
                                 )}
                               </div>
@@ -1115,12 +1150,33 @@ export default function App() {
                               >
                                 <Eye className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                title="Khác"
-                                className="p-1.5 hover:text-[var(--text-strong)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] border border-transparent hover:border-[var(--border-main)] rounded transition-all duration-200 cursor-pointer"
-                              >
-                                <MoreHorizontal className="w-3.5 h-3.5" />
-                              </button>
+                              {canDeleteProject(user, p) && (
+                              <div className="relative" ref={projectMenuId === (p.id || p.PROJECT_ID) ? projectMenuRef : null}>
+                                <button
+                                  type="button"
+                                  title="Xóa dự án"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const pid = p.id || p.PROJECT_ID;
+                                    setProjectMenuId(projectMenuId === pid ? null : pid);
+                                  }}
+                                  className="p-1.5 hover:text-[var(--text-strong)] text-[var(--text-muted)] hover:bg-[var(--bg-hover)] border border-transparent hover:border-[var(--border-main)] rounded transition-all duration-200 cursor-pointer"
+                                >
+                                  <MoreHorizontal className="w-3.5 h-3.5" />
+                                </button>
+                                {projectMenuId === (p.id || p.PROJECT_ID) && (
+                                  <div className="absolute right-0 top-full mt-1 w-44 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-md shadow-lg py-1 z-50">
+                                    <button
+                                      type="button"
+                                      className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+                                      onClick={(e) => handleDeleteProject(p, e)}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" /> Xóa dự án
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1131,8 +1187,8 @@ export default function App() {
               </table>
             </div>
 
-            {/* 6. PAGINATION */}
-            <div className="flex justify-between items-center py-2 px-3 border-t border-[var(--border-main)] bg-[var(--bg-panel)] text-xs text-[var(--text-muted)] font-medium">
+            {/* 6. PAGINATION (desktop — attached to table) */}
+            <div className="hidden md:flex justify-between items-center py-2 px-3 border-t border-[var(--border-main)] bg-[var(--bg-panel)] text-xs text-[var(--text-muted)] font-medium">
               {/* Left page sizing */}
               <div className="flex items-center gap-2">
                 <span>Hiển thị</span>
@@ -1193,7 +1249,63 @@ export default function App() {
                 </button>
               </div>
             </div>
+          </div>
 
+          {/* Pagination (mobile) */}
+          <div className="md:hidden flex flex-col gap-2 py-2 px-3 border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] text-xs text-[var(--text-muted)] font-medium mt-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span>Hiển thị</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-[var(--bg-panel)] border border-[var(--border-main)] text-slate-200 px-2 py-0.5 rounded text-xs focus:outline-none focus:border-[#5252ff] cursor-pointer"
+              >
+                <option value={4}>4</option>
+                <option value={8}>8</option>
+                <option value={12}>12</option>
+                <option value={20}>20</option>
+              </select>
+              <span>dự án / {processedProjects.length} kết quả</span>
+            </div>
+            <div className="flex items-center justify-center gap-1 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className={`p-1 rounded border border-[var(--border-main)] ${
+                  currentPage === 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[var(--bg-hover)]'
+                }`}
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <button
+                  key={page}
+                  type="button"
+                  onClick={() => setCurrentPage(page)}
+                  className={`px-2.5 py-1 rounded text-xs font-semibold border ${
+                    currentPage === page
+                      ? 'bg-[#5252ff] border-[#5252ff] text-white'
+                      : 'border-[var(--border-main)] text-[var(--text-muted)]'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className={`p-1 rounded border border-[var(--border-main)] ${
+                  currentPage === totalPages ? 'opacity-40 cursor-not-allowed' : 'hover:bg-[var(--bg-hover)]'
+                }`}
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </section>
 
@@ -1494,8 +1606,19 @@ export default function App() {
                   <input
                     type="number"
                     min={0}
+                    step="0.01"
+                    inputMode="decimal"
+                    placeholder="1241.24"
                     value={newProject.capacity}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, capacity: e.target.value }))}
+                    onChange={(e) => {
+                      let v = e.target.value.trim();
+                      if (v.includes(',') && v.includes('.')) {
+                        v = v.replace(/\./g, '').replace(',', '.');
+                      } else {
+                        v = v.replace(',', '.');
+                      }
+                      setNewProject(prev => ({ ...prev, capacity: v }));
+                    }}
                     className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
                   />
                 </div>
@@ -1508,6 +1631,8 @@ export default function App() {
                   <DateInputDMY
                     value={newProject.kickoffDate}
                     onChange={(val) => setNewProject(prev => ({ ...prev, kickoffDate: val }))}
+                    showCalendar
+                    calendarTitle="Chọn ngày Kickoff"
                     className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
                   />
                 </div>
@@ -1526,6 +1651,8 @@ export default function App() {
                       }
                       setNewProject(prev => ({ ...prev, codDate: val, codDays }));
                     }}
+                    showCalendar
+                    calendarTitle="Chọn ngày COD"
                     className="w-full bg-[var(--bg-main)] border border-[var(--border-main)] text-slate-200 px-3 py-2 rounded focus:outline-none focus:border-[#5252ff]"
                   />
                 </div>

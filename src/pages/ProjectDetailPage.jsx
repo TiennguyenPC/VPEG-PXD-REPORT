@@ -24,7 +24,8 @@ import { api } from "../services/api";
 import { updateDashboardContext } from "../utils/dashboardContext";
 import { syncProgressToProjectsCache } from "../utils/projectProgress";
 import { useAuth } from "../context/AuthContext";
-import { canEditProject, canShareProjectWithClient } from "../utils/permissions";
+import { canEditProject, canShareProjectWithClient, canEditContractTracking } from "../utils/permissions";
+import { computeModuleProgressFromBundle } from "../utils/moduleProgress";
 import { ProjectEditProvider } from "../context/ProjectEditContext";
 import {
   parseFlexibleDate as parseDateStr,
@@ -34,6 +35,7 @@ import {
   normalizeToDMY,
 } from "../utils/timelineDates";
 import { getPhotoUrlsFromLog } from "../utils/sitePhotoCache";
+import { serializeContractTracking, buildSyncFieldsFromTracking } from "../utils/contractTracking";
 
 const getTodayStr = getTodayDMY;
 
@@ -206,6 +208,21 @@ export default function ProjectDetailPage() {
       return next;
     });
   };
+
+  useEffect(() => {
+    const computed = computeModuleProgressFromBundle(bundleData);
+    if (!computed) return;
+    setModuleProgress((prev) => {
+      const same = Object.keys(computed).every((key) => prev[key] === computed[key]);
+      return same ? prev : { ...prev, ...computed };
+    });
+  }, [
+    bundleData?.permits,
+    bundleData?.designs,
+    bundleData?.procurements,
+    bundleData?.constructions,
+    bundleData?.handovers,
+  ]);
 
   useEffect(() => {
     const applyBundle = (bundle) => {
@@ -458,8 +475,9 @@ export default function ProjectDetailPage() {
   };
 
   const buildSiteLogSavePayload = (toSave) => {
+    const logDate = normalizeToDMY(toSave.LOG_DATE || toSave.NGÀY || selectedDate);
     const existingInLogs = logsRef.current.find(
-      (l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(toSave.LOG_DATE)
+      (l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === logDate
     );
     let dailyNote = toSave.DAILY_NOTE !== undefined ? toSave.DAILY_NOTE : (toSave.GHI_CHÚ_HIỆN_TRƯỜNG || '');
     const existingPhotos = existingInLogs ? getPhotoUrlsFromLog(existingInLogs).join('\n') : '';
@@ -467,8 +485,8 @@ export default function ProjectDetailPage() {
 
     return {
       PROJECT_ID: String(id),
-      LOG_DATE: toSave.LOG_DATE,
-      NGÀY: toSave.LOG_DATE,
+      LOG_DATE: logDate,
+      NGÀY: logDate,
       MANPOWER: toSave.MANPOWER !== undefined ? Number(toSave.MANPOWER || 0) : Number(toSave.NHÂN_LỰC_SITE || 0),
       NHÂN_LỰC_SITE: toSave.MANPOWER !== undefined ? Number(toSave.MANPOWER || 0) : Number(toSave.NHÂN_LỰC_SITE || 0),
       ENGINEERS: toSave.ENGINEERS !== undefined ? Number(toSave.ENGINEERS || 0) : Number(toSave.KỸ_SƯ_GS || 0),
@@ -487,13 +505,30 @@ export default function ProjectDetailPage() {
       STATUS: 'Saved',
       UPDATED_BY: 'NV - GIÁM SÁT',
       UPDATED_AT: new Date().toISOString(),
-      _rowIndex: toSave._rowIndex,
+      _rowIndex: (
+        existingInLogs
+        && normalizeToDMY(existingInLogs.LOG_DATE || existingInLogs.NGÀY) === logDate
+      ) ? existingInLogs._rowIndex : undefined,
     };
+  };
+
+  const mergeLogsByDate = (prev, incoming) => {
+    if (!incoming?.length) return prev || [];
+    const map = new Map();
+    (prev || []).forEach((log) => {
+      const key = normalizeToDMY(log.LOG_DATE || log.NGÀY);
+      if (key) map.set(key, log);
+    });
+    incoming.forEach((log) => {
+      const key = normalizeToDMY(log.LOG_DATE || log.NGÀY);
+      if (key) map.set(key, { ...(map.get(key) || {}), ...log });
+    });
+    return Array.from(map.values());
   };
 
   const applySiteLogApiResponse = (res, dailyRes, weeklyRes, monthlyRes) => {
     if (res && res.dailyLogs) {
-      setLogs(res.dailyLogs);
+      setLogs((prev) => mergeLogsByDate(prev, res.dailyLogs));
       if (res.weeklyLogs) setWeeklyLogs(res.weeklyLogs);
       if (res.monthlyLogs) setMonthlyLogs(res.monthlyLogs);
       setBundleData((prev) => {
@@ -502,6 +537,7 @@ export default function ProjectDetailPage() {
           siteLogs: res.dailyLogs,
           weeklyLogs: res.weeklyLogs || prev?.weeklyLogs,
           monthlyLogs: res.monthlyLogs || prev?.monthlyLogs,
+          constructions: res.constructions || prev?.constructions,
         };
         writeBundleCache(id, next);
         return next;
@@ -523,6 +559,93 @@ export default function ProjectDetailPage() {
     });
   };
 
+  const handleProjectUpdate = useCallback(async (fields) => {
+    if (!canEditProject(user, id, project) || !project) {
+      throw new Error('Không có quyền sửa dự án');
+    }
+
+    const normalized = { ...fields };
+    if (normalized.cod || normalized.codDate) {
+      const codVal = normalized.cod || normalized.codDate;
+      normalized.cod = normalizeToDMY(codVal) || codVal;
+      normalized.codDate = normalized.cod;
+      normalized.KẾ_HOẠCH_COD = normalized.cod;
+    }
+    if (normalized.kickoffDate) {
+      normalized.kickoffDate = normalizeToDMY(normalized.kickoffDate) || normalized.kickoffDate;
+      normalized.KICKOFF_DATE = normalized.kickoffDate;
+    }
+    if (normalized.startDate) {
+      normalized.startDate = normalizeToDMY(normalized.startDate) || normalized.startDate;
+      normalized.NGÀY_BẮT_ĐẦU = normalized.startDate;
+    }
+    if (normalized.contractTracking) {
+      const serialized = serializeContractTracking(normalized.contractTracking);
+      normalized.contractTracking = serialized;
+      normalized.THEO_DÕI_HĐ = JSON.stringify(serialized);
+      Object.assign(normalized, buildSyncFieldsFromTracking(serialized));
+    }
+
+    const updated = {
+      ...project,
+      ...normalized,
+      id: project.id || id,
+      PROJECT_ID: project.PROJECT_ID || id,
+      _rowIndex: project._rowIndex,
+      updatedAt: new Date().toLocaleString('vi-VN'),
+    };
+
+    setProject(updated);
+    setBundleData((prev) => {
+      let milestones = prev?.milestones;
+      if (normalized.cod && milestones?.length) {
+        milestones = milestones.map((m) => {
+          const title = String(m.MILESTONE || '').toUpperCase();
+          return title === 'COD' || title.includes('COD')
+            ? { ...m, NGÀY_KẾ_HOẠCH: normalized.cod }
+            : m;
+        });
+      }
+      if (normalized.kickoffDate && milestones?.length) {
+        milestones = milestones.map((m) => {
+          const title = String(m.MILESTONE || '').toUpperCase();
+          return title === 'KICKOFF'
+            ? { ...m, NGÀY_KẾ_HOẠCH: normalized.kickoffDate }
+            : m;
+        });
+      }
+      const next = { ...(prev || {}), project: updated, milestones: milestones || prev?.milestones };
+      writeBundleCache(id, next);
+      return next;
+    });
+
+    try {
+      const cached = localStorage.getItem('epc_projects_cache');
+      if (cached) {
+        const list = JSON.parse(cached).map((p) =>
+          String(p.id || p.PROJECT_ID) === String(id) ? { ...p, ...normalized } : p
+        );
+        localStorage.setItem('epc_projects_cache', JSON.stringify(list));
+      }
+    } catch { /* ignore */ }
+
+    await api.updateProject(updated);
+  }, [id, user, project]);
+
+  const handleContractTrackingSave = useCallback(async (trackingData) => {
+    if (!canEditContractTracking(user, id, project)) {
+      throw new Error('Chỉ SM/PM nội bộ được cập nhật theo dõi HĐ');
+    }
+    updateSaveStatus('Saving...');
+    try {
+      await handleProjectUpdate({ contractTracking: trackingData });
+      updateSaveStatus('Saved');
+    } catch (e) {
+      updateSaveStatus('Error');
+      throw e;
+    }
+  }, [handleProjectUpdate, updateSaveStatus, user, id, project]);
+
   const handleLogsUpdated = useCallback((dailyLogs) => {
     if (!dailyLogs?.length) return;
     setLogs(dailyLogs);
@@ -534,7 +657,7 @@ export default function ProjectDetailPage() {
   }, [id]);
 
   const saveSitePhotosToServer = useCallback(async (urls, logDate, rowIndex) => {
-    if (!canEditProject(user, id)) {
+    if (!canEditProject(user, id, project)) {
       throw new Error('Không có quyền lưu ảnh');
     }
 
@@ -551,7 +674,7 @@ export default function ProjectDetailPage() {
   }, [id, user, updateSaveStatus]);
 
   const saveSiteLogImmediate = useCallback(async (noteUpdates) => {
-    if (!canEditProject(user, id)) {
+    if (!canEditProject(user, id, project)) {
       throw new Error('Không có quyền lưu nhật ký');
     }
 
@@ -561,12 +684,13 @@ export default function ProjectDetailPage() {
     }
     pendingSaveRef.current = null;
 
+    const logDate = normalizeToDMY(selectedDate);
     const existingLog = logsRef.current.find(
-      (l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(selectedDate)
+      (l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === logDate
     ) || {
       PROJECT_ID: id,
-      LOG_DATE: selectedDate,
-      NGÀY: selectedDate,
+      LOG_DATE: logDate,
+      NGÀY: logDate,
       MANPOWER: 0,
       ENGINEERS: 0,
       WEATHER: '',
@@ -583,37 +707,42 @@ export default function ProjectDetailPage() {
       ...noteUpdates,
       DAILY_NOTE: dailyNote,
       GHI_CHÚ_HIỆN_TRƯỜNG: dailyNote,
-      LOG_DATE: selectedDate,
-      NGÀY: selectedDate,
+      LOG_DATE: logDate,
+      NGÀY: logDate,
       UPDATED_BY: 'NV - GIÁM SÁT',
       UPDATED_AT: new Date().toISOString(),
     };
 
     setLogs((prev) => {
-      const idx = prev.findIndex((l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === normalizeToDMY(selectedDate));
+      const idx = prev.findIndex((l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === logDate);
       if (idx !== -1) return prev.map((l, i) => (i === idx ? { ...l, ...updatedLog } : l));
       return [...prev, updatedLog];
     });
 
     updateSaveStatus('Saving...');
     const payload = buildSiteLogSavePayload(updatedLog);
-    const res = await api.updateSiteLog(payload);
-    updateSaveStatus('Saved');
+    try {
+      const res = await api.updateSiteLog(payload);
+      updateSaveStatus('Saved');
 
-    if (res && res.dailyLogs) {
-      applySiteLogApiResponse(res);
-    } else {
-      const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
-        api.getSiteLogs(id),
-        api.getWeeklyLogs(id),
-        api.getMonthlyLogs(id),
-      ]);
-      applySiteLogApiResponse(null, dailyRes, weeklyRes, monthlyRes);
+      if (res && res.dailyLogs) {
+        applySiteLogApiResponse(res);
+      } else {
+        const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
+          api.getSiteLogs(id),
+          api.getWeeklyLogs(id),
+          api.getMonthlyLogs(id),
+        ]);
+        applySiteLogApiResponse(null, dailyRes, weeklyRes, monthlyRes);
+      }
+    } catch (error) {
+      updateSaveStatus('Error');
+      throw error;
     }
-  }, [id, user, selectedDate, updateSaveStatus]);
+  }, [id, user, selectedDate, updateSaveStatus, project]);
 
   const handleUpdateLog = (field, value) => {
-    if (!canEditProject(user, id)) return;
+    if (!canEditProject(user, id, project)) return;
 
     let targetLogDate = selectedDate;
 
@@ -631,6 +760,8 @@ export default function ProjectDetailPage() {
       if (f === 'ĐÁNH_GIÁ_TUẦN') mapped = 'WEEKLY_ASSESSMENT';
       return mapped;
     };
+
+    const noteOnlyKeys = new Set(['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE', 'SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG']);
 
     // Map view edits to correct daily log row
     if (selectedView === 'week') {
@@ -681,6 +812,8 @@ export default function ProjectDetailPage() {
     const updatedLog = {
       ...existingLog,
       ...updatedFields,
+      LOG_DATE: normalizeToDMY(existingLog.LOG_DATE || existingLog.NGÀY || targetLogDate),
+      NGÀY: normalizeToDMY(existingLog.LOG_DATE || existingLog.NGÀY || targetLogDate),
       UPDATED_BY: 'NV - GIÁM SÁT',
       UPDATED_AT: new Date().toISOString()
     };
@@ -695,8 +828,10 @@ export default function ProjectDetailPage() {
       }
     });
 
-    // Sync to GAS — ảnh: gom debounce để 4 ảnh song song không ghi đè nhau
-    const isPhotoSave = updates.GHI_CHÚ_HIỆN_TRƯỜNG !== undefined || updates.DAILY_NOTE !== undefined;
+    // Sync to GAS — chỉ debounce khi chỉ cập nhật ảnh/ghi chú (tránh ghi đè khi upload nhiều ảnh)
+    const updateKeys = Object.keys(updates);
+    const isPhotoSave = updateKeys.some((k) => noteOnlyKeys.has(k))
+      && updateKeys.every((k) => noteOnlyKeys.has(k));
     if (isPhotoSave) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       pendingSaveRef.current = mergePendingLog(pendingSaveRef.current, updatedLog);
@@ -722,7 +857,7 @@ export default function ProjectDetailPage() {
   };
 
   const performSave = async () => {
-    if (!canEditProject(user, id)) {
+    if (!canEditProject(user, id, project)) {
       pendingSaveRef.current = null;
       updateSaveStatus('Saved');
       return;
@@ -788,7 +923,7 @@ export default function ProjectDetailPage() {
     );
   }
 
-  const projectEditable = canEditProject(user, id);
+  const projectEditable = canEditProject(user, id, project);
 
   return (
     <div className="h-screen flex overflow-hidden bg-[var(--bg-main)] text-slate-100 font-sans">
@@ -807,11 +942,11 @@ export default function ProjectDetailPage() {
           <div className="p-4 md:px-5 pt-2 md:pt-4">
           <ProjectHeader
             project={enrichedProject} 
-            milestones={bundleData?.milestones || []} 
             onBack={() => navigate('/')} 
             onToggleSidebar={toggleSidebar}
             isSidebarCollapsed={isCollapsed}
             shareMode={canShareProjectWithClient(user) ? 'public' : 'internal'}
+            onUpdateProject={projectEditable ? handleProjectUpdate : undefined}
           />
           </div>
 
@@ -825,7 +960,18 @@ export default function ProjectDetailPage() {
 
           {/* SECTION 3 - MILESTONE TIMELINE */}
           <section id="section-timeline" className="scroll-mt-16">
-            <MilestoneTimeline project={enrichedProject} moduleProgress={moduleProgress} milestonesData={bundleData?.milestones || []} />
+            <MilestoneTimeline
+              project={enrichedProject}
+              moduleProgress={moduleProgress}
+              milestonesData={bundleData?.milestones || []}
+              moduleBundles={{
+                procurements: bundleData?.procurements,
+                handovers: bundleData?.handovers,
+              }}
+              onContractTrackingSave={
+                canEditContractTracking(user, id, project) ? handleContractTrackingSave : undefined
+              }
+            />
           </section>
 
           {/* SECTION 4 - NHẬT KÝ & VẬN HÀNH (trước S-Curve để dễ thấy) */}
@@ -847,7 +993,16 @@ export default function ProjectDetailPage() {
                 setSelectedMonth={setSelectedMonth}
                 activeLog={activeLog}
                 onUpdateLog={handleUpdateLog}
+                onSaveLogImmediate={saveSiteLogImmediate}
                 saveStatus={saveStatus}
+                constructions={bundleData?.constructions || []}
+                moduleBundles={{
+                  permits: bundleData?.permits,
+                  designs: bundleData?.designs,
+                  procurements: bundleData?.procurements,
+                  constructions: bundleData?.constructions,
+                  handovers: bundleData?.handovers,
+                }}
               />
             </div>
             {selectedView !== 'day' && (
@@ -891,6 +1046,13 @@ export default function ProjectDetailPage() {
               milestonesData={bundleData?.milestones || []}
               initialData={scurveData}
               onPlanCalculated={setDynamicPlanPercent}
+              moduleBundles={{
+                permits: bundleData?.permits,
+                designs: bundleData?.designs,
+                procurements: bundleData?.procurements,
+                constructions: bundleData?.constructions,
+                handovers: bundleData?.handovers,
+              }}
             />
           </section>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HardHat, ChevronDown, ChevronUp, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
@@ -8,6 +8,8 @@ import ModuleProgressPill from './ModuleProgressPill';
 import DateInputDMY from '../../DateInputDMY';
 import { useProjectCanEdit } from '../../../context/ProjectEditContext';
 import { useI18n } from '../../../context/I18nContext';
+import ModuleNotesCell from './ModuleNotesCell';
+import { normalizeModuleField, formatModuleProgress } from '../../../utils/moduleDisplay';
 
 const initialGroups = [
   {
@@ -82,7 +84,32 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   const [isOpen, setIsOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState({ 'A': true, 'B': true, 'C': true, 'D': true });
 
+  const normalizeItemKey = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');
+
+  const findConstructionRow = (data, task) => {
+    if (!data || !data.length) return null;
+    const taskKey = normalizeItemKey(task.item);
+    return data.find((r) => {
+      const item = r.HẠNG_MỤC_CÔNG_VIỆC || r.hang_muc_cong_viec || '';
+      if (item && normalizeItemKey(item) === taskKey) return true;
+      return r.id === task.id;
+    }) || null;
+  };
+
   const mergeConstructionData = (data) => {
+    const getVal = (row, keys) => {
+      if (!row) return null;
+      const rowKeys = Object.keys(row);
+      for (const key of keys) {
+        const cleanKey = key.toLowerCase().replace(/[\s_]/g, '');
+        const match = rowKeys.find(k => k.toLowerCase().replace(/[\s_]/g, '') === cleanKey);
+        if (match && row[match] !== undefined && row[match] !== null && row[match] !== '') {
+          return row[match];
+        }
+      }
+      return null;
+    };
+
     if (!data || data.length === 0) return initialGroups.map(g => ({
       ...g,
       tasks: g.tasks.map(t => ({
@@ -96,15 +123,18 @@ export default function ConstructionModule({ project, initialData, onProgressCha
     return initialGroups.map(g => ({
       ...g,
       tasks: g.tasks.map(t => {
-        const row = data.find(r => r.MÃ_CV === t.code || r.HẠNG_MỤC_CÔNG_VIỆC === t.item || r.id === t.id);
+        const row = findConstructionRow(data, t);
         if (row) {
+          const progressRaw = row.TIẾN_ĐỘ_THỰC_TẾ;
+          const progressNum = Number(progressRaw);
           return {
             ...t,
             _rowIndex: row._rowIndex,
-            NGÀY_BẮT_ĐẦU: row.NGÀY_BẮT_ĐẦU !== undefined ? row.NGÀY_BẮT_ĐẦU : t.start,
-            NGÀY_KẾT_THÚC: row.NGÀY_KẾT_THÚC !== undefined ? row.NGÀY_KẾT_THÚC : t.endPlan,
-            NGÀY_HT_THỰC_TẾ: row.NGÀY_HT_THỰC_TẾ !== undefined ? row.NGÀY_HT_THỰC_TẾ : t.endActual,
-            TIẾN_ĐỘ_THỰC_TẾ: row.TIẾN_ĐỘ_THỰC_TẾ !== undefined ? Number(row.TIẾN_ĐỘ_THỰC_TẾ) : t.progress
+            NGÀY_BẮT_ĐẦU: normalizeModuleField(row.NGÀY_BẮT_ĐẦU !== undefined ? row.NGÀY_BẮT_ĐẦU : t.start),
+            NGÀY_KẾT_THÚC: normalizeModuleField(row.NGÀY_KẾT_THÚC !== undefined ? row.NGÀY_KẾT_THÚC : t.endPlan),
+            NGÀY_HT_THỰC_TẾ: normalizeModuleField(row.NGÀY_HT_THỰC_TẾ !== undefined ? row.NGÀY_HT_THỰC_TẾ : t.endActual),
+            TIẾN_ĐỘ_THỰC_TẾ: Number.isFinite(progressNum) ? progressNum : t.progress,
+            GHI_CHÚ: normalizeModuleField(getVal(row, ['GHI_CHÚ', 'ghichu']))
           };
         }
         return {
@@ -112,7 +142,8 @@ export default function ConstructionModule({ project, initialData, onProgressCha
           NGÀY_BẮT_ĐẦU: t.start,
           NGÀY_KẾT_THÚC: t.endPlan,
           NGÀY_HT_THỰC_TẾ: t.endActual,
-          TIẾN_ĐỘ_THỰC_TẾ: t.progress
+          TIẾN_ĐỘ_THỰC_TẾ: t.progress,
+          GHI_CHÚ: ''
         };
       })
     }));
@@ -123,6 +154,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   const [isLoading, setIsLoading] = useState(!initialData);
   const [isUpdating, setIsUpdating] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
+  const saveInFlightRef = useRef(false);
 
   useEffect(() => {
     if (initialData) {
@@ -164,48 +196,79 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   }, [groups, onProgressChange]);
 
   const handleUpdate = async (groupId, taskId, field, value) => {
-    if (!canEdit) return;
-    try {
-      setIsUpdating(true); setSyncStatus("saving");
+    if (!canEdit || saveInFlightRef.current) return;
 
-      let updatedTask = null;
-      const nextGroups = groups.map(g => {
-        if (g.id !== groupId) return g;
-        return {
+    const currentGroup = groups.find(g => g.id === groupId);
+    const currentTask = currentGroup?.tasks.find(t => t.id === taskId);
+    if (!currentTask) return;
+
+    const normalizedValue = field === 'GHI_CHÚ'
+      ? String(value ?? '')
+      : normalizeModuleField(value);
+    const currentValue = field === 'GHI_CHÚ'
+      ? String(currentTask[field] ?? '')
+      : normalizeModuleField(currentTask[field]);
+    if (normalizedValue === currentValue) return;
+
+    let updatedTask = null;
+    const nextGroups = groups.map(g => {
+      if (g.id !== groupId) return g;
+      return {
+        ...g,
+        tasks: g.tasks.map(t => {
+          if (t.id === taskId) {
+            updatedTask = { ...t, [field]: normalizedValue };
+            return updatedTask;
+          }
+          return t;
+        })
+      };
+    });
+    setGroups(nextGroups);
+
+    if (!updatedTask) return;
+
+    saveInFlightRef.current = true;
+    setIsUpdating(true);
+    setSyncStatus('saving');
+
+    try {
+      const payload = {
+        _rowIndex: updatedTask._rowIndex,
+        PROJECT_ID: project?.PROJECT_ID || project?.id,
+        NHÓM_THI_CÔNG: updatedTask.NHÓM_THI_CÔNG || initialGroups.find(g => g.id === groupId)?.name,
+        MÃ_CV: updatedTask.code,
+        HẠNG_MỤC_CÔNG_VIỆC: updatedTask.item,
+        NGÀY_BẮT_ĐẦU: updatedTask.NGÀY_BẮT_ĐẦU,
+        NGÀY_KẾT_THÚC: updatedTask.NGÀY_KẾT_THÚC,
+        NGÀY_HT_THỰC_TẾ: updatedTask.NGÀY_HT_THỰC_TẾ,
+        TIẾN_ĐỘ_THỰC_TẾ: updatedTask.TIẾN_ĐỘ_THỰC_TẾ,
+        TRỌNG_SỐ: updatedTask.TRỌNG_SỐ || initialGroups.find(g => g.id === groupId)?.weight,
+        GHI_CHÚ: updatedTask.GHI_CHÚ,
+        ghichu: updatedTask.GHI_CHÚ
+      };
+      const response = await api.updateConstruction(payload);
+      if (response?.data?.length) {
+        setGroups(prev => prev.map(g => ({
           ...g,
           tasks: g.tasks.map(t => {
-            if (t.id === taskId) {
-              let temp = { ...t, [field]: value };
-              updatedTask = temp;
-              return updatedTask;
+            const serverRow = findConstructionRow(response.data, t);
+            if (serverRow?._rowIndex) {
+              return { ...t, _rowIndex: serverRow._rowIndex };
             }
             return t;
           })
-        };
-      }); setGroups(nextGroups);
-
-      if (updatedTask) {
-        const payload = {
-          _rowIndex: updatedTask._rowIndex,
-          PROJECT_ID: project?.PROJECT_ID || project?.id,
-          NHÓM_THI_CÔNG: updatedTask.NHÓM_THI_CÔNG || initialGroups.find(g => g.id === groupId)?.name,
-          MÃ_CV: updatedTask.code,
-          HẠNG_MỤC_CÔNG_VIỆC: updatedTask.item,
-          NGÀY_BẮT_ĐẦU: updatedTask.NGÀY_BẮT_ĐẦU,
-          NGÀY_KẾT_THÚC: updatedTask.NGÀY_KẾT_THÚC,
-          NGÀY_HT_THỰC_TẾ: updatedTask.NGÀY_HT_THỰC_TẾ,
-          TIẾN_ĐỘ_THỰC_TẾ: updatedTask.TIẾN_ĐỘ_THỰC_TẾ,
-          TRỌNG_SỐ: updatedTask.TRỌNG_SỐ || initialGroups.find(g => g.id === groupId)?.weight
-        };
-        const response = await api.updateConstruction(payload);
-        if (response && response.data) {
-          setGroups(mergeConstructionData(response.data));
-        }
+        })));
+        setRawData(response.data);
       }
+      setSyncStatus('success');
     } catch (error) {
-      console.error("Update construction error:", error);
+      console.error('Update construction error:', error);
+      setSyncStatus('error');
     } finally {
-      setIsUpdating(false); setSyncStatus("success"); setTimeout(() => setSyncStatus(null), 3000);
+      saveInFlightRef.current = false;
+      setIsUpdating(false);
+      setTimeout(() => setSyncStatus(null), 3000);
     }
   };
 
@@ -306,27 +369,38 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                           transition={{ duration: 0.2 }}
                         >
                           <div className="overflow-x-auto">
-                            <table className="w-full text-left text-xs min-w-[800px]">
+                            <table className="w-full table-fixed text-left text-xs">
+                              <colgroup>
+                                <col className="w-[4%]" />
+                                <col className="w-[34%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[30%]" />
+                              </colgroup>
                               <thead>
                                 <tr className="bg-[var(--bg-main)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                                  <th className="p-3 w-16">{t('table.taskCode')}</th>
-                                  <th className="p-3">{t('table.taskItem')}</th>
-                                  <th className="p-3 w-28">{t('table.startDate')}</th>
-                                  <th className="p-3 w-28">{t('table.endDate')}</th>
-                                  <th className="p-3 w-28">{t('table.actualEnd')}</th>
-                                  <th className="p-3 w-48 text-right pr-6">{t('table.actualProgress')}</th>
+                                  <th className="p-2 md:p-3">{t('table.taskCode')}</th>
+                                  <th className="p-2 md:p-3">{t('table.taskItem')}</th>
+                                  <th className="px-1.5 py-2 md:px-2 md:py-3 text-[10px] leading-tight">{t('table.startDate')}</th>
+                                  <th className="px-1.5 py-2 md:px-2 md:py-3 text-[10px] leading-tight">{t('table.endDate')}</th>
+                                  <th className="px-1.5 py-2 md:px-2 md:py-3 text-[10px] leading-tight">{t('table.actualEnd')}</th>
+                                  <th className="p-2 md:p-3 text-right pr-2 md:pr-4">{t('table.actualProgress')}</th>
+                                  <th className="p-2 md:p-3">{t('table.notes')}</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-[var(--border-main)]">
                                 {group.tasks.map(task => (
                                   <tr key={task.id} className="hover:bg-[#141c2f]/40 transition-colors">
                                     <td className="p-3 font-semibold text-[var(--text-muted)]">{task.code}</td>
-                                    <td className="p-3 font-semibold text-slate-200">{ts(task.item)}</td>
-                                    <td className="p-3">
+                                    <td className="p-3 font-semibold text-slate-200 align-top">{ts(task.item)}</td>
+                                    <td className="px-1.5 py-2 md:px-2 md:py-3 align-middle whitespace-nowrap w-0">
                                       <DateInputDMY
-                                        className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
+                                        displayMode="dm"
+                                        className={`bg-transparent font-semibold tabular-nums focus:outline-none border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_BẮT_ĐẦU || ''}
-                                        placeholder="dd/mm/yyyy"
+                                        placeholder={canEdit ? 'dd/mm' : ''}
                                         disabled={!canEdit || isUpdating}
                                         onChange={(val) => {
                                           setGroups(prev => prev.map(g => g.id === group.id ? {
@@ -336,11 +410,12 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                         onBlur={(_e, val) => handleUpdate(group.id, task.id, 'NGÀY_BẮT_ĐẦU', val)}
                                       />
                                     </td>
-                                    <td className="p-3">
+                                    <td className="px-1.5 py-2 md:px-2 md:py-3 align-middle whitespace-nowrap w-0">
                                       <DateInputDMY
-                                        className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
+                                        displayMode="dm"
+                                        className={`bg-transparent font-semibold tabular-nums focus:outline-none border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_KẾT_THÚC || ''}
-                                        placeholder="dd/mm/yyyy"
+                                        placeholder={canEdit ? 'dd/mm' : ''}
                                         disabled={!canEdit || isUpdating}
                                         onChange={(val) => {
                                           setGroups(prev => prev.map(g => g.id === group.id ? {
@@ -350,11 +425,12 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                         onBlur={(_e, val) => handleUpdate(group.id, task.id, 'NGÀY_KẾT_THÚC', val)}
                                       />
                                     </td>
-                                    <td className="p-3">
+                                    <td className="px-1.5 py-2 md:px-2 md:py-3 align-middle whitespace-nowrap w-0">
                                       <DateInputDMY
-                                        className={`bg-transparent font-semibold focus:outline-none w-full border-b border-transparent focus:border-[#5252ff] ${task.NGÀY_HT_THỰC_TẾ && task.NGÀY_HT_THỰC_TẾ !== '-' ? 'text-emerald-400' : 'text-slate-400'} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
+                                        displayMode="dm"
+                                        className={`bg-transparent font-semibold tabular-nums focus:outline-none border-b border-transparent focus:border-[#5252ff] ${task.NGÀY_HT_THỰC_TẾ && task.NGÀY_HT_THỰC_TẾ !== '-' ? 'text-emerald-400' : 'text-slate-400'} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_HT_THỰC_TẾ || ''}
-                                        placeholder="dd/mm/yyyy"
+                                        placeholder={canEdit ? 'dd/mm' : ''}
                                         disabled={!canEdit || isUpdating}
                                         onChange={(val) => {
                                           setGroups(prev => prev.map(g => g.id === group.id ? {
@@ -364,27 +440,28 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                         onBlur={(_e, val) => handleUpdate(group.id, task.id, 'NGÀY_HT_THỰC_TẾ', val)}
                                       />
                                     </td>
-                                    <td className="p-3 text-right pr-6">
-                                      <div className="flex items-center justify-end gap-3">
-                                        <input
-                                          type="text"
-                                          disabled={!canEdit || isUpdating}
-                                          className={`bg-transparent font-bold focus:outline-none w-12 text-right border-b border-transparent focus:border-[#5252ff] ${task.TIẾN_ĐỘ_THỰC_TẾ === 100 ? 'text-emerald-400' : 'text-slate-300'} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
-                                          value={task.TIẾN_ĐỘ_THỰC_TẾ !== undefined ? `${task.TIẾN_ĐỘ_THỰC_TẾ}%` : '0%'}
-                                          onChange={(e) => {
-                                            const rawVal = e.target.value.replace('%', '');
-                                            const numVal = isNaN(Number(rawVal)) ? 0 : Number(rawVal);
-                                            setGroups(prev => prev.map(g => g.id === group.id ? {
-                                              ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, TIẾN_ĐỘ_THỰC_TẾ: numVal } : t)
-                                            } : g));
-                                          }}
-                                          onBlur={(e) => {
-                                            const rawVal = e.target.value.replace('%', '');
-                                            const numVal = isNaN(Number(rawVal)) ? 0 : Number(rawVal);
-                                            handleUpdate(group.id, task.id, 'TIẾN_ĐỘ_THỰC_TẾ', numVal);
-                                          }}
-                                        />
+                                    <td className="p-3 text-right pr-4 align-top">
+                                      <div className="flex items-center justify-end" title="Cập nhật qua Nhật ký hiện trường">
+                                        <span
+                                          className={`font-bold tabular-nums ${task.TIẾN_ĐỘ_THỰC_TẾ === 100 ? 'text-emerald-400' : 'text-slate-300'}`}
+                                        >
+                                          {formatModuleProgress(task.TIẾN_ĐỘ_THỰC_TẾ)}
+                                        </span>
                                       </div>
+                                    </td>
+                                    <td className="p-3 align-top">
+                                      <ModuleNotesCell
+                                        value={task.GHI_CHÚ || ''}
+                                        canEdit={canEdit && !isUpdating}
+                                        readDisplay={task.GHI_CHÚ ? ts(task.GHI_CHÚ) : ''}
+                                        onChange={(e) => {
+                                          const v = e.target.value;
+                                          setGroups(prev => prev.map(g => g.id === group.id ? {
+                                            ...g, tasks: g.tasks.map(t => t.id === task.id ? { ...t, GHI_CHÚ: v } : t)
+                                          } : g));
+                                        }}
+                                        onBlur={(e) => handleUpdate(group.id, task.id, 'GHI_CHÚ', e.target.value)}
+                                      />
                                     </td>
                                   </tr>
                                 ))}

@@ -6,6 +6,13 @@ import { normalizeToDMY, parseFlexibleDate, formatDateDMY } from '../../../utils
 import { useProjectCanEdit } from '../../../context/ProjectEditContext';
 import { useI18n } from '../../../context/I18nContext';
 
+const cellClass =
+  'flex flex-col items-center justify-center gap-0.5 h-10 py-1 px-2 border-r border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors text-center';
+const labelClass =
+  'text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider leading-none text-center whitespace-nowrap';
+const valueClass =
+  'text-[11px] font-semibold tabular-nums leading-none min-h-[14px] w-full flex items-center justify-center overflow-visible';
+
 export default function ModuleDateHeader({ projectId, moduleKey, syncStatus, initialData }) {
   const canEdit = useProjectCanEdit();
   const { t } = useI18n();
@@ -55,9 +62,9 @@ export default function ModuleDateHeader({ projectId, moduleKey, syncStatus, ini
   };
 
   const calculateEndDate = (start, days) => {
-    if (!start || !days) return '-';
+    if (!start || !days) return '';
     const d = parseFlexibleDate(start);
-    if (!d || Number.isNaN(d.getTime())) return '-';
+    if (!d || Number.isNaN(d.getTime())) return '';
     d.setDate(d.getDate() + parseInt(days, 10));
     return formatDateDMY(d);
   };
@@ -82,62 +89,73 @@ export default function ModuleDateHeader({ projectId, moduleKey, syncStatus, ini
       setLocalSyncStatus('success');
     } catch (e) {
       setLocalSyncStatus('error');
+    } finally {
+      setTimeout(() => setLocalSyncStatus(null), 3000);
     }
-    setTimeout(() => setLocalSyncStatus(null), 3000);
   };
 
+  const endDate = calculateEndDate(dateInfo.start, dateInfo.days);
+
   return (
-    <div className="hidden lg:flex items-center shrink-0 bg-[var(--bg-main)]/60 border border-[var(--border-main)] rounded-md overflow-hidden shadow-sm" onClick={e => e.stopPropagation()}>
-      <div className="flex items-center shrink-0 px-3 py-1.5 border-r border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors group">
-        <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-2 shrink-0">{t('moduleDate.start')}</span>
-        <DateInputDMY
-          value={dateInfo.start}
-          onChange={(val) => updateDateInfo('start', val)}
-          onBlur={handleBlur}
-          disabled={!canEdit}
-          showCalendar={canEdit}
-          calendarTitle={t('moduleDate.pickDate')}
-          className={`bg-transparent text-[11px] font-semibold tabular-nums whitespace-nowrap text-[var(--text-main)] focus:outline-none min-w-[5.75rem] w-[5.75rem] box-border ${canEdit ? 'cursor-text' : 'cursor-default opacity-70'}`}
-        />
+    <div
+      className="hidden lg:flex items-center self-center shrink-0 bg-[var(--bg-main)]/60 border border-[var(--border-main)] rounded-lg shadow-sm overflow-hidden"
+      onClick={e => e.stopPropagation()}
+    >
+      <div className={`${cellClass} w-[7rem] min-w-[7rem] shrink-0 rounded-l-lg`}>
+        <span className={labelClass}>{t('moduleDate.start')}</span>
+        <div className={valueClass}>
+          <DateInputDMY
+            value={dateInfo.start}
+            onChange={(val) => updateDateInfo('start', val)}
+            onBlur={handleBlur}
+            disabled={!canEdit}
+            showCalendar={canEdit}
+            compact
+            calendarTitle={t('moduleDate.pickDate')}
+            className={`bg-transparent whitespace-nowrap text-center text-[var(--text-main)] focus:outline-none w-[4.65rem] flex-none p-0 m-0 border-0 h-[14px] leading-none ${canEdit ? 'cursor-text' : 'cursor-default opacity-70'}`}
+          />
+        </div>
       </div>
-      
-      <div className="flex items-center shrink-0 px-3 py-1.5 border-r border-[var(--border-main)] bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors group">
-        <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-2 shrink-0">{t('moduleDate.days')}</span>
-        <input 
-          type="number" 
+
+      <div className={`${cellClass} w-11 min-w-[2.75rem] shrink-0`}>
+        <span className={labelClass}>{t('moduleDate.days')}</span>
+        <input
+          type="number"
           min="0"
-          value={dateInfo.days} 
+          value={dateInfo.days}
           onChange={e => updateDateInfo('days', e.target.value)}
           onBlur={handleBlur}
           disabled={!canEdit}
-          className={`bg-transparent text-[11px] font-semibold tabular-nums text-[#5252ff] focus:outline-none min-w-[2.25rem] w-10 text-center placeholder-[var(--text-muted)] box-border ${!canEdit ? 'opacity-70 cursor-default' : ''}`}
+          className={`${valueClass} input-no-spin bg-transparent text-[#5252ff] focus:outline-none w-full placeholder-[var(--text-muted)] p-0 border-0 ${!canEdit ? 'opacity-70 cursor-default' : ''}`}
           placeholder="-"
         />
       </div>
-      
-      <div className="flex items-center shrink-0 px-3 py-1.5 bg-[var(--bg-panel)]">
-        <span className="text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mr-2 shrink-0">{t('moduleDate.end')}</span>
-        <span className="inline-flex items-center justify-center min-w-[5.75rem] px-2 box-border text-[11px] font-bold tabular-nums whitespace-nowrap text-[#059669] bg-[#10b981]/10 rounded border border-[#10b981]/30 py-0.5">
-          {calculateEndDate(dateInfo.start, dateInfo.days)}
+
+      <div className={`${cellClass} border-r-0 w-[7rem] min-w-[7rem] shrink-0 ${!(syncStatus || localSyncStatus) ? 'rounded-r-lg' : ''}`}>
+        <span className={labelClass}>{t('moduleDate.end')}</span>
+        <span className={`${valueClass} font-bold text-[#059669]`}>
+          <span className="inline-flex items-center justify-center px-1 py-0.5 rounded-md border border-[#10b981]/30 bg-[#10b981]/10 whitespace-nowrap tabular-nums">
+            {endDate || '\u00A0'}
+          </span>
         </span>
       </div>
-      
+
       {(syncStatus || localSyncStatus) && (
         <>
-          <div className="w-[1px] h-4 bg-[var(--border-main)]"></div>
-          <div className="flex items-center">
+          <div className="w-[1px] h-6 bg-[var(--border-main)] self-center" />
+          <div className="flex items-center h-10 px-2 rounded-r-lg bg-[var(--bg-panel)]">
             {(syncStatus === 'saving' || localSyncStatus === 'saving') && (
-              <span className="flex items-center gap-1.5 text-[10px] text-blue-400">
+              <span className="flex items-center gap-1.5 text-[10px] text-blue-400 leading-none">
                 <Loader2 className="w-3 h-3 animate-spin" /> {t('moduleDate.saving')}
               </span>
             )}
             {(syncStatus === 'success' || localSyncStatus === 'success') && (
-              <span className="flex items-center gap-1.5 text-[10px] text-[#10b981]">
+              <span className="flex items-center gap-1.5 text-[10px] text-[#10b981] leading-none">
                 <CheckCircle2 className="w-3 h-3" /> {t('moduleDate.saved')}
               </span>
             )}
             {(syncStatus === 'error' || localSyncStatus === 'error') && (
-              <span className="flex items-center gap-1.5 text-[10px] text-rose-400">
+              <span className="flex items-center gap-1.5 text-[10px] text-rose-400 leading-none">
                 <CloudFog className="w-3 h-3" /> {t('moduleDate.saveError')}
               </span>
             )}
