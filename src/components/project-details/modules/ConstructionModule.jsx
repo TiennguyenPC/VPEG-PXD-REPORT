@@ -341,18 +341,18 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                   <div key={group.id} className="border border-[var(--border-main)] rounded-lg overflow-hidden bg-[var(--bg-panel)]">
                     <button
                       onClick={() => toggleGroup(group.id)}
-                      className="w-full flex items-center justify-between p-3 bg-[var(--bg-hover)] hover:bg-[#141c2f] transition-colors border-b border-[var(--border-main)]"
+                      className="w-full flex flex-col gap-2.5 md:flex-row md:items-center md:justify-between p-3 bg-[var(--bg-hover)] hover:bg-[#141c2f] transition-colors border-b border-[var(--border-main)]"
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs font-bold text-white tracking-wider">{ts(group.name)}</span>
-                        <span className="text-[10px] font-bold text-[var(--text-muted)] bg-[var(--bg-main)] px-2 py-0.5 rounded border border-[var(--border-main)]">
+                      <div className="flex items-start gap-2 min-w-0 flex-wrap">
+                        <span className="text-xs font-bold text-white tracking-wider leading-snug">{ts(group.name)}</span>
+                        <span className="text-[10px] font-bold text-[var(--text-muted)] bg-[var(--bg-main)] px-2 py-0.5 rounded border border-[var(--border-main)] shrink-0">
                           {tf('modules.weight', { n: group.weight })}
                         </span>
                       </div>
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-[#3b82f6]">{Math.round(groupProg)}%</span>
-                          <div className="w-24 h-1.5 bg-[var(--bg-main)] rounded-full overflow-hidden border border-[var(--border-main)]">
+                      <div className="flex items-center justify-between md:justify-end gap-4 shrink-0">
+                        <div className="flex items-center gap-2 flex-1 md:flex-none min-w-0">
+                          <span className="text-xs font-bold text-[#3b82f6] shrink-0">{Math.round(groupProg)}%</span>
+                          <div className="flex-1 md:w-24 h-1.5 bg-[var(--bg-main)] rounded-full overflow-hidden border border-[var(--border-main)]">
                             <div className="h-full bg-[#3b82f6] rounded-full" style={{ width: `${groupProg}%` }}></div>
                           </div>
                         </div>
@@ -368,17 +368,8 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.2 }}
                         >
-                          <div className="overflow-x-auto">
-                            <table className="w-full table-fixed text-left text-xs">
-                              <colgroup>
-                                <col className="w-[4%]" />
-                                <col className="w-[34%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[8%]" />
-                                <col className="w-[30%]" />
-                              </colgroup>
+                          <div className="overflow-x-auto custom-scrollbar touch-pan-x">
+                            <table className="w-full text-left text-xs min-w-[950px]">
                               <thead>
                                 <tr className="bg-[var(--bg-main)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
                                   <th className="p-2 md:p-3">{t('table.taskCode')}</th>

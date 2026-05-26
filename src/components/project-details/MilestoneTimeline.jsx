@@ -248,19 +248,21 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
   const codNode = milestones.find(m => m.title === 'COD');
   
   return (
-    <div className="glass-panel p-6 rounded-xl shadow-lg border border-[var(--border-main)] print:break-inside-avoid overflow-hidden">
-      <div className="flex justify-between items-center mb-8">
+    <div className="glass-panel p-4 md:p-6 rounded-xl shadow-lg border border-[var(--border-main)] print:break-inside-avoid overflow-visible">
+      <div className="flex flex-col gap-4 md:flex-row md:justify-between md:items-center mb-6 md:mb-8">
         <h3 className="text-sm font-bold text-[var(--text-strong)] uppercase tracking-wider flex items-center gap-2">
           {t('milestoneUi.title')}
           {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-[var(--text-muted)]" />}
         </h3>
-        <div className="flex gap-4 text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider items-center flex-wrap justify-end">
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></div> {t('milestoneUi.completed')}</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]"></div> {t('milestoneUi.inProgress')}</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#64748b]"></div> {t('milestoneUi.notStarted')}</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div> {t('milestoneUi.delay')}</div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end text-[10px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">
+          <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#10b981]"></div> {t('milestoneUi.completed')}</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#3b82f6]"></div> {t('milestoneUi.inProgress')}</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#64748b]"></div> {t('milestoneUi.notStarted')}</div>
+            <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full bg-[#ef4444]"></div> {t('milestoneUi.delay')}</div>
+          </div>
 
-          <div className="ml-2 px-4 py-2 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg text-right shadow-sm min-w-[120px]">
+          <div className="px-4 py-2 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-lg text-right shadow-sm min-w-[120px] shrink-0 self-start sm:self-auto">
             <p className="text-[10px] text-[var(--text-muted)]">{t('milestoneUi.expectedCod')}</p>
             <p className="text-sm font-bold text-[#7c3aed] tracking-wider">{codNode?.date || '-'}</p>
           </div>
@@ -276,10 +278,10 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
         />
       )}
 
-      <div className="relative pt-12 pb-16 overflow-x-auto custom-scrollbar">
-        <div className="min-w-[900px] relative px-10">
+      <div className="relative pt-12 pb-8 md:pb-16 -mx-1 px-1 overflow-x-auto overflow-y-visible custom-scrollbar touch-pan-x">
+        <div className="min-w-[1120px] md:min-w-[900px] relative px-6 md:px-10">
           
-          <div className="absolute top-[20px] left-10 right-10 h-0.5 bg-[var(--border-main)] z-[1] pointer-events-none">
+          <div className="absolute top-[20px] left-6 right-6 md:left-10 md:right-10 h-0.5 bg-[var(--border-main)] z-[1] pointer-events-none">
             <motion.div 
               initial={{ width: 0 }}
               animate={{ width: percentWidth }}
@@ -303,7 +305,7 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
             )}
           </div>
 
-          <div className="flex justify-between relative z-20">
+          <div className="flex justify-between gap-2 relative z-20">
             {visualMilestones.map((ms, index) => {
               let Icon = Circle;
               let colorClass = "text-[#64748b] bg-[var(--bg-panel)] border-[var(--border-main)]";
@@ -333,14 +335,14 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
               }
 
               return (
-                <div key={ms.id} className="flex flex-col items-center relative z-30 w-24">
+                <div key={ms.id} className="flex flex-col items-center relative z-30 min-w-[7.25rem] w-[7.25rem] md:min-w-[6rem] md:w-24 shrink-0 px-0.5">
                   
                   {/* Floating Delay Badge */}
                   {ms.status === 'delay' && ms.delayDays > 0 && (
                     <motion.div 
                       initial={{ y: 10, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
-                      className="absolute -top-10 bg-[#ef4444] text-white text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap shadow-lg z-20"
+                      className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[#ef4444] text-white text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap shadow-lg z-20"
                     >
                       {tf('milestoneUi.daysLate', { n: ms.delayDays })}
                       <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-l-[4px] border-r-[4px] border-t-[4px] border-transparent border-t-[#ef4444]"></div>
@@ -351,7 +353,7 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
                     transition={{ delay: index * 0.1, type: "spring" }}
-                    className={`w-10 h-10 rounded-full flex items-center justify-center relative z-30 mb-4 ${colorClass} ${lineClasses}`}
+                    className={`w-10 h-10 rounded-full flex items-center justify-center relative z-30 shrink-0 ${colorClass} ${lineClasses}`}
                   >
                     <Icon className="w-5 h-5" />
                     {ms.status === 'in-progress' && (
@@ -362,11 +364,11 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
                     )}
                   </motion.div>
                   
-                  <div className="text-center absolute top-14 w-full">
-                    <p className={`text-[10px] font-bold tracking-wider uppercase mb-1 ${titleColor}`}>
+                  <div className="text-center w-full mt-3">
+                    <p className={`text-[10px] font-bold tracking-wide uppercase mb-1 leading-snug break-words ${titleColor}`}>
                       {displayMilestoneTitle(ms.title, t, ts)}
                     </p>
-                    <p className={`text-xs font-semibold ${dateColor}`}>
+                    <p className={`text-[11px] font-semibold tabular-nums ${dateColor}`}>
                       {ms.date}
                     </p>
                     <div className="mt-2 flex justify-center">
