@@ -67,12 +67,22 @@ export const APP_USAGE_GUIDE = `
 
 ### Các khối nội dung (từ trên xuống)
 1. **KPI Overview**: COD, kickoff, delay, trạng thái.
-2. **Milestone Timeline**: Cột mốc dự án — số ngày **âm** = **trễ** (vd: -3 ngày = trễ 3 ngày), không phải lỗi nhập.
+2. **Milestone Timeline** (tab Milestone — TRỤC MILESTONE KIỂM SOÁT TIẾN ĐỘ):
+   - **7 mốc:** KICKOFF → PHÁP LÝ (Giấy phép) → THIẾT KẾ → VẬT TƯ → THI CÔNG → COD → BÀN GIAO HỒ SƠ.
+   - Ngày trên mốc = **ngày kết thúc kế hoạch** giai đoạn (trừ KICKOFF). % = tiến độ thực tế từ module tương ứng.
+   - **4 trạng thái màu:** 🟢 Hoàn thành (100% + qua ngày KT) | 🔵 Đang thực hiện (trong khung thời gian, kể cả 100% chưa tới ngày KT) | ⚪ Chưa bắt đầu | 🔴 Delay (qua ngày KT mà % < 100%).
+   - **Ví dụ:** Giấy phép 100% vẫn xanh dương vì chưa qua ngày kết thúc lịch Giấy phép — không phải lỗi.
+   - Vạch **HÔM NAY** (đứt nét xanh) trên trục thời gian Kickoff → COD.
+   - **Theo dõi HĐ · SM+** (phía trên timeline): mốc hợp đồng nội bộ, chỉ nội bộ vũ phong (by Tien Nguyen), không hiện link khách. PM/SM được gán dự án có thể sửa ngày (icon bút chì).
+   - Số ngày **âm** trên milestone cũ = **trễ**, không phải lỗi nhập.
 3. **S-Curve**: Biểu đồ tiến độ kế hoạch vs thực tế theo thời gian.
-4. **Nhật ký hiện trường (Site Log)**:
-   - Tab **Ngày / Tuần / Tháng**: Chuyển chế độ xem và chọn ngày/tuần/tháng.
-   - Nhập nhân lực, thời tiết, sự cố, ghi chú — **tự lưu** sau ~1 giây (Saving... → Saved).
-   - Có thể đính kèm ảnh / công việc chính trong form ngày.
+4. **Nhật ký & Vận hành (Site Log)** — tab Nhật ký:
+   - Chế độ **Ngày / Tuần / Tháng**; chọn ngày bằng mũi tên hoặc lịch.
+   - **Xem:** 4 thẻ KPI (Nhân lực, Thời tiết, Công việc chính, Sự cố), Ghi chú hiện trường, **Tóm tắt ngày** (Tiến độ thực tế, Chênh lệch KH vs TT, Trạng thái ngày), **Công việc ngày mai** (góc phải dưới).
+   - **Sửa nhật ký:** Nút **Sửa nhật ký** → form (Nhân lực/Thời tiết/Sự cố, Tiến độ thi công delta %, Ghi chú, Công việc ngày mai, Risk) → **Lưu ngay** (desktop: trong form; mobile: thanh cuối). **Hủy** để thoát không lưu.
+   - **Công việc ngày mai:** Tự gợi ý từ lịch D+1, thi công ngày mai, carry-over hôm qua. Nút **Xem bảng ↓** bên Giấy phép/Thiết kế… → cuộn xuống + mở accordion module (viền tím 2 giây).
+   - **Ảnh hiện trường:** Tối đa 4 ảnh/ngày — panel riêng dưới Nhật ký.
+   - Chỉ user **được gán dự án** mới sửa; dự án khác chỉ xem.
 5. **Module accordion** (mở từng mục):
    - **Risk** — rủi ro dự án
    - **Permit** — giấy phép (10% trọng số tiến độ)
@@ -118,7 +128,16 @@ export const APP_USAGE_GUIDE = `
 - **Giao diện**: Sáng / Tối / Hệ thống (mobile cũng có icon góc phải trên).
 - **Đăng xuất**: Nút đỏ cuối trang Tài khoản (hoặc sidebar desktop).
 
-## 7. PXD — quy ước nội bộ VPEG
+## 6b. Phân quyền PM/SM (quan trọng)
+- PM/SM **toàn quyền** trên dự án được Admin **gán**: sửa module, nhật ký, vướng mắc, Theo dõi HĐ SM+, tạo/sửa/xóa task dự án đó.
+- Dự án **không được gán** → **chỉ xem** (read-only), không nút Sửa nhật ký, không lưu module.
+- Thêm dự án: mọi user đăng nhập. Xóa dự án: Admin hoặc người tạo dự án.
+- Quản lý tài khoản / link chia sẻ khách: chỉ Admin chủ định.
+
+## 6c. Hướng dẫn đầy đủ trên web
+- Tài liệu training A–Z: https://vpeg-pxd-dashboard.vercel.app/huong-dan (mục lục 16 phần, milestone, site log chi tiết).
+
+## 7. PXD — quy ước nội bộ VPEG (vũ phong by Tien Nguyen)
 - Dự án rooftop C&I: OSAKA, VAL, v.v. — công suất kWp trên KPI tổng.
 - Module tiến độ: Permit 10%, Design 15%, Procurement 25%, Construction 40%, Handover 10%.
 - 15 hạng mục mua sắm chuẩn (xem Procurement).
@@ -128,7 +147,11 @@ export const APP_USAGE_GUIDE = `
 - "Làm sao thêm dự án?" → /projects → **+ Thêm dự án**.
 - "Làm sao thêm việc?" → /tasks → **+ Thêm tác vụ**.
 - "Xem tiến độ một dự án?" → Click dự án → S-Curve + Milestone + module.
-- "Ghi nhật ký site?" → Chi tiết dự án → Site Log → tab Ngày.
+- "Ghi nhật ký site?" → Chi tiết dự án → tab Nhật ký → **Sửa nhật ký** → nhập → **Lưu ngay**.
+- "Công việc ngày mai / Xem bảng?" → Góc phải dưới nhật ký ngày; bấm **Xem bảng ↓** để cuộn tới module Giấy phép/Thiết kế…
+- "Milestone 100% mà vẫn xanh dương?" → Đang trong khung thời gian, chưa qua ngày kết thúc kế hoạch module.
+- "PM/SM quyền gì?" → Toàn quyền dự án được gán; dự án khác chỉ xem.
+- "Hướng dẫn đầy đủ?" → https://vpeg-pxd-dashboard.vercel.app/huong-dan
 - "Xuất báo cáo?" → Chi tiết dự án → Export (in PDF) hoặc Danh sách dự án → Xuất Excel.
 - "Đăng xuất?" → Tài khoản → Đăng xuất (mobile) hoặc sidebar desktop.
 - "Đổi giao diện sáng tối?" → Icon mặt trời/trăng góc phải trên (mobile) hoặc sidebar.
@@ -1019,7 +1042,19 @@ export function getOfflineAppHint(userMessage) {
     return 'Mở chi tiết dự án (click dòng trong bảng Dự án) → cuộn xuống khối S-Curve.';
   }
   if (/nhật ký|site log|hiện trường/.test(q)) {
-    return 'Trong chi tiết dự án → Nhật ký hiện trường → chọn tab Ngày/Tuần/Tháng, nhập và đợi Saved.';
+    return 'Chi tiết dự án → tab Nhật ký → **Sửa nhật ký** → nhập nhân lực/tiến độ thi công/ghi chú → **Lưu ngay** (mobile: thanh cuối). Công việc ngày mai: góc phải dưới; **Xem bảng ↓** cuộn tới module.';
+  }
+  if (/xem bảng|ngày mai|cong viec ngay mai/.test(q)) {
+    return 'Trong Nhật ký ngày → khối **Công việc ngày mai** (góc phải). Bấm **Xem bảng ↓** cạnh Giấy phép/Thiết kế… để cuộn xuống bảng module tương ứng.';
+  }
+  if (/milestone|mốc|theo dõi hđ|sm\+/.test(q)) {
+    return 'Tab Milestone → 7 mốc (Kickoff→COD). 4 màu: xanh lá=HT, xanh dương=đang làm (kể cả 100% chưa tới ngày KT), xám=chưa, đỏ=delay. **Theo dõi HĐ SM+** = mốc hợp đồng nội bộ (chỉ nội bộ).';
+  }
+  if (/pm\/sm|phân quyền|quyền|toàn quyền/.test(q)) {
+    return 'PM/SM **toàn quyền** dự án được Admin gán (module, nhật ký, task…). Dự án không gán → **chỉ xem**. Liên hệ Admin nếu thiếu quyền sửa.';
+  }
+  if (/huong dan|hướng dẫn|hdvh|tài liệu|doc/.test(q)) {
+    return 'Hướng dẫn A–Z trên web: https://vpeg-pxd-dashboard.vercel.app/huong-dan';
   }
   if (/xuất|export|excel|in /.test(q)) {
     return 'Excel: trang Dự án → Xuất Excel. In/PDF: chi tiết dự án → Export.';

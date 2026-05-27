@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hướng dẫn sử dụng — Dashboard VPEG-PXD</title>
-  <meta name="description" content="Hướng dẫn sử dụng Dashboard VPEG-PXD từ A–Z — Vu Phong Energy Group" />
+  <meta name="description" content="Hướng dẫn sử dụng Dashboard VPEG-PXD từ A–Z — vũ phong (by Tien Nguyen)" />
   <style>
     :root {
       --purple: #5252ff;
@@ -242,12 +242,12 @@
     <main class="content">
       <h1>Hướng dẫn sử dụng Dashboard VPEG-PXD</h1>
 <blockquote>
-<p><strong>Phiên bản tài liệu:</strong> 1.1<br><strong>Đối tượng:</strong> PM, SM, GS, SA, TK, P.SC — vận hành hàng ngày<br><strong>Mục đích:</strong> Training từ A–Z — đọc xong có thể tự thao tác trên hệ thống<br><strong>Đọc trên web:</strong> <a href="https://vpeg-pxd-dashboard.vercel.app/huong-dan">https://vpeg-pxd-dashboard.vercel.app/huong-dan</a></p>
+<p><strong>Phiên bản tài liệu:</strong> 1.2<br><strong>Đối tượng:</strong> PM, SM, GS, SA, TK, P.SC — vận hành hàng ngày<br><strong>Mục đích:</strong> Training từ A–Z — đọc xong có thể tự thao tác trên hệ thống<br><strong>Đọc trên web:</strong> <a href="https://vpeg-pxd-dashboard.vercel.app/huong-dan">https://vpeg-pxd-dashboard.vercel.app/huong-dan</a></p>
 </blockquote>
 <hr>
 <h2 id="1-giới-thiệu">1. Giới thiệu</h2>
 <h3 id="11-phần-mềm-là-gì">1.1. Phần mềm là gì?</h3>
-<p><strong>Dashboard VPEG-PXD</strong> là nền tảng quản lý dự án điện mặt trời EPC của <strong>Vu Phong Energy Group</strong>. Phần mềm giúp:</p>
+<p><strong>Dashboard VPEG-PXD</strong> là nền tảng quản lý dự án điện mặt trời EPC của <strong>vũ phong (by Tien Nguyen)</strong>. Phần mềm giúp:</p>
 <ul>
 <li>Theo dõi <strong>toàn bộ danh mục dự án</strong> (công suất, tiến độ, COD, rủi ro, vướng mắc).</li>
 <li>Quản lý <strong>công việc (task)</strong> theo dự án hoặc văn phòng.</li>
@@ -271,8 +271,8 @@
 <td><code>https://vpeg-pxd-dashboard.vercel.app</code></td>
 </tr>
 <tr>
-<td>Local (dev)</td>
-<td><code>http://localhost:5173</code> (khi chạy <code>npm run dev</code>)</td>
+<td>Hướng dẫn sử dụng</td>
+<td><code>https://vpeg-pxd-dashboard.vercel.app/huong-dan</code></td>
 </tr>
 </tbody></table></div>
 <hr>
@@ -423,54 +423,77 @@
 </tr>
 </tbody></table></div>
 <h3 id="42-ma-trận-quyền-chính">4.2. Ma trận quyền chính</h3>
+<p><strong>Nguyên tắc vàng:</strong> PM/SM <strong>toàn quyền</strong> trên dự án được Admin <strong>gán</strong> cho mình. Dự án <strong>không</strong> thuộc phạm vi quản lý → <strong>chỉ xem</strong>, không sửa module / nhật ký / vướng mắc.</p>
 <div class="table-wrap"><table>
 <thead>
 <tr>
 <th>Hành động</th>
 <th>Admin</th>
-<th>PM/SM (dự án được gán)</th>
+<th>PM/SM — dự án được gán</th>
+<th>PM/SM — dự án khác</th>
 <th>Nhân viên khác</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>Xem tất cả dự án</td>
+<td>Xem danh sách &amp; chi tiết dự án</td>
 <td>✅</td>
-<td>✅ (xem)</td>
-<td>✅ (xem)</td>
+<td>✅</td>
+<td>✅ <strong>chỉ xem</strong></td>
+<td>✅ <strong>chỉ xem</strong></td>
 </tr>
 <tr>
-<td>Sửa dữ liệu dự án (module, nhật ký…)</td>
+<td>Sửa module, nhật ký, risk, ảnh site</td>
 <td>✅</td>
-<td>✅</td>
-<td>❌ (chỉ xem)</td>
+<td>✅ <strong>toàn quyền</strong></td>
+<td>❌ chỉ xem</td>
+<td>❌ chỉ xem</td>
 </tr>
 <tr>
-<td>Thêm / xóa dự án</td>
+<td>Sửa <strong>Vướng mắc</strong> trên bảng dự án</td>
+<td>✅</td>
 <td>✅</td>
 <td>❌</td>
 <td>❌</td>
 </tr>
 <tr>
-<td>Sửa &quot;Vướng mắc&quot; trên bảng dự án</td>
+<td><strong>Theo dõi HĐ SM+</strong> (milestone hợp đồng)</td>
 <td>✅</td>
-<td>✅ (dự án được gán)</td>
+<td>✅ xem &amp; sửa</td>
 <td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Thêm dự án mới</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+<td>✅</td>
+</tr>
+<tr>
+<td>Xóa dự án</td>
+<td>✅</td>
+<td>✅ <em>(dự án mình tạo)</em></td>
+<td>❌</td>
+<td>❌ <em>(chỉ dự án mình tạo)</em></td>
 </tr>
 <tr>
 <td>Tạo task mới</td>
 <td>✅</td>
 <td>✅</td>
+<td>✅ <em>(task văn phòng / dự án được gán)</em></td>
 <td>❌</td>
 </tr>
 <tr>
 <td>Sửa / xóa task</td>
 <td>✅</td>
+<td>✅ <strong>toàn quyền</strong> task thuộc dự án được gán</td>
 <td>Chỉ task mình được giao (<code>NHÂN_SỰ</code>)</td>
 <td>Chỉ task mình được giao</td>
 </tr>
 <tr>
-<td>Quản lý tài khoản</td>
+<td>Quản lý tài khoản hệ thống</td>
 <td>✅</td>
+<td>❌</td>
 <td>❌</td>
 <td>❌</td>
 </tr>
@@ -479,11 +502,27 @@
 <td>Chỉ admin chủ định</td>
 <td>❌</td>
 <td>❌</td>
+<td>❌</td>
 </tr>
 </tbody></table></div>
 <blockquote>
-<p><strong>Quy tắc quan trọng:</strong> Muốn sửa dữ liệu dự án, tài khoản phải được <strong>gán dự án</strong> đó (trong Cài đặt → Tài khoản). PM/SM thường được gán dự án mình phụ trách.</p>
+<p><strong>Quy tắc quan trọng:</strong> Muốn <strong>sửa</strong> dữ liệu dự án, tài khoản phải được <strong>gán dự án</strong> đó. PM/SM được gán dự án A → toàn quyền dự án A; mở dự án B (không gán) → chỉ đọc, không có nút Sửa nhật ký / không lưu module.</p>
 </blockquote>
+<h4 id="421-pmsm-toàn-quyền-cụ-thể-được-làm-gì">4.2.1. PM/SM toàn quyền — cụ thể được làm gì?</h4>
+<p>Trên <strong>dự án được gán</strong>, PM/SM có thể:</p>
+<ul>
+<li>Cập nhật <strong>6 module EPC</strong> (Risk, Giấy phép, Thiết kế, Mua sắm, Thi công, Bàn giao).</li>
+<li>Ghi <strong>Nhật ký &amp; Vận hành</strong> (ngày/tuần), upload <strong>ảnh hiện trường</strong>.</li>
+<li>Sửa <strong>Vướng mắc</strong> trực tiếp trên bảng danh sách dự án (double-click).</li>
+<li>Nhập / xem <strong>Theo dõi HĐ SM+</strong> trên timeline milestone.</li>
+<li><strong>Tạo, sửa, xóa task</strong> thuộc dự án đó (không bị giới hạn như nhân viên thường).</li>
+</ul>
+<h4 id="422-dự-án-không-quản-lý-chỉ-view">4.2.2. Dự án không quản lý — chỉ view</h4>
+<ul>
+<li>Xem KPI, Milestone, S-Curve, module, nhật ký — <strong>read-only</strong>.</li>
+<li>Không thấy <strong>Sửa nhật ký</strong>, không lưu được module.</li>
+<li>Vẫn có thể <strong>xem task</strong>; chỉ sửa task nếu mình là <code>NHÂN_SỰ</code> được giao.</li>
+</ul>
 <hr>
 <h2 id="5-trang-tổng-quan">5. Trang Tổng quan</h2>
 <p><strong>Đường dẫn:</strong> <code>/</code> — menu <strong>TỔNG QUAN</strong></p>
@@ -759,7 +798,7 @@
 <li><strong>Mục đích:</strong> Theo dõi <strong>mốc hợp đồng nội bộ</strong> (SM/PM) — song song với milestone kỹ thuật.</li>
 <li><strong>Chấm xanh nhỏ</strong> bên cạnh = đã có ít nhất một ngày hợp đồng được nhập.</li>
 <li>Mở ra xem <strong>sơ đồ luồng hợp đồng</strong> (flow) với các deadline tính tự động từ ngày đã nhập + lịch module.</li>
-<li><strong>Không hiện</strong> trên link chia sẻ khách — chỉ nội bộ Vu Phong.</li>
+<li><strong>Không hiện</strong> trên link chia sẻ khách — chỉ nội bộ vũ phong.</li>
 <li>PM/SM được gán dự án có thể cập nhật ngày (biểu tượng bút chì → chế độ nhập).</li>
 </ul>
 <blockquote>
@@ -1083,25 +1122,85 @@ KPI tổng dự án + S-Curve
 <p>Nhấn <strong>Tắt link chia sẻ</strong> — link cũ hết hiệu lực ngay.</p>
 <hr>
 <h2 id="11-trợ-lý-ai-ai-pxd">11. Trợ lý AI (AI PXD)</h2>
-<h3 id="111-vị-trí">11.1. Vị trí</h3>
-<p>Nút <strong>bot</strong> góc dưới phải màn hình (mọi trang sau đăng nhập).</p>
-<h3 id="112-ai-có-thể-giúp-gì">11.2. AI có thể giúp gì?</h3>
+<h3 id="111-vị-trí-cách-mở">11.1. Vị trí &amp; cách mở</h3>
 <ul>
-<li>Hướng dẫn thao tác từng màn hình.</li>
-<li>Đọc số liệu dự án / task bạn đang xem.</li>
-<li>Tư vấn kỹ thuật điện mặt trời EPC.</li>
+<li>Nút <strong>bot</strong> góc dưới phải (mọi trang sau đăng nhập).</li>
+<li>Kéo thả nút bot để đổi vị trí — hệ thống nhớ vị trí lần sau.</li>
+<li>Trên mobile: bot nằm phía trên thanh điều hướng dưới.</li>
 </ul>
-<h3 id="113-gợi-ý-câu-hỏi-nhanh">11.3. Gợi ý câu hỏi nhanh</h3>
+<h3 id="112-ai-biết-gì-cập-nhật-2026">11.2. AI biết gì? (cập nhật 2026)</h3>
+<p>AI PXD được huấn luyện trên <strong>toàn bộ dashboard</strong> + <strong>dữ liệu thực</strong> trên trang bạn đang mở:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Nhóm</th>
+<th>AI trả lời được</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Hướng dẫn app</strong></td>
+<td>Từng màn hình: Tổng quan, Dự án, Task, Nhật ký, Module, S-Curve, Milestone…</td>
+</tr>
+<tr>
+<td><strong>Nhật ký site</strong></td>
+<td>Cách sửa nhật ký, tiến độ thi công, <strong>Công việc ngày mai</strong>, nút <strong>Xem bảng ↓</strong>, Tóm tắt ngày KH vs TT</td>
+</tr>
+<tr>
+<td><strong>Milestone</strong></td>
+<td>7 mốc, trạng thái màu, vì sao 100% vẫn “Đang thực hiện”, <strong>Theo dõi HĐ SM+</strong></td>
+</tr>
+<tr>
+<td><strong>Module EPC</strong></td>
+<td>Giấy phép, Thiết kế, Mua sắm, Thi công, Bàn giao — cách cập nhật, % ảnh hưởng tiến độ</td>
+</tr>
+<tr>
+<td><strong>Số liệu thực</strong></td>
+<td>Tiến độ %, vật tư X/Y, milestone trễ, risk mở, nhân lực site, Δ kế hoạch</td>
+</tr>
+<tr>
+<td><strong>Phân tích</strong></td>
+<td>“Vì sao dự án trễ?”, đề xuất recovery, ưu tiên việc tuần này</td>
+</tr>
+<tr>
+<td><strong>Solar EPC</strong></td>
+<td>PR, commissioning, zero-export, thi công mái, checklist nghiệm thu</td>
+</tr>
+<tr>
+<td><strong>Phân quyền</strong></td>
+<td>PM/SM toàn quyền dự án được gán; dự án khác chỉ xem</td>
+</tr>
+<tr>
+<td><strong>Hướng dẫn web</strong></td>
+<td>Link tài liệu: <code>/huong-dan</code></td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>Mẹo:</strong> Mở <strong>chi tiết dự án</strong> trước khi hỏi — AI đọc đúng dữ liệu dự án đó (local cache + ngữ cảnh trang).</p>
+</blockquote>
+<h3 id="113-gợi-ý-câu-hỏi-bấm-nhanh-trong-chat">11.3. Gợi ý câu hỏi (bấm nhanh trong chat)</h3>
 <ul>
 <li><em>&quot;Hướng dẫn trang tôi đang xem&quot;</em></li>
-<li><em>&quot;Làm sao thêm dự án?&quot;</em></li>
-<li><em>&quot;Làm sao thêm công việc?&quot;</em></li>
-<li><em>&quot;Giải thích S-Curve và milestone&quot;</em></li>
+<li><em>&quot;Vật tư dự án này về mấy %?&quot;</em></li>
+<li><em>&quot;Dự án trễ — phân tích và đề xuất&quot;</em></li>
+<li><em>&quot;Làm sao ghi nhật ký site?&quot;</em></li>
+<li><em>&quot;Công việc ngày mai và Xem bảng là gì?&quot;</em></li>
+<li><em>&quot;Giải thích milestone — vì sao Giấy phép 100% mà vẫn xanh dương?&quot;</em></li>
+<li><em>&quot;Giải thích S-Curve và Tóm tắt ngày KH vs TT&quot;</em></li>
+<li><em>&quot;PM/SM được quyền gì trên dự án được gán?&quot;</em></li>
+<li><em>&quot;Commissioning checklist&quot;</em></li>
 </ul>
-<h3 id="114-lưu-ý">11.4. Lưu ý</h3>
+<h3 id="114-cách-hỏi-hiệu-quả">11.4. Cách hỏi hiệu quả</h3>
+<ol>
+<li><strong>Đứng đúng trang</strong> — ví dụ vào Nhật ký rồi hỏi “hướng dẫn trang này”.</li>
+<li><strong>Hỏi cụ thể</strong> — “Nhật ký ngày 26/05 tiến độ thực tế bao nhiêu?” thay vì “tiến độ sao?”.</li>
+<li><strong>Một câu một việc</strong> — dễ nhận câu trả lời từng bước.</li>
+<li><strong>Kết hợp hướng dẫn web</strong> — doc đầy đủ tại <a href="https://vpeg-pxd-dashboard.vercel.app/huong-dan">https://vpeg-pxd-dashboard.vercel.app/huong-dan</a> ; AI giải thích thêm theo ngữ cảnh.</li>
+</ol>
+<h3 id="115-giới-hạn">11.5. Giới hạn</h3>
 <ul>
-<li>AI đọc dữ liệu từ cache trình duyệt + ngữ cảnh trang hiện tại.</li>
-<li>Câu trả lời mang tính <strong>hỗ trợ</strong> — quyết định chính thức vẫn theo dữ liệu trên dashboard và quy trình công ty.</li>
+<li>AI đọc data từ <strong>cache trình duyệt</strong> — nếu chưa mở dự án / chưa sync, số liệu có thể chưa mới nhất.</li>
+<li>Câu trả lời mang tính <strong>hỗ trợ</strong> — quyết định chính thức theo dashboard và quy trình công ty.</li>
+<li>Không thay thế Admin (tạo tài khoản, gán dự án) — liên hệ Admin nếu thiếu quyền.</li>
 </ul>
 <hr>
 <h2 id="12-thông-báo">12. Thông báo</h2>
@@ -1299,7 +1398,7 @@ KPI tổng dự án + S-Curve
 </tr>
 </tbody></table></div>
 <hr>
-<p><em>Tài liệu thuộc Vu Phong Energy Group — VPEG-PXD Dashboard. Cập nhật khi phát hành phiên bản mới của phần mềm.</em></p>
+<p><em>Tài liệu thuộc <strong>vũ phong (by Tien Nguyen)</strong> — VPEG-PXD Dashboard. Cập nhật khi phát hành phiên bản mới.</em></p>
 
 
     </main>
