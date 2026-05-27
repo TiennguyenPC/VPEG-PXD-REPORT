@@ -213,9 +213,11 @@ export function hasFullTaskEditRights(user, task, context = {}) {
   return false;
 }
 
-/** Admin, người tạo, PM/SM dự án, hoặc người được phân công */
+/** Admin, người tạo, PM/SM dự án, hoặc người được phân công (task VP/nội bộ: chỉ nhóm PXD core) */
 export function canEditTask(user, task, context = {}) {
   if (!task || !user) return false;
+  const { projects = [] } = context;
+  if (isOfficeTask(task, projects) && !canViewOfficeTasks(user)) return false;
   if (hasFullTaskEditRights(user, task, context)) return true;
   return isTaskAssignee(user, task);
 }

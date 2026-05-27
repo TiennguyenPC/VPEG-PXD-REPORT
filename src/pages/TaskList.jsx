@@ -25,6 +25,15 @@ import { canEditTask, canEditTaskField, canCreateTask, canDeleteTask, canViewTas
 
 const NEW_TASK_PROJECT_CUSTOM = '__custom__';
 
+function initDraftProjectPickerState(task, projectList) {
+  const name = String(task?.TÊN_DỰ_ÁN || '').trim();
+  const container = String(task?.BỘ_CHỨA || '').toUpperCase();
+  const isOffice = container.includes('VĂN PHÒNG') || name.toUpperCase().includes('VĂN PHÒNG');
+  if (isOffice || !name) return { picker: '', custom: '' };
+  if (projectList.some((p) => p.name === name)) return { picker: name, custom: '' };
+  return { picker: NEW_TASK_PROJECT_CUSTOM, custom: name };
+}
+
 const thCell = 'py-2 px-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider align-middle';
 const tdCell = 'py-2 px-2.5 text-xs align-middle overflow-hidden';
 const tdClip = `${tdCell} max-w-0`;
@@ -170,6 +179,8 @@ export default function TaskList() {
 
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [draftTask, setDraftTask] = useState(null);
+  const [draftProjectPicker, setDraftProjectPicker] = useState('');
+  const [draftCustomProject, setDraftCustomProject] = useState('');
   const [draftDirty, setDraftDirty] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [taskSaveError, setTaskSaveError] = useState(null);
@@ -340,10 +351,13 @@ export default function TaskList() {
     const enriched = enrichTaskForUI(task);
     setDraftTask(enriched);
     taskMatchRef.current = { ...enriched };
+    const { picker, custom } = initDraftProjectPickerState(enriched, projects);
+    setDraftProjectPicker(picker);
+    setDraftCustomProject(custom);
     setDraftDirty(false);
     setTaskSaveError(null);
     setIsTaskMenuOpen(false);
-  }, [user, taskContext]);
+  }, [user, taskContext, projects]);
 
   const persistTaskUpdate = useCallback(async (originalTask, updatedTask) => {
     try {
@@ -360,6 +374,9 @@ export default function TaskList() {
           if (!prev || !isSameTask(prev, updatedTask)) return prev;
           return enrichTaskForUI({ ...synced });
         });
+        const { picker, custom } = initDraftProjectPickerState(synced, projects);
+        setDraftProjectPicker(picker);
+        setDraftCustomProject(custom);
       }
       setDraftDirty(false);
       return true;
@@ -378,6 +395,8 @@ export default function TaskList() {
     pendingSaveRef.current = null;
     modalClosingRef.current = true;
     setDraftTask(null);
+    setDraftProjectPicker('');
+    setDraftCustomProject('');
     setDraftDirty(false);
     taskMatchRef.current = null;
     setTaskSaveError(null);
@@ -418,17 +437,35 @@ export default function TaskList() {
     }
   }, [draftTask, user, taskContext]);
 
-  const updateDraftProject = useCallback((projectName) => {
+  const applyDraftProjectName = useCallback((projectName) => {
     if (!draftTask) return;
     const activeTask = taskMatchRef.current || draftTask;
     if (!canEditTaskField(user, activeTask, 'TÊN_DỰ_ÁN', taskContext)) return;
-    const project = projects.find((p) => p.name === projectName);
+    const trimmed = String(projectName || '').trim();
+    const project = projects.find((p) => p.name === trimmed);
     const projectId = project ? (project.id || project.PROJECT_ID) : '';
-    let updatedTask = enrichTaskForUI(applyTaskFieldUpdate(draftTask, 'TÊN_DỰ_ÁN', projectName));
+    let updatedTask = enrichTaskForUI(applyTaskFieldUpdate(draftTask, 'TÊN_DỰ_ÁN', trimmed));
     updatedTask = enrichTaskForUI(applyTaskFieldUpdate(updatedTask, 'PROJECT_ID', projectId));
     setDraftTask(updatedTask);
     setDraftDirty(true);
   }, [draftTask, user, taskContext, projects]);
+
+  const handleDraftProjectPickerChange = useCallback((value) => {
+    setDraftProjectPicker(value);
+    if (value === NEW_TASK_PROJECT_CUSTOM) {
+      applyDraftProjectName(draftCustomProject);
+    } else {
+      setDraftCustomProject('');
+      applyDraftProjectName(value);
+    }
+  }, [applyDraftProjectName, draftCustomProject]);
+
+  const handleDraftCustomProjectChange = useCallback((value) => {
+    setDraftCustomProject(value);
+    if (draftProjectPicker === NEW_TASK_PROJECT_CUSTOM) {
+      applyDraftProjectName(value);
+    }
+  }, [applyDraftProjectName, draftProjectPicker]);
 
   useEffect(() => {
     if (!draftTask) return undefined;
@@ -1512,28 +1549,56 @@ export default function TaskList() {
                     className={`text-2xl font-semibold text-slate-800 w-full outline-none rounded px-1 -ml-1 transition-colors ${canEditDraftField('TÁC_VỤ') ? 'hover:bg-slate-50 focus:bg-slate-50' : 'cursor-default'}`}
                     placeholder="Nhập tên tác vụ"
                   />
-                  <div className="text-xs text-slate-500 mt-1">
-                    {canEditDraftField('TÊN_DỰ_ÁN') ? (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="shrink-0">Dự án:</span>
-                        <select
-                          value={draftTask.TÊN_DỰ_ÁN || ''}
-                          onChange={(e) => updateDraftProject(e.target.value)}
-                          className="bg-white border border-slate-300 text-slate-700 py-1 pl-2 pr-7 rounded text-xs hover:border-slate-400 focus:outline-none focus:border-blue-500 max-w-full"
-                        >
-                          <option value="">Nhiệm vụ chung</option>
-                          {projects.map((p) => (
-                            <option key={p.id} value={p.name}>{p.name}</option>
-                          ))}
-                          {draftTask.TÊN_DỰ_ÁN && !projects.some((p) => p.name === draftTask.TÊN_DỰ_ÁN) ? (
-                            <option value={draftTask.TÊN_DỰ_ÁN}>{draftTask.TÊN_DỰ_ÁN}</option>
-                          ) : null}
-                        </select>
+                  {(() => {
+                    const container = String(draftTask.BỘ_CHỨA || '').toUpperCase();
+                    const projectName = String(draftTask.TÊN_DỰ_ÁN || '').trim();
+                    const isOfficeDraft = container.includes('VĂN PHÒNG') || projectName.toUpperCase().includes('VĂN PHÒNG');
+                    return (
+                      <div className="mt-3 max-w-md">
+                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Dự án</label>
+                        {canEditDraftField('TÊN_DỰ_ÁN') ? (
+                          isOfficeDraft ? (
+                            <input
+                              type="text"
+                              readOnly
+                              value="Văn phòng nội bộ"
+                              className="w-full bg-slate-50 border border-slate-200 text-slate-600 py-2 px-3 rounded text-sm cursor-default"
+                            />
+                          ) : (
+                            <div className="space-y-1.5">
+                              <select
+                                value={draftProjectPicker}
+                                onChange={(e) => handleDraftProjectPickerChange(e.target.value)}
+                                className="w-full bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-[#5252ff] max-w-full"
+                              >
+                                <option value="">-- Chọn dự án --</option>
+                                {projects.map((p) => (
+                                  <option key={p.id} value={p.name}>{p.name}</option>
+                                ))}
+                                <option value={NEW_TASK_PROJECT_CUSTOM}>Khác — tự nhập tên dự án</option>
+                              </select>
+                              {draftProjectPicker === NEW_TASK_PROJECT_CUSTOM && (
+                                <input
+                                  type="text"
+                                  className="w-full bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded text-sm focus:outline-none focus:border-[#5252ff]"
+                                  value={draftCustomProject}
+                                  onChange={(e) => handleDraftCustomProjectChange(e.target.value)}
+                                  placeholder="VD: SOLAR HOME A — defect / bảo hành sau COD"
+                                />
+                              )}
+                              <p className="text-[10px] text-slate-400">
+                                Dự án đã xong hoặc không còn trên danh sách: chọn &quot;Khác&quot; và gõ tên.
+                              </p>
+                            </div>
+                          )
+                        ) : (
+                          <span className="text-sm text-slate-600">
+                            {isOfficeDraft ? 'Văn phòng nội bộ' : (projectName || '— Chưa chọn dự án —')}
+                          </span>
+                        )}
                       </div>
-                    ) : (
-                      <span>{draftTask.TÊN_DỰ_ÁN ? `Dự án: ${draftTask.TÊN_DỰ_ÁN}` : 'Nhiệm vụ chung'}</span>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </div>
               </div>
 
