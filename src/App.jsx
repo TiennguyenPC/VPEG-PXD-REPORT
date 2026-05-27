@@ -378,14 +378,19 @@ export default function App() {
       alert('Chỉ người tạo dự án mới được xóa (Admin có toàn quyền)');
       return;
     }
-    if (window.confirm("Bạn có chắc chắn muốn xóa dự án này? Toàn bộ dữ liệu liên quan trong tất cả các module sẽ bị xóa vĩnh viễn và không thể khôi phục.")) {
-      try {
-        await api.deleteProject(id);
-        setProjects(projects.filter(p => p.id !== id && p.PROJECT_ID !== id));
-      } catch (error) {
-        console.error("Failed to delete project:", error);
-        alert("Lỗi khi xóa dự án: " + error.message);
-      }
+    if (!window.confirm("Bạn có chắc chắn muốn xóa dự án này? Toàn bộ dữ liệu liên quan trong tất cả các module sẽ bị xóa vĩnh viễn và không thể khôi phục.")) {
+      return;
+    }
+
+    const previousProjects = projects;
+    setProjects((prev) => prev.filter((p) => p.id !== id && p.PROJECT_ID !== id));
+
+    try {
+      await api.deleteProject(id);
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      setProjects(previousProjects);
+      alert("Lỗi khi xóa dự án: " + error.message);
     }
   };
 
@@ -853,10 +858,13 @@ export default function App() {
             </div>
             <div className="flex flex-col min-w-0 flex-1">
               <span className="text-[9px] md:text-[10px] tracking-wide font-bold text-[var(--text-muted)] uppercase leading-snug">TỔNG CÔNG SUẤT</span>
-              <span className="text-base md:text-xl font-bold text-white mt-0.5 tracking-tight tabular-nums leading-none">
-                {kpiStats.capacity.toLocaleString()}
-              </span>
-              <span className="text-[10px] text-[#4d5e7a] font-medium mt-0.5">kWp</span>
+              <div className="mt-0.5">
+                <span className="text-base md:text-xl font-bold text-white tracking-tight tabular-nums leading-none">
+                  {kpiStats.capacity.toLocaleString()}
+                  <span className="hidden md:inline text-sm font-medium text-[#4d5e7a] ml-1.5">kWp</span>
+                </span>
+                <span className="text-[10px] text-[#4d5e7a] font-medium mt-0.5 md:hidden">kWp</span>
+              </div>
             </div>
             <div className="absolute right-0 top-0 bottom-0 w-[4px] bg-[#3b82f6]"></div>
           </div>

@@ -284,6 +284,42 @@ try {
 }
 
 const OVERVIEW_REFRESH_EVENT = 'epc-overview-refreshed';
+let projectsFetchGeneration = 0;
+
+function projectMatchesId(project, projectId) {
+  const id = String(projectId || '').trim();
+  if (!id) return false;
+  return String(project?.id ?? '').trim() === id || String(project?.PROJECT_ID ?? '').trim() === id;
+}
+
+function removeProjectFromCaches(projectId) {
+  const id = String(projectId || '').trim();
+  if (!id) return [];
+
+  const keep = (p) => !projectMatchesId(p, id);
+  let next = [];
+
+  try {
+    const raw = localStorage.getItem('epc_projects_cache');
+    const list = raw ? JSON.parse(raw) : (projectsCache || []);
+    next = (Array.isArray(list) ? list : []).filter(keep);
+    localStorage.setItem('epc_projects_cache', JSON.stringify(next));
+  } catch {
+    next = (Array.isArray(projectsCache) ? projectsCache : []).filter(keep);
+  }
+
+  projectsCache = next;
+  projectsFetchGeneration += 1;
+  invalidateCache();
+
+  dispatchOverviewRefresh({
+    projects: next,
+    tasks: tasksCache ?? readLocalJson('epc_tasks_cache'),
+    risks: readLocalJson('epc_risks_cache'),
+  });
+
+  return next;
+}
 
 function readLocalJson(key, fallback = []) {
   try {
@@ -457,9 +493,11 @@ export const api = {
     // Return cache immediately if available and not forcing refresh
     if (!forceRefresh && projectsCache && projectsCache.length > 0) {
       // Trigger background fetch to keep data fresh (Stale-While-Revalidate)
+      const gen = projectsFetchGeneration;
       setTimeout(async () => {
         try {
           const data = await fetchFromGAS('projects');
+          if (gen !== projectsFetchGeneration) return;
           const normalized = (data || []).map(normalizeProject);
           projectsCache = normalized;
           localStorage.setItem('epc_projects_cache', JSON.stringify(normalized));
@@ -667,12 +705,17 @@ export const api = {
     return postToGAS('update-project', mapProjectToSheet(data));
   },
   createProject: async (data) => {
+    projectsFetchGeneration += 1;
     projectsCache = null;
-    return postToGAS('add-project', mapProjectToSheet(data));
+    const result = await postToGAS('add-project', mapProjectToSheet(data));
+    invalidateCache();
+    return result;
   },
   deleteProject: async (id) => {
-    projectsCache = null;
-    return postToGAS('delete-project', { PROJECT_ID: id });
+    removeProjectFromCaches(id);
+    const result = await postToGAS('delete-project', { PROJECT_ID: id });
+    removeProjectFromCaches(id);
+    return result;
   },
   addRisk: (data) => postToGAS('add-risk', data),
   addPermit: (data) => postToGAS('add-permit', data),
