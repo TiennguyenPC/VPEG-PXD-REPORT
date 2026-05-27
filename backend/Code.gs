@@ -55,9 +55,15 @@ function doGet(e) {
           milestones: getSheetDataAsObjects(ss, 'PROJECT_MILESTONE').filter(row => (row.PROJECT_ID == actualProjectId || row.projectId == actualProjectId))
         };
         break;
-      case 'ai-context':
+      case 'ai-context': {
+        var aiToken = e.parameter.token || '';
+        var aiSession = getAuthSession_(aiToken);
         data = getAllSheetDataForAI(ss);
+        if (data.PROJECT_TASKS) {
+          data.PROJECT_TASKS = filterTasksForSession_(data.PROJECT_TASKS, aiSession, ss);
+        }
         break;
+      }
       case 'projects':
         data = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
         break;
@@ -2911,6 +2917,23 @@ function canViewOfficeTasks_(session) {
   return false;
 }
 
+function canUserIdViewOfficeTasks_(ss, userId) {
+  var user = findUserByUserId_(ss, userId);
+  if (!user) return false;
+  return canViewOfficeTasks_({
+    role: user.ROLE,
+    username: user.USERNAME,
+    displayName: user.DISPLAY_NAME || user.displayName || ''
+  });
+}
+
+function filterNotifyUserIdsForOfficeTask_(ss, userIds, payload) {
+  if (!isOfficeTask_(payload, ss)) return userIds;
+  return (userIds || []).filter(function(uid) {
+    return canUserIdViewOfficeTasks_(ss, uid);
+  });
+}
+
 function filterTasksForSession_(tasks, session, ss) {
   if (!tasks || !tasks.length) return tasks || [];
   if (canViewOfficeTasks_(session)) return tasks;
@@ -3919,6 +3942,8 @@ function notifyTaskAssigned_(ss, payload, actor, opts) {
   var actorName = String((actor && actor.displayName) || 'Hệ thống');
   var actorUserId = getActorUserId_(actor);
   var userIds = findUserIdsByDisplayName_(ss, assignee);
+  userIds = filterNotifyUserIdsForOfficeTask_(ss, userIds, payload);
+  if (!userIds.length) return;
   var title = opts.reassigned ? 'Task được chuyển giao' : 'Task mới được giao';
   var body = actorName + (opts.reassigned ? ' chuyển cho bạn task "' : ' giao cho bạn task "') + taskName + '"';
   if (projectName) body += ' (' + projectName + ')';
@@ -4241,7 +4266,7 @@ function runTaskDeadlineNotifications_(ss) {
     var taskLink = buildTaskLink_(projectId, taskName);
 
     if (endDate.getTime() === tomorrow.getTime()) {
-      var assigneeIds = findUserIdsByDisplayName_(ss, assignee);
+      var assigneeIds = filterNotifyUserIdsForOfficeTask_(ss, findUserIdsByDisplayName_(ss, assignee), task);
       for (var a = 0; a < assigneeIds.length; a++) {
         createNotificationIfNew_(
           assigneeIds[a],
@@ -4259,7 +4284,7 @@ function runTaskDeadlineNotifications_(ss) {
       var overdueBody = 'Task "' + taskName + '"' + suffix + ' đã trễ ' + daysLate + ' ngày';
       var overdueFp = taskKey + '_overdue_' + fpDay;
 
-      var assigneeIdsOverdue = findUserIdsByDisplayName_(ss, assignee);
+      var assigneeIdsOverdue = filterNotifyUserIdsForOfficeTask_(ss, findUserIdsByDisplayName_(ss, assignee), task);
       for (var b = 0; b < assigneeIdsOverdue.length; b++) {
         createNotificationIfNew_(
           assigneeIdsOverdue[b],

@@ -163,11 +163,11 @@ export function filterTasksForUser(tasks, user, projects = []) {
   return list.filter((t) => !isOfficeTask(t, projects));
 }
 
-/** Mọi user đăng nhập xem task dự án; task Văn phòng/nội bộ chỉ nhóm PXD core */
+/** Task Văn phòng / nội bộ — chỉ nhóm PXD core được xem (không theo người được giao) */
 export function canViewTaskDetail(user, task, context = {}) {
   if (!user || !task) return false;
   const { projects = [] } = context;
-  if (isOfficeTask(task, projects) && !canViewOfficeTasks(user)) return false;
+  if (isOfficeTask(task, projects)) return canViewOfficeTasks(user);
   return true;
 }
 

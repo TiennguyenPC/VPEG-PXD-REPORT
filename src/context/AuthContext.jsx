@@ -7,6 +7,7 @@ import {
   writeSessionUserCache,
   clearSessionUserCache,
   clearCache,
+  invalidateTasksCache,
   prefetchOverviewRoute,
   isLocalDevBypass,
   LOCAL_DEV_USER,
@@ -98,6 +99,7 @@ export function AuthProvider({ children }) {
   }, [validateSession]);
 
   const login = useCallback(async (username, password) => {
+    invalidateTasksCache();
     const { token, user: sessionUser } = await api.login(username, password);
     setAuthToken(token);
     setUser(sessionUser);

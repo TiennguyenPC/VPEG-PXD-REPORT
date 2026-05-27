@@ -5,6 +5,8 @@ import { buildSystemInstruction, getLocalDataAnswer, getOfflineAppHint } from '.
 import { sendGeminiChat, hasGeminiApiKey } from '../services/geminiChat';
 import { api } from '../services/api';
 import { getPageLabel, updateDashboardContext, resolveProjectFromPath } from '../utils/dashboardContext';
+import { useAuth } from '../context/AuthContext';
+import { filterTasksForUser } from '../utils/permissions';
 import AIMessageContent from './AIMessageContent';
 
 const WELCOME =
@@ -75,13 +77,14 @@ function readLocalJson(key, fallback = []) {
   }
 }
 
-function buildFallbackTables(data = {}) {
+function buildFallbackTables(data = {}, user = null) {
   const projects = Array.isArray(data.projects) && data.projects.length > 0
     ? data.projects
     : readLocalJson('epc_projects_cache', []);
-  const tasks = Array.isArray(data.tasks) && data.tasks.length > 0
+  const rawTasks = Array.isArray(data.tasks) && data.tasks.length > 0
     ? data.tasks
     : readLocalJson('epc_tasks_cache', []);
+  const tasks = filterTasksForUser(rawTasks, user, projects);
   const employees = readLocalJson('epc_employees_cache', []);
 
   return {
@@ -100,6 +103,7 @@ function buildFallbackTables(data = {}) {
 
 export default function AIAssistant() {
   const location = useLocation();
+  const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([{ role: 'ai', content: WELCOME }]);
   const [inputValue, setInputValue] = useState('');
@@ -203,11 +207,17 @@ export default function AIAssistant() {
 
   const buildContext = useCallback(() => {
     const data = typeof window !== 'undefined' ? window.__DASHBOARD_DATA__ || {} : {};
-    const fallbackTables = buildFallbackTables(data);
+    const fallbackTables = buildFallbackTables(data, user);
     const projects = data.projects || fallbackTables.PROJECT_MASTER;
     const pathResolved = resolveProjectFromPath(location.pathname, projects);
     const projectId = data.projectId || pathResolved.projectId;
     const currentProject = data.currentProject || pathResolved.project;
+
+    const visibleTasks = filterTasksForUser(
+      data.tasks || fallbackTables.PROJECT_TASKS,
+      user,
+      projects
+    );
 
     return {
       currentPath: location.pathname,
@@ -221,7 +231,7 @@ export default function AIAssistant() {
         minute: '2-digit',
       }),
       projects,
-      tasks: data.tasks || fallbackTables.PROJECT_TASKS,
+      tasks: visibleTasks,
       currentProject,
       projectId,
       milestones: data.milestones,
@@ -231,22 +241,32 @@ export default function AIAssistant() {
       siteLogs: data.siteLogs,
       permits: data.permits,
       designs: data.designs,
-      tables: data.tables || fallbackTables,
+      tables: {
+        ...(data.tables || fallbackTables),
+        PROJECT_TASKS: visibleTasks,
+      },
     };
-  }, [location.pathname]);
+  }, [location.pathname, user]);
 
   const buildContextWithTables = useCallback(async () => {
     const context = buildContext();
     try {
       const tables = await api.getAIContext();
       const mergedTables = { ...(context.tables || {}), ...(tables || {}) };
-      updateDashboardContext({ tables: mergedTables });
-      return { ...context, tables: mergedTables };
+      const projects = context.projects || mergedTables.PROJECT_MASTER || [];
+      const visibleTasks = filterTasksForUser(
+        mergedTables.PROJECT_TASKS || context.tasks || [],
+        user,
+        projects
+      );
+      mergedTables.PROJECT_TASKS = visibleTasks;
+      updateDashboardContext({ tables: mergedTables, tasks: visibleTasks });
+      return { ...context, tasks: visibleTasks, tables: mergedTables };
     } catch (error) {
       console.warn('Không tải được dữ liệu bảng đầy đủ cho AI:', error);
       return context;
     }
-  }, [buildContext]);
+  }, [buildContext, user]);
 
   useEffect(() => {
     if (isOpen) {

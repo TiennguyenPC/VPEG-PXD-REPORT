@@ -176,6 +176,8 @@ function invalidateTasksCache() {
   localStorage.removeItem('epc_tasks_cache');
 }
 
+export { invalidateTasksCache };
+
 async function syncTasksFromResponse(result) {
   if (Array.isArray(result?.data)) {
     tasksCache = result.data;

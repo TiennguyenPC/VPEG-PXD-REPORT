@@ -102,10 +102,10 @@ export default function TaskList() {
     setSortConfig({ key, direction });
   };
   
-  // Expose to AI Assistant
+  // Expose to AI Assistant — chỉ task user được phép xem
   useEffect(() => {
-    updateDashboardContext({ tasks });
-  }, [tasks]);
+    updateDashboardContext({ tasks: filterTasksForUser(tasks, user, projects) });
+  }, [tasks, user, projects]);
   
   // Process tasks dynamically for status
   const processedTasks = useMemo(() => {
@@ -748,7 +748,7 @@ export default function TaskList() {
                 {processedTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((task) => {
                   const taskEditable = canEditTaskRow(task);
                   const taskFullyEditable = canFullyEditTaskRow(task);
-                  const canOpenTask = canViewTaskDetail(user, task);
+                  const canOpenTask = canViewTaskDetail(user, task, taskContext);
                   return (
                     <TaskMobileCard
                       key={task._rowIndex ?? `${task.TÁC_VỤ}-${task.PROJECT_ID}`}
@@ -802,7 +802,7 @@ export default function TaskList() {
                     {processedTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((task) => {
                       const taskEditable = canEditTaskRow(task);
                       const taskFullyEditable = canFullyEditTaskRow(task);
-                      const canOpenTask = canViewTaskDetail(user, task);
+                      const canOpenTask = canViewTaskDetail(user, task, taskContext);
                       return (
                       <tr key={task._rowIndex ?? `${task.TÁC_VỤ}-${task.PROJECT_ID}`} className={`hover:bg-[#141c2f] transition-colors group ${canOpenTask ? 'cursor-pointer' : ''}`} onClick={canOpenTask ? () => openTaskDetail(task) : undefined}>
                         <td className={tdClip}>
@@ -941,7 +941,7 @@ export default function TaskList() {
                     <div className="p-2.5 space-y-2">
                       {processedTasks.filter(t => t.BỘ_CHỨA === container).map((task, idx) => {
                         const taskEditable = canEditTaskRow(task);
-                        const canOpenTask = canViewTaskDetail(user, task);
+                        const canOpenTask = canViewTaskDetail(user, task, taskContext);
                         return (
                         <div key={idx} className={`bg-[var(--bg-panel)] p-2.5 rounded-lg border border-[var(--border-main)] shadow-sm transition-all group ${canOpenTask ? 'hover:border-[#5252ff]/50 cursor-pointer' : ''}`} onClick={canOpenTask ? () => openTaskDetail(task) : undefined}>
                           <div className="flex items-start gap-2 mb-2">
@@ -1104,7 +1104,7 @@ export default function TaskList() {
                                   else { bgClass='bg-[#1e293b]/50'; borderClass='border-[#263554]'; textClass='text-slate-300'; }
 
                                   const taskEditable = canEditTaskRow(t);
-                                  const canOpenTask = canViewTaskDetail(user, t);
+                                  const canOpenTask = canViewTaskDetail(user, t, taskContext);
 
                                   return (
                                     <div 
