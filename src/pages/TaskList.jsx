@@ -3,7 +3,7 @@ import {
   CheckCircle2, Circle, Clock, LayoutGrid, Calendar, 
   BarChart3, Columns, Plus, Search, Filter, Download, 
   ChevronDown, AlertTriangle, MoreHorizontal, Calendar as CalendarIcon,
-  PlayCircle, Flag, Star, MoreVertical, Bell, Sun, Moon, User, ClipboardList, X, Menu, ChevronLeft
+  PlayCircle, Flag, Star, MoreVertical, Bell, Sun, Moon, User, ClipboardList, X, Menu, ChevronLeft, Loader2
 } from 'lucide-react';
 import PriorityBadge from '../components/PriorityBadge';
 import { api } from '../services/api';
@@ -21,7 +21,7 @@ import AssigneeMultiSelect from '../components/AssigneeMultiSelect';
 import TaskMobileCard from '../components/TaskMobileCard';
 import { compareDateStrings, normalizeToDMY } from '../utils/timelineDates';
 import { useAuth } from '../context/AuthContext';
-import { canEditTask, canEditTaskField, canCreateTask, canDeleteTask, canViewTaskDetail, canToggleTaskComplete, hasFullTaskEditRights, normalizePersonName } from '../utils/permissions';
+import { canEditTask, canEditTaskField, canCreateTask, canDeleteTask, canViewTaskDetail, canToggleTaskComplete, hasFullTaskEditRights, canViewOfficeTasks, filterTasksForUser } from '../utils/permissions';
 
 const NEW_TASK_PROJECT_CUSTOM = '__custom__';
 
@@ -100,7 +100,7 @@ export default function TaskList() {
   
   // Process tasks dynamically for status
   const processedTasks = useMemo(() => {
-    let filtered = tasks.map(enrichTaskForUI);
+    let filtered = filterTasksForUser(tasks, user, projects).map(enrichTaskForUI);
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -144,7 +144,7 @@ export default function TaskList() {
     }
     
     return filtered;
-  }, [tasks, searchQuery, sortConfig, searchParams]);
+  }, [tasks, user, projects, searchQuery, sortConfig, searchParams]);
 
   // Fetch tasks, projects, employees
   useEffect(() => {
@@ -170,6 +170,8 @@ export default function TaskList() {
 
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [draftTask, setDraftTask] = useState(null);
+  const [draftDirty, setDraftDirty] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [taskSaveError, setTaskSaveError] = useState(null);
   const [isTaskMenuOpen, setIsTaskMenuOpen] = useState(false);
   const taskMatchRef = useRef(null);
@@ -295,6 +297,10 @@ export default function TaskList() {
       const project = projects.find(p => p.name === projectName);
       projectId = project ? (project.id || project.PROJECT_ID) : '';
     } else {
+      if (!canViewOfficeTasks(user)) {
+        alert('Bạn không có quyền tạo công việc Văn phòng / nội bộ');
+        return;
+      }
       projectName = 'VĂN PHÒNG';
       container = newTask.BỘ_CHỨA === 'DỰ ÁN' ? 'VĂN PHÒNG' : newTask.BỘ_CHỨA;
     }
@@ -330,13 +336,14 @@ export default function TaskList() {
   };
 
   const openTaskDetail = useCallback((task) => {
-    if (modalClosingRef.current || !canViewTaskDetail(user, task)) return;
+    if (modalClosingRef.current || !canViewTaskDetail(user, task, taskContext)) return;
     const enriched = enrichTaskForUI(task);
     setDraftTask(enriched);
     taskMatchRef.current = { ...enriched };
+    setDraftDirty(false);
     setTaskSaveError(null);
     setIsTaskMenuOpen(false);
-  }, [user]);
+  }, [user, taskContext]);
 
   const persistTaskUpdate = useCallback(async (originalTask, updatedTask) => {
     try {
@@ -351,40 +358,86 @@ export default function TaskList() {
       if (synced) {
         setDraftTask(prev => {
           if (!prev || !isSameTask(prev, updatedTask)) return prev;
-          return { ...prev, _rowIndex: synced._rowIndex ?? prev._rowIndex };
+          return enrichTaskForUI({ ...synced });
         });
       }
+      setDraftDirty(false);
+      return true;
     } catch (err) {
       console.error(err);
       setTaskSaveError(err.message || 'Không lưu được lên Google Sheet');
+      return false;
     }
   }, [projects]);
 
-  const closeTaskDetail = useCallback(() => {
-    clearTimeout(saveTimerRef.current);
-    const pending = pendingSaveRef.current;
-    pendingSaveRef.current = null;
-    if (pending) {
-      persistTaskUpdate(pending.original, pending.updated);
+  const requestCloseTaskDetail = useCallback(() => {
+    if (draftDirty) {
+      if (!window.confirm('Thay đổi chưa được lưu. Bỏ và thoát?')) return;
     }
+    clearTimeout(saveTimerRef.current);
+    pendingSaveRef.current = null;
     modalClosingRef.current = true;
     setDraftTask(null);
+    setDraftDirty(false);
     taskMatchRef.current = null;
     setTaskSaveError(null);
     setIsTaskMenuOpen(false);
     window.setTimeout(() => {
       modalClosingRef.current = false;
     }, 400);
-  }, [persistTaskUpdate]);
+  }, [draftDirty]);
+
+  const saveDraftTask = useCallback(async () => {
+    if (!draftTask || !taskMatchRef.current) return;
+    if (!draftDirty) {
+      requestCloseTaskDetail();
+      return;
+    }
+    setIsSavingDraft(true);
+    try {
+      await persistTaskUpdate(taskMatchRef.current, draftTask);
+    } finally {
+      setIsSavingDraft(false);
+    }
+  }, [draftTask, draftDirty, persistTaskUpdate, requestCloseTaskDetail]);
+
+  const updateDraftField = useCallback((field, value) => {
+    if (!draftTask) return;
+    const activeTask = taskMatchRef.current || draftTask;
+    if (field === 'TRẠNG_THÁI') {
+      if (!canToggleTaskComplete(user, activeTask, taskContext)) return;
+    } else if (field === 'PINNED') {
+      if (!hasFullTaskEditRights(user, activeTask, taskContext)) return;
+    } else if (!canEditTaskField(user, activeTask, field, taskContext)) {
+      return;
+    }
+    const updatedTask = enrichTaskForUI(applyTaskFieldUpdate(draftTask, field, value));
+    setDraftTask(updatedTask);
+    if (!UI_ONLY_TASK_FIELDS.has(field)) {
+      setDraftDirty(true);
+    }
+  }, [draftTask, user, taskContext]);
+
+  const updateDraftProject = useCallback((projectName) => {
+    if (!draftTask) return;
+    const activeTask = taskMatchRef.current || draftTask;
+    if (!canEditTaskField(user, activeTask, 'TÊN_DỰ_ÁN', taskContext)) return;
+    const project = projects.find((p) => p.name === projectName);
+    const projectId = project ? (project.id || project.PROJECT_ID) : '';
+    let updatedTask = enrichTaskForUI(applyTaskFieldUpdate(draftTask, 'TÊN_DỰ_ÁN', projectName));
+    updatedTask = enrichTaskForUI(applyTaskFieldUpdate(updatedTask, 'PROJECT_ID', projectId));
+    setDraftTask(updatedTask);
+    setDraftDirty(true);
+  }, [draftTask, user, taskContext, projects]);
 
   useEffect(() => {
     if (!draftTask) return undefined;
     const onKeyDown = (e) => {
-      if (e.key === 'Escape') closeTaskDetail();
+      if (e.key === 'Escape') requestCloseTaskDetail();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [draftTask, closeTaskDetail]);
+  }, [draftTask, requestCloseTaskDetail]);
 
   const queueTaskSave = useCallback((originalTask, updatedTask) => {
     pendingSaveRef.current = { original: originalTask, updated: updatedTask };
@@ -422,22 +475,6 @@ export default function TaskList() {
 
   const updateTaskStatus = (task, newStatus) => handleTaskUpdate(task, 'TRẠNG_THÁI', newStatus);
 
-  const handleTaskProjectUpdate = (task, projectName) => {
-    const activeTask = taskMatchRef.current || task;
-    if (!canEditTaskField(user, activeTask, 'TÊN_DỰ_ÁN', taskContext)) return;
-
-    const project = projects.find((p) => p.name === projectName);
-    const projectId = project ? (project.id || project.PROJECT_ID) : '';
-    let updatedTask = applyTaskFieldUpdate(task, 'TÊN_DỰ_ÁN', projectName);
-    updatedTask = applyTaskFieldUpdate(updatedTask, 'PROJECT_ID', projectId);
-
-    setTasks(tasks.map((t) => (isSameTask(t, task) ? { ...updatedTask } : t)));
-    if (draftTask && isSameTask(draftTask, task)) setDraftTask(updatedTask);
-
-    const originalForApi = taskMatchRef.current || task;
-    queueTaskSave(originalForApi, updatedTask);
-  };
-
   const handleTaskDelete = async (task) => {
     if (!canDeleteTask(user, taskMatchRef.current || task, taskContext)) {
       alert('Chỉ người tạo task mới được xóa (Admin có toàn quyền)');
@@ -447,7 +484,7 @@ export default function TaskList() {
 
     const previousTasks = tasks;
     setTasks(tasks.filter(t => !isSameTask(t, task)));
-    closeTaskDetail();
+    requestCloseTaskDetail();
     try {
       const data = await api.deleteTask(task);
       setTasks(data || []);
@@ -1227,6 +1264,7 @@ export default function TaskList() {
                   />
                   Công việc Dự án
                 </label>
+                {canViewOfficeTasks(user) && (
                 <label className="flex items-center gap-2 text-sm text-slate-200 cursor-pointer">
                   <input 
                     type="radio" 
@@ -1240,8 +1278,9 @@ export default function TaskList() {
                     }}
                     className="accent-[#5252ff]"
                   />
-                  Công việc Văn phòng / Nội bộ
+                  Văn phòng / Nội bộ
                 </label>
+                )}
               </div>
 
               <div>
@@ -1400,7 +1439,7 @@ export default function TaskList() {
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               e.stopPropagation();
-              closeTaskDetail();
+              requestCloseTaskDetail();
             }
           }}
         >
@@ -1419,7 +1458,7 @@ export default function TaskList() {
                 {isTaskMenuOpen && (
                   <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-slate-200 rounded-md shadow-lg py-1 z-50">
                     {canFullyEditDraft() && (
-                    <button className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2" onClick={() => { setIsTaskMenuOpen(false); handleTaskUpdate(draftTask, 'PINNED', true); }}>
+                    <button className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2" onClick={() => { setIsTaskMenuOpen(false); updateDraftField('PINNED', true); }}>
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg> Ghim yêu thích
                     </button>
                     )}
@@ -1438,7 +1477,7 @@ export default function TaskList() {
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.stopPropagation();
-                  closeTaskDetail();
+                  requestCloseTaskDetail();
                 }}
               >
                 <X className="w-5 h-5" />
@@ -1454,7 +1493,7 @@ export default function TaskList() {
             <div className="flex-1 p-8 pb-10">
               <div className="flex items-start gap-3 mb-6">
                 <button 
-                  onClick={() => canToggleCompleteDraft() && updateTaskStatus(draftTask, draftTask.computedStatus === 'Đã hoàn thành' ? '' : 'Đã hoàn thành')}
+                  onClick={() => canToggleCompleteDraft() && updateDraftField('TRẠNG_THÁI', draftTask.computedStatus === 'Đã hoàn thành' ? '' : 'Đã hoàn thành')}
                   className={`mt-1 flex-shrink-0 ${!canToggleCompleteDraft() ? 'cursor-default opacity-60' : ''}`}
                   disabled={!canToggleCompleteDraft()}
                 >
@@ -1468,7 +1507,7 @@ export default function TaskList() {
                   <input 
                     type="text" 
                     value={draftTask.TÁC_VỤ || ''}
-                    onChange={(e) => handleTaskUpdate(draftTask, 'TÁC_VỤ', e.target.value)}
+                    onChange={(e) => updateDraftField('TÁC_VỤ', e.target.value)}
                     readOnly={!canEditDraftField('TÁC_VỤ')}
                     className={`text-2xl font-semibold text-slate-800 w-full outline-none rounded px-1 -ml-1 transition-colors ${canEditDraftField('TÁC_VỤ') ? 'hover:bg-slate-50 focus:bg-slate-50' : 'cursor-default'}`}
                     placeholder="Nhập tên tác vụ"
@@ -1479,7 +1518,7 @@ export default function TaskList() {
                         <span className="shrink-0">Dự án:</span>
                         <select
                           value={draftTask.TÊN_DỰ_ÁN || ''}
-                          onChange={(e) => handleTaskProjectUpdate(draftTask, e.target.value)}
+                          onChange={(e) => updateDraftProject(e.target.value)}
                           className="bg-white border border-slate-300 text-slate-700 py-1 pl-2 pr-7 rounded text-xs hover:border-slate-400 focus:outline-none focus:border-blue-500 max-w-full"
                         >
                           <option value="">Nhiệm vụ chung</option>
@@ -1534,7 +1573,7 @@ export default function TaskList() {
                   <div className="relative">
                     <select 
                       value={draftTask.ƯU_TIÊN || 'Medium'}
-                      onChange={(e) => handleTaskUpdate(draftTask, 'ƯU_TIÊN', e.target.value)}
+                      onChange={(e) => updateDraftField('ƯU_TIÊN', e.target.value)}
                       disabled={!canEditDraftField('ƯU_TIÊN')}
                       className="w-full appearance-none bg-white border border-slate-300 text-slate-700 py-2 pl-3 pr-8 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
@@ -1554,7 +1593,7 @@ export default function TaskList() {
                     calendarTitle="Chọn ngày bắt đầu"
                     className="w-full bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     value={draftTask.NGÀY_BẮT_ĐẦU_LOCAL || draftTask.NGÀY_BẮT_ĐẦU || ''}
-                    onChange={(val) => handleTaskUpdate(draftTask, 'NGÀY_BẮT_ĐẦU', val)}
+                    onChange={(val) => updateDraftField('NGÀY_BẮT_ĐẦU', val)}
                     disabled={!canEditDraftField('NGÀY_BẮT_ĐẦU')}
                   />
                 </div>
@@ -1565,7 +1604,7 @@ export default function TaskList() {
                     calendarTitle="Chọn ngày đến hạn"
                     className="w-full bg-white border border-slate-300 text-slate-700 py-2 px-3 rounded text-sm hover:border-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed"
                     value={draftTask.NGÀY_KẾT_THÚC_LOCAL || draftTask.NGÀY_KẾT_THÚC || ''}
-                    onChange={(val) => handleTaskUpdate(draftTask, 'NGÀY_KẾT_THÚC', val)}
+                    onChange={(val) => updateDraftField('NGÀY_KẾT_THÚC', val)}
                     disabled={!canEditDraftField('NGÀY_KẾT_THÚC')}
                   />
                 </div>
@@ -1589,7 +1628,7 @@ export default function TaskList() {
                   {canEditDraftField('NHÂN_SỰ') ? (
                     <AssigneeMultiSelect
                       value={draftTask.NHÂN_SỰ}
-                      onChange={(val) => handleTaskUpdate(draftTask, 'NHÂN_SỰ', val)}
+                      onChange={(val) => updateDraftField('NHÂN_SỰ', val)}
                       options={assigneeOptions}
                       variant="light"
                     />
@@ -1607,10 +1646,34 @@ export default function TaskList() {
                   className="w-full bg-slate-50 border border-slate-200 text-slate-700 py-3 px-4 rounded-md text-sm hover:border-slate-300 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:bg-white transition-all min-h-[100px] resize-y disabled:opacity-60 disabled:cursor-not-allowed"
                   placeholder="Mô tả chi tiết công việc..."
                   value={getTaskDescription(draftTask)}
-                  onChange={(e) => handleTaskUpdate(draftTask, 'GHI_CHÚ', e.target.value)}
+                  onChange={(e) => updateDraftField('GHI_CHÚ', e.target.value)}
                   readOnly={!canEditDraftField('GHI_CHÚ')}
                 />
-                <p className="text-[10px] text-slate-400 mt-1">Tự lưu sau khi bạn ngừng gõ ~1 giây. Hiển thị ở cột Mô tả trên bảng và trang Tổng quan.</p>
+                <p className="text-[10px] text-slate-400 mt-1">Bấm <strong>Lưu thay đổi</strong> để áp dụng. Thoát không lưu sẽ hỏi xác nhận.</p>
+              </div>
+            </div>
+
+            <div className="shrink-0 px-8 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
+              <span className="text-xs text-slate-500">
+                {draftDirty ? 'Có thay đổi chưa lưu' : 'Đã đồng bộ với server'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={requestCloseTaskDetail}
+                  className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  onClick={saveDraftTask}
+                  disabled={isSavingDraft || !draftDirty}
+                  className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#5252ff] text-white hover:bg-[#4141d6] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                >
+                  {isSavingDraft && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Lưu thay đổi
+                </button>
               </div>
             </div>
           </div>

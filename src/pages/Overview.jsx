@@ -19,6 +19,8 @@ import AssigneeDisplay from '../components/AssigneeDisplay';
 import { enrichProjectsProgress } from '../utils/projectProgress';
 import { buildOverviewRiskRows } from '../utils/riskHelpers';
 import { parseFlexibleDate } from '../utils/timelineDates';
+import { useAuth } from '../context/AuthContext';
+import { filterTasksForUser } from '../utils/permissions';
 import OverviewProgressMobile from '../components/mobile/OverviewProgressMobile';
 import OverviewRiskMobile from '../components/mobile/OverviewRiskMobile';
 
@@ -186,6 +188,7 @@ export default function Overview() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isCollapsed, toggleSidebar } = useSidebar();
+  const { user } = useAuth();
 
   const [projects, setProjects] = useState(() => readCachedArray('epc_projects_cache'));
   const [tasks, setTasks] = useState(() => readCachedArray('epc_tasks_cache'));
@@ -207,6 +210,13 @@ export default function Overview() {
     () => enrichProjectsProgress(projects),
     [projects, progressTick]
   );
+
+  const visibleTasks = useMemo(
+    () => filterTasksForUser(tasks, user, enrichedProjects),
+    [tasks, user, enrichedProjects]
+  );
+
+  const enrichedTasks = useMemo(() => visibleTasks.map(enrichTaskForUI), [visibleTasks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -255,10 +265,8 @@ export default function Overview() {
   }, [location.pathname]);
 
   useEffect(() => {
-    updateDashboardContext({ projects: enrichedProjects, tasks });
-  }, [enrichedProjects, tasks]);
-
-  const enrichedTasks = useMemo(() => tasks.map(enrichTaskForUI), [tasks]);
+    updateDashboardContext({ projects: enrichedProjects, tasks: visibleTasks });
+  }, [enrichedProjects, visibleTasks]);
 
   const totalCapacity = useMemo(
     () => enrichedProjects.reduce((sum, p) => sum + (Number(p.capacity) || 0), 0),

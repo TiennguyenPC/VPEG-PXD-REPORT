@@ -143,9 +143,32 @@ function isOfficeTask(task, projects = []) {
   return container.includes('VAN PHONG') || projectName.includes('VAN PHONG') || !hasProject;
 }
 
-/** Mọi user đăng nhập đều xem được chi tiết task */
-export function canViewTaskDetail(user, task) {
-  return Boolean(user && task);
+/** Nội bộ PXD — chỉ nhóm core được xem/sửa task Văn phòng / Nhiệm vụ chung */
+const OFFICE_TASK_PXD_NAME_TOKENS = ['thieu', 'doan', 'sang', 'quang', 'thuan', 'cuong', 'duy', 'tien'];
+
+export function canViewOfficeTasks(user) {
+  if (!user) return false;
+  if (isAdmin(user)) return true;
+  const username = String(user.username || '').trim().toLowerCase();
+  if (username === 'tien.nguyen') return true;
+  const norm = normalizePersonName(user.displayName || '');
+  if (!norm) return false;
+  return OFFICE_TASK_PXD_NAME_TOKENS.some((token) => norm.includes(token));
+}
+
+export function filterTasksForUser(tasks, user, projects = []) {
+  const list = Array.isArray(tasks) ? tasks : [];
+  if (!user) return list.filter((t) => !isOfficeTask(t, projects));
+  if (canViewOfficeTasks(user)) return list;
+  return list.filter((t) => !isOfficeTask(t, projects));
+}
+
+/** Mọi user đăng nhập xem task dự án; task Văn phòng/nội bộ chỉ nhóm PXD core */
+export function canViewTaskDetail(user, task, context = {}) {
+  if (!user || !task) return false;
+  const { projects = [] } = context;
+  if (isOfficeTask(task, projects) && !canViewOfficeTasks(user)) return false;
+  return true;
 }
 
 /** Cột người nhận việc được sửa (tên, mô tả, dự án) */
@@ -183,8 +206,8 @@ export function hasFullTaskEditRights(user, task, context = {}) {
 
   if (isProjectEditorRole(user?.role)) {
     const { projects = [] } = context;
+    if (isOfficeTask(task, projects)) return canViewOfficeTasks(user);
     if (isUserAssignedToTaskProject(user, task, projects)) return true;
-    if (isOfficeTask(task, projects) && canCreateTask(user)) return true;
   }
 
   return false;
