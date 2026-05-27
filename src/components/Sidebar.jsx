@@ -45,7 +45,7 @@ export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
             { key: 'tasks',     label: 'CÔNG VIỆC',  Icon: Briefcase, href: '/tasks',   onClick: (e) => { e.preventDefault(); navigate('/tasks'); } },
             { key: 'projects',  label: 'DỰ ÁN',      Icon: Folder,    href: '/projects',onClick: (e) => { e.preventDefault(); navigate('/projects'); } },
             { key: 'account',   label: 'TÀI KHOẢN',  Icon: UserCircle, href: '/account', onClick: (e) => { e.preventDefault(); navigate('/account'); } },
-            { key: 'guide',     label: 'HƯỚNG DẪN VẬN HÀNH', Icon: BookOpen, href: '/huong-dan', external: true },
+            { key: 'guide',     label: 'HƯỚNG DẪN SỬ DỤNG', Icon: BookOpen, href: '/huong-dan', external: true },
             ...(isAdmin(user) ? [{ key: 'settings', label: 'CÀI ĐẶT', Icon: Settings, href: '/settings/users', onClick: (e) => { e.preventDefault(); navigate('/settings/users'); } }] : []),
           ].map(({ key, label, Icon, href, onClick, external }) => {
             const className = `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-xs font-semibold

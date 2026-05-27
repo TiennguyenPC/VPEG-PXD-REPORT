@@ -156,7 +156,7 @@ export default function AccountPage() {
         </header>
 
         <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6 max-md:pb-8 mobile-content-compact">
-          {/* Hướng dẫn vận hành — mobile (sidebar ẩn) */}
+          {/* Hướng dẫn sử dụng — mobile (sidebar ẩn) */}
           <a
             href="/huong-dan"
             className="md:hidden flex items-center gap-4 p-4 rounded-2xl border border-[#5252ff]/30 bg-[#5252ff]/5 hover:bg-[#5252ff]/10 transition-colors"
@@ -165,7 +165,7 @@ export default function AccountPage() {
               <BookOpen className="w-5 h-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-bold text-[var(--text-strong)]">Hướng dẫn vận hành</p>
+              <p className="text-sm font-bold text-[var(--text-strong)]">Hướng dẫn sử dụng</p>
               <p className="text-xs text-[var(--text-muted)] mt-0.5">Đọc tài liệu A–Z: dự án, nhật ký, task, phân quyền…</p>
             </div>
           </a>
