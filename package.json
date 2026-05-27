@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npm run docs:html && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "docs:html": "node scripts/build-huong-dan-html.mjs",
     "gas:login": "node scripts/gas-deploy.mjs login",
     "gas:push": "node scripts/gas-deploy.mjs push",
     "gas:deploy": "node scripts/gas-deploy.mjs deploy",

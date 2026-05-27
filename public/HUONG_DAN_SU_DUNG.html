@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hướng dẫn sử dụng — Dashboard VPEG-PXD</title>
+  <meta name="description" content="Hướng dẫn sử dụng Dashboard VPEG-PXD từ A–Z — Vu Phong Energy Group" />
+  <style>
+    :root {
+      --purple: #5252ff;
+      --purple-light: #7373ff;
+      --bg: #0a0f1a;
+      --panel: #111827;
+      --border: #263554;
+      --text: #cbd5e1;
+      --text-strong: #f1f5f9;
+      --muted: #64748b;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      font-size: 15px;
+    }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 20px;
+      background: rgba(10, 15, 26, 0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar a.brand {
+      color: var(--purple-light);
+      font-weight: 800;
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-decoration: none;
+    }
+    .topbar .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .topbar a.btn, .topbar button.btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+      border: 1px solid rgba(82, 82, 255, 0.35);
+      background: rgba(82, 82, 255, 0.12);
+      color: var(--purple-light);
+    }
+    .topbar a.btn.primary {
+      background: var(--purple);
+      border-color: var(--purple);
+      color: #fff;
+    }
+    .topbar a.btn:hover, .topbar button.btn:hover { filter: brightness(1.08); }
+    .layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      max-width: 1200px;
+      margin: 0 auto;
+      gap: 0;
+    }
+    .toc {
+      position: sticky;
+      top: 56px;
+      align-self: start;
+      max-height: calc(100vh - 56px);
+      overflow-y: auto;
+      padding: 20px 16px 40px;
+      border-right: 1px solid var(--border);
+      background: rgba(17, 24, 39, 0.35);
+    }
+    .toc-title {
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    .toc ol {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 12px;
+    }
+    .toc li { margin-bottom: 6px; }
+    .toc a { color: var(--text); text-decoration: none; }
+    .toc a:hover { color: var(--purple-light); }
+    .content {
+      padding: 28px 32px 80px;
+      min-width: 0;
+    }
+    .content h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--text-strong);
+      margin: 0 0 0.5em;
+      background: linear-gradient(135deg, #fff 0%, var(--purple-light) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .content h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--text-strong);
+      margin: 2em 0 0.75em;
+      padding-left: 12px;
+      border-left: 4px solid var(--purple);
+      scroll-margin-top: 72px;
+    }
+    .content h3 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--purple-light);
+      margin: 1.4em 0 0.5em;
+      scroll-margin-top: 72px;
+    }
+    .content h4 { color: var(--text-strong); margin: 1em 0 0.4em; scroll-margin-top: 72px; }
+    .content p, .content li { color: var(--text); }
+    .content ul, .content ol { padding-left: 1.3em; }
+    .content li { margin-bottom: 0.35em; }
+    .content strong { color: var(--text-strong); }
+    .content a { color: var(--purple-light); }
+    .content blockquote {
+      margin: 1em 0;
+      padding: 12px 16px;
+      border-left: 3px solid var(--purple);
+      background: rgba(82, 82, 255, 0.08);
+      border-radius: 0 8px 8px 0;
+      color: #94a3b8;
+      font-size: 14px;
+    }
+    .content hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2em 0;
+    }
+    .content table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      margin: 1em 0;
+    }
+    .content .table-wrap {
+      overflow-x: auto;
+      margin: 1em 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .content th {
+      background: rgba(82, 82, 255, 0.15);
+      color: var(--purple-light);
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      text-align: left;
+      white-space: nowrap;
+    }
+    .content td {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .content code {
+      background: rgba(82, 82, 255, 0.12);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: #e2e8f0;
+      word-break: break-word;
+    }
+    .content input[type="checkbox"] {
+      margin-right: 8px;
+      accent-color: var(--purple);
+    }
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc {
+        position: static;
+        max-height: none;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .content { padding: 20px 16px 60px; }
+    }
+    @media print {
+      body { background: #fff; color: #111; }
+      .topbar, .toc { display: none; }
+      .layout { display: block; max-width: none; }
+      .content { padding: 0; }
+      .content h1, .content h2, .content h3, .content strong { color: #111; -webkit-text-fill-color: #111; }
+      .content p, .content li { color: #222; }
+      .content a { color: #333; }
+      .content th { background: #eee; color: #111; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" id="app-home" href="https://vpeg-pxd-dashboard.vercel.app/">VPEG-PXD</a>
+    <div class="actions">
+      <a class="btn primary" id="app-dashboard" href="https://vpeg-pxd-dashboard.vercel.app/">Về Dashboard</a>
+      <button class="btn" type="button" onclick="window.print()">In / PDF</button>
+    </div>
+  </header>
+  <div class="layout">
+    <nav class="toc" aria-label="Mục lục">
+      <div class="toc-title">Mục lục</div>
+      <ol>
+        <li><a href="#1-giới-thiệu">1. Giới thiệu</a></li>
+        <li><a href="#2-truy-cập-đăng-nhập">2. Truy cập &amp; đăng nhập</a></li>
+        <li><a href="#3-giao-diện-chung">3. Giao diện chung</a></li>
+        <li><a href="#4-phân-quyền-theo-vai-trò">4. Phân quyền theo vai trò</a></li>
+        <li><a href="#5-trang-tổng-quan">5. Trang Tổng quan</a></li>
+        <li><a href="#6-danh-sách-dự-án">6. Danh sách dự án</a></li>
+        <li><a href="#7-chi-tiết-dự-án">7. Chi tiết dự án</a></li>
+        <li><a href="#8-quản-lý-công-việc-task">8. Quản lý công việc (Task)</a></li>
+        <li><a href="#9-tài-khoản-cá-nhân">9. Tài khoản cá nhân</a></li>
+        <li><a href="#10-cài-đặt-hệ-thống-admin">10. Cài đặt hệ thống (Admin)</a></li>
+        <li><a href="#11-chia-sẻ-tiến-độ-cho-khách-hàng">11. Chia sẻ tiến độ cho khách hàng</a></li>
+        <li><a href="#12-trợ-lý-ai-ai-pxd">12. Trợ lý AI (AI PXD)</a></li>
+        <li><a href="#13-thông-báo">13. Thông báo</a></li>
+        <li><a href="#14-mẹo-vận-hành-xử-lý-sự-cố">14. Mẹo vận hành &amp; xử lý sự cố</a></li>
+        <li><a href="#15-kịch-bản-training-đề-xuất">15. Kịch bản training đề xuất</a></li>
+        <li><a href="#phụ-lục-a-thuật-ngữ">Phụ lục A — Thuật ngữ</a></li>
+        <li><a href="#phụ-lục-b-liên-hệ-hỗ-trợ">Phụ lục B — Liên hệ hỗ trợ</a></li>
+      </ol>
+    </nav>
+    <main class="content">
+      <h1>Hướng dẫn sử dụng Dashboard VPEG-PXD</h1>
+<blockquote>
+<p><strong>Phiên bản tài liệu:</strong> 1.0<br><strong>Đối tượng:</strong> Nhân viên mới, PM, SM, GS, SA, TK, P.SC và Admin<br><strong>Mục đích:</strong> Training từ A–Z — đọc xong có thể tự thao tác trên hệ thống</p>
+</blockquote>
+<hr>
+<h2 id="1-giới-thiệu">1. Giới thiệu</h2>
+<h3 id="11-phần-mềm-là-gì">1.1. Phần mềm là gì?</h3>
+<p><strong>Dashboard VPEG-PXD</strong> là nền tảng quản lý dự án điện mặt trời EPC của <strong>Vu Phong Energy Group</strong>. Phần mềm giúp:</p>
+<ul>
+<li>Theo dõi <strong>toàn bộ danh mục dự án</strong> (công suất, tiến độ, COD, rủi ro, vướng mắc).</li>
+<li>Quản lý <strong>công việc (task)</strong> theo dự án hoặc văn phòng.</li>
+<li>Ghi <strong>nhật ký hiện trường</strong> (ngày / tuần / tháng), ảnh site, nhân lực, sự cố.</li>
+<li>Theo dõi <strong>6 hạng mục EPC</strong>: Risk, Giấy phép, Thiết kế, Mua sắm, Thi công, Bàn giao.</li>
+<li>Xem <strong>S-Curve</strong>, milestone, KPI tuần.</li>
+<li><strong>Chia sẻ read-only</strong> cho khách hàng qua link công khai.</li>
+<li>Quản trị <strong>tài khoản, phân quyền, nhật ký hoạt động</strong> (Admin).</li>
+</ul>
+<h3 id="12-dữ-liệu-lưu-ở-đâu">1.2. Dữ liệu lưu ở đâu?</h3>
+<p>Dữ liệu được đồng bộ qua <strong>Google Apps Script (GAS)</strong> — backend kết nối Google Sheets / Drive. Trình duyệt có <strong>cache cục bộ</strong> để tải nhanh; khi mất mạng tạm thời vẫn xem được dữ liệu đã cache, nhưng <strong>lưu mới cần có kết nối</strong>.</p>
+<h3 id="13-địa-chỉ-truy-cập">1.3. Địa chỉ truy cập</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Môi trường</th>
+<th>URL</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Production</td>
+<td><code>https://vpeg-pxd-dashboard.vercel.app</code></td>
+</tr>
+<tr>
+<td>Local (dev)</td>
+<td><code>http://localhost:5173</code> (khi chạy <code>npm run dev</code>)</td>
+</tr>
+</tbody></table></div>
+<hr>
+<h2 id="2-truy-cập-đăng-nhập">2. Truy cập &amp; đăng nhập</h2>
+<h3 id="21-đăng-nhập-lần-đầu">2.1. Đăng nhập lần đầu</h3>
+<ol>
+<li>Mở trình duyệt <strong>Chrome</strong> hoặc <strong>Edge</strong> (khuyến nghị).</li>
+<li>Truy cập URL production ở trên.</li>
+<li>Nhập <strong>Tên đăng nhập</strong> và <strong>Mật khẩu</strong> do Admin cấp.</li>
+<li>Nhấn <strong>Đăng nhập</strong>.</li>
+</ol>
+<blockquote>
+<p><strong>Lưu ý:</strong> Mật khẩu mặc định khi Admin tạo tài khoản mới thường là <code>123123</code>. <strong>Bắt buộc đổi mật khẩu</strong> ngay sau lần đăng nhập đầu (xem <a href="#9-tài-khoản-cá-nhân">mục 9</a>).</p>
+</blockquote>
+<h3 id="22-lỗi-đăng-nhập-thường-gặp">2.2. Lỗi đăng nhập thường gặp</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Triệu chứng</th>
+<th>Nguyên nhân</th>
+<th>Cách xử lý</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>&quot;Đăng nhập thất bại&quot;</td>
+<td>Sai user/pass</td>
+<td>Kiểm tra lại; liên hệ Admin reset</td>
+</tr>
+<tr>
+<td>Không vào được</td>
+<td>Tài khoản bị khóa</td>
+<td>Admin vào <strong>Cài đặt → Tài khoản → Mở khóa</strong></td>
+</tr>
+<tr>
+<td>Trang trắng / lỗi tải</td>
+<td>Cache cũ</td>
+<td><code>Ctrl + F5</code> hoặc xóa cache trình duyệt</td>
+</tr>
+</tbody></table></div>
+<h3 id="23-đăng-xuất">2.3. Đăng xuất</h3>
+<p>Ở <strong>thanh sidebar dưới cùng</strong>, nhấn biểu tượng <strong>Đăng xuất</strong> (mũi tên ra). Luôn đăng xuất khi dùng máy chung.</p>
+<hr>
+<h2 id="3-giao-diện-chung">3. Giao diện chung</h2>
+<h3 id="31-thanh-điều-hướng-bên-trái-sidebar">3.1. Thanh điều hướng bên trái (Sidebar)</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Menu</th>
+<th>Đường dẫn</th>
+<th>Mô tả</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>TỔNG QUAN</strong></td>
+<td><code>/</code></td>
+<td>Dashboard tổng hợp KPI, risk, task</td>
+</tr>
+<tr>
+<td><strong>CÔNG VIỆC</strong></td>
+<td><code>/tasks</code></td>
+<td>Quản lý task toàn công ty</td>
+</tr>
+<tr>
+<td><strong>DỰ ÁN</strong></td>
+<td><code>/projects</code></td>
+<td>Bảng danh sách dự án</td>
+</tr>
+<tr>
+<td><strong>TÀI KHOẢN</strong></td>
+<td><code>/account</code></td>
+<td>Thông tin cá nhân, đổi mật khẩu</td>
+</tr>
+<tr>
+<td><strong>CÀI ĐẶT</strong></td>
+<td><code>/settings/users</code></td>
+<td>Chỉ <strong>Admin</strong> thấy menu này</td>
+</tr>
+</tbody></table></div>
+<p><strong>Thu gọn sidebar:</strong> Nút <strong>Thu gọn</strong> / biểu tượng mũi tên ở cuối sidebar — tiết kiệm không gian màn hình.</p>
+<p><strong>Logo VUPHONG:</strong> Nhấn để quay về <strong>Tổng quan</strong>.</p>
+<h3 id="32-chế-độ-giao-diện-sáng-tối-hệ-thống">3.2. Chế độ giao diện (Sáng / Tối / Hệ thống)</h3>
+<p>Ở cuối sidebar, biểu tượng <strong>Mặt trời / Mặt trăng / Màn hình</strong>:</p>
+<ul>
+<li><strong>Sáng</strong> — nền sáng, dễ đọc ban ngày.</li>
+<li><strong>Tối</strong> — nền tối, mặc định dashboard.</li>
+<li><strong>Hệ thống</strong> — theo cài đặt Windows/macOS.</li>
+</ul>
+<h3 id="33-ngôn-ngữ-trang-chia-sẻ-khách">3.3. Ngôn ngữ (trang chia sẻ khách)</h3>
+<p>Trang nội bộ chủ yếu dùng <strong>Tiếng Việt</strong>. Trang <strong>link chia sẻ khách</strong> (<code>/share/...</code>) hỗ trợ chuyển <strong>VI / EN</strong> qua nút ngôn ngữ góc trên.</p>
+<h3 id="34-trạng-thái-tải-dữ-liệu">3.4. Trạng thái tải dữ liệu</h3>
+<p>Khi mở trang lần đầu hoặc đồng bộ, có thể thấy:</p>
+<ul>
+<li><em>&quot;Đang đồng bộ dữ liệu...&quot;</em> — danh sách dự án.</li>
+<li><em>&quot;Đang tải giao diện...&quot;</em> — chuyển trang.</li>
+<li><em>&quot;Đang tải chi tiết dự án...&quot;</em> — trang chi tiết.</li>
+</ul>
+<p>Đợi vài giây; nếu quá 30 giây, thử <strong>F5</strong> hoặc kiểm tra mạng.</p>
+<hr>
+<h2 id="4-phân-quyền-theo-vai-trò">4. Phân quyền theo vai trò</h2>
+<h3 id="41-các-vai-trò-role">4.1. Các vai trò (Role)</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Tên hiển thị</th>
+<th>Mô tả ngắn</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>admin</code></td>
+<td>Admin</td>
+<td>Toàn quyền hệ thống</td>
+</tr>
+<tr>
+<td><code>pm</code></td>
+<td>PM</td>
+<td>Project Manager — quản lý dự án được gán</td>
+</tr>
+<tr>
+<td><code>sm</code></td>
+<td>SM</td>
+<td>Site Manager — quản lý hiện trường</td>
+</tr>
+<tr>
+<td><code>gs</code></td>
+<td>GS</td>
+<td>Giám sát</td>
+</tr>
+<tr>
+<td><code>sa</code></td>
+<td>SA</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>tk</code></td>
+<td>TK</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>psc</code></td>
+<td>P.SC</td>
+<td>Phòng SC</td>
+</tr>
+<tr>
+<td><code>employee</code></td>
+<td>Nhân viên</td>
+<td>Xem &amp; cập nhật task được giao</td>
+</tr>
+</tbody></table></div>
+<h3 id="42-ma-trận-quyền-chính">4.2. Ma trận quyền chính</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Hành động</th>
+<th>Admin</th>
+<th>PM/SM (dự án được gán)</th>
+<th>Nhân viên khác</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Xem tất cả dự án</td>
+<td>✅</td>
+<td>✅ (xem)</td>
+<td>✅ (xem)</td>
+</tr>
+<tr>
+<td>Sửa dữ liệu dự án (module, nhật ký…)</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌ (chỉ xem)</td>
+</tr>
+<tr>
+<td>Thêm / xóa dự án</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Sửa &quot;Vướng mắc&quot; trên bảng dự án</td>
+<td>✅</td>
+<td>✅ (dự án được gán)</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Tạo task mới</td>
+<td>✅</td>
+<td>✅</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Sửa / xóa task</td>
+<td>✅</td>
+<td>Chỉ task mình được giao (<code>NHÂN_SỰ</code>)</td>
+<td>Chỉ task mình được giao</td>
+</tr>
+<tr>
+<td>Quản lý tài khoản</td>
+<td>✅</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>Bật link chia sẻ khách</td>
+<td>Chỉ admin chủ định</td>
+<td>❌</td>
+<td>❌</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p><strong>Quy tắc quan trọng:</strong> Muốn sửa dữ liệu dự án, tài khoản phải được <strong>gán dự án</strong> đó (trong Cài đặt → Tài khoản). PM/SM thường được gán dự án mình phụ trách.</p>
+</blockquote>
+<hr>
+<h2 id="5-trang-tổng-quan">5. Trang Tổng quan</h2>
+<p><strong>Đường dẫn:</strong> <code>/</code> — menu <strong>TỔNG QUAN</strong></p>
+<h3 id="51-mục-đích">5.1. Mục đích</h3>
+<p>Trang &quot;điểm danh&quot; buổi sáng: xem nhanh toàn công ty đang thế nào — không cần mở từng dự án.</p>
+<h3 id="52-thẻ-kpi-trên-cùng">5.2. Thẻ KPI trên cùng</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thẻ</th>
+<th>Ý nghĩa</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Tổng công suất Site</strong></td>
+<td>Tổng kWp các dự án đang active</td>
+</tr>
+<tr>
+<td><strong>Dự án đang thi công</strong></td>
+<td>Số dự án chưa hoàn thành</td>
+</tr>
+<tr>
+<td><strong>Risk cần xử lý</strong></td>
+<td>Rủi ro mở — nhấn để cuộn xuống bảng Risk</td>
+</tr>
+<tr>
+<td><strong>Task quan trọng</strong></td>
+<td>Task ưu tiên cao — nhấn để cuộn xuống bảng Task</td>
+</tr>
+</tbody></table></div>
+<h3 id="53-các-khối-nội-dung">5.3. Các khối nội dung</h3>
+<ul>
+<li><strong>Tiến độ dự án</strong> — top 5 dự án active theo công suất; thanh % thực tế vs kế hoạch.</li>
+<li><strong>Risk cần xử lý</strong> — rủi ro HIGH/MEDIUM chưa đóng; nhấn dòng để vào chi tiết dự án.</li>
+<li><strong>Task quan trọng</strong> — task ưu tiên Khẩn cấp / Quan trọng / Bình thường (không gồm Thấp).</li>
+<li><strong>Kanban task</strong> — 4 cột: <strong>Quá hạn | Hôm nay | Sắp tới | Hoàn thành</strong>; nhấn thẻ để sang trang Công việc.</li>
+</ul>
+<h3 id="54-thao-tác-nhanh">5.4. Thao tác nhanh</h3>
+<ul>
+<li>Nhấn tên dự án → vào <strong>Chi tiết dự án</strong>.</li>
+<li>Nhấn task → chuyển sang <strong>Công việc</strong> (có thể kèm bộ lọc tìm kiếm).</li>
+</ul>
+<hr>
+<h2 id="6-danh-sách-dự-án">6. Danh sách dự án</h2>
+<p><strong>Đường dẫn:</strong> <code>/projects</code> — menu <strong>DỰ ÁN</strong></p>
+<h3 id="61-bảng-dự-án-các-cột">6.1. Bảng dự án — các cột</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Cột</th>
+<th>Giải thích</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Dự án</strong></td>
+<td>Tên dự án — nhấn để vào chi tiết</td>
+</tr>
+<tr>
+<td><strong>Khách hàng</strong></td>
+<td>Chủ đầu tư</td>
+</tr>
+<tr>
+<td><strong>PM</strong></td>
+<td>Project Manager phụ trách</td>
+</tr>
+<tr>
+<td><strong>Công suất (kWp)</strong></td>
+<td>Quy mô công trình</td>
+</tr>
+<tr>
+<td><strong>% Thực tế</strong></td>
+<td>Tiến độ thi công thực tế</td>
+</tr>
+<tr>
+<td><strong>Δ Kế hoạch</strong></td>
+<td>Chênh lệch so kế hoạch: <strong>+x%</strong> (xanh = đúng/vượt), <strong>-x%</strong> (đỏ = chậm)</td>
+</tr>
+<tr>
+<td><strong>COD còn lại</strong></td>
+<td>Số ngày đến ngày Commercial Operation Date</td>
+</tr>
+<tr>
+<td><strong>Risk</strong></td>
+<td>LOW / MEDIUM / HIGH</td>
+</tr>
+<tr>
+<td><strong>Vướng mắc</strong></td>
+<td>Vấn đề chính đang gặp</td>
+</tr>
+<tr>
+<td><strong>Action</strong></td>
+<td>Nút xem chi tiết</td>
+</tr>
+</tbody></table></div>
+<h3 id="62-tìm-kiếm-lọc">6.2. Tìm kiếm &amp; lọc</h3>
+<ul>
+<li><strong>Ô tìm kiếm:</strong> Gõ tên dự án, khách hàng, PM, SM.</li>
+<li><strong>Bộ lọc nâng cao:</strong> Lọc theo PM, SM, Khu vực, Khách hàng, Trạng thái, Risk.<ul>
+<li>Chọn tab bên trái → tick checkbox bên phải.</li>
+<li><strong>Áp dụng</strong> để lọc; <strong>Xóa bộ lọc</strong> để reset.</li>
+</ul>
+</li>
+</ul>
+<h3 id="63-sắp-xếp">6.3. Sắp xếp</h3>
+<p>Nhấn <strong>tiêu đề cột</strong> để sắp xếp tăng/giảm. Mũi tên ↑↓ hiện ở cột đang sort.</p>
+<h3 id="64-phân-trang">6.4. Phân trang</h3>
+<p>Chọn số dòng: <strong>4 / 8 / 12 / 20</strong> dự án mỗi trang. Dùng nút số trang hoặc mũi tên <code>&lt; &gt;</code>.</p>
+<h3 id="65-xuất-excel">6.5. Xuất Excel</h3>
+<p>Nút <strong>Xuất Excel</strong> (góc phải header) — tải file CSV danh sách dự án <strong>theo bộ lọc hiện tại</strong>.</p>
+<h3 id="66-thêm-dự-án-mới-admin">6.6. Thêm dự án mới <em>(Admin)</em></h3>
+<ol>
+<li>Nhấn <strong>Thêm dự án</strong> (góc phải).</li>
+<li>Điền form bên phải:<ul>
+<li><strong>Tên dự án EPC</strong> * (bắt buộc) — tự chuyển IN HOA.</li>
+<li><strong>Khách hàng / Chủ đầu tư</strong> * (bắt buộc).</li>
+<li><strong>PM</strong>, <strong>Công suất (kWp)</strong>.</li>
+<li><strong>Ngày Kickoff</strong>, <strong>Ngày COD</strong> (định dạng dd/mm/yyyy).</li>
+</ul>
+</li>
+<li>Nhấn <strong>Lưu dự án</strong>.</li>
+</ol>
+<p>Hệ thống tự sinh <strong>Mã dự án</strong> dạng <code>2026-01</code>, <code>2026-02</code>… theo năm hiện tại.</p>
+<h3 id="67-sửa-vướng-mắc-nhanh-trên-bảng">6.7. Sửa vướng mắc nhanh trên bảng</h3>
+<p>Người có quyền sửa dự án: <strong>double-click</strong> ô <strong>Vướng mắc</strong> → gõ nội dung → <strong>Enter</strong> hoặc click ra ngoài để lưu.</p>
+<hr>
+<h2 id="7-chi-tiết-dự-án">7. Chi tiết dự án</h2>
+<p><strong>Cách vào:</strong> Nhấn tên dự án từ Tổng quan / Danh sách dự án / Task.</p>
+<p><strong>Đường dẫn:</strong> <code>/projects/{tên-hoặc-mã-dự-án}</code></p>
+<h3 id="71-header-dự-án">7.1. Header dự án</h3>
+<ul>
+<li><strong>Quay lại</strong> — về Tổng quan.</li>
+<li>Thông tin: tên, khách hàng, công suất, tiến độ, COD.</li>
+<li><strong>Copy link / Bật link</strong> — chỉ admin được phép chia sẻ khách (xem <a href="#11-chia-sẻ-tiến-độ-cho-khách-hàng">mục 11</a>).</li>
+</ul>
+<h3 id="72-thanh-điều-hướng-nội-bộ-sticky">7.2. Thanh điều hướng nội bộ (sticky)</h3>
+<p>Cuộn trang sẽ tự highlight mục đang xem:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>KPI</strong></td>
+<td>Chỉ số tổng hợp dự án</td>
+</tr>
+<tr>
+<td><strong>Milestone</strong></td>
+<td>Timeline các mốc quan trọng</td>
+</tr>
+<tr>
+<td><strong>Nhật ký</strong></td>
+<td>Site log ngày/tuần/tháng</td>
+</tr>
+<tr>
+<td><strong>S-Curve</strong></td>
+<td>Biểu đồ tiến độ kế hoạch vs thực tế</td>
+</tr>
+<tr>
+<td><strong>Hạng mục</strong></td>
+<td>6 module EPC</td>
+</tr>
+</tbody></table></div>
+<h3 id="73-kpi-overview">7.3. KPI Overview</h3>
+<p>Hiển thị:</p>
+<ul>
+<li>Tiến độ <strong>kế hoạch</strong> vs <strong>thực tế</strong>.</li>
+<li><strong>Chênh lệch / Delay</strong> (%).</li>
+<li><strong>Thời gian còn lại</strong> đến COD.</li>
+</ul>
+<h3 id="74-milestone-timeline">7.4. Milestone Timeline</h3>
+<p>Timeline các mốc: Kickoff, Giấy phép, Thiết kế, Mua sắm, Thi công, COD, Bàn giao…<br>Màu sắc thể hiện trạng thái: hoàn thành / đang làm / chưa tới / trễ.</p>
+<h3 id="75-nhật-ký-vận-hành-site-log">7.5. Nhật ký &amp; Vận hành (Site Log)</h3>
+<p><strong>Ba chế độ xem:</strong> <strong>Ngày | Tuần | Tháng</strong></p>
+<h4 id="nhật-ký-theo-ngày">Nhật ký theo ngày</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Trường</th>
+<th>Mô tả</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Nhân lực Site</td>
+<td>Số công nhân hiện trường</td>
+</tr>
+<tr>
+<td>Kỹ sư / GS</td>
+<td>Số kỹ sư giám sát</td>
+</tr>
+<tr>
+<td>Thời tiết</td>
+<td>Nắng / Mưa / Nhiều mây…</td>
+</tr>
+<tr>
+<td>Công việc chính</td>
+<td>Checklist công việc trong ngày</td>
+</tr>
+<tr>
+<td>Sự cố</td>
+<td>Số sự cố, mức độ</td>
+</tr>
+<tr>
+<td>Ghi chú hiện trường</td>
+<td>Mô tả tự do</td>
+</tr>
+<tr>
+<td>Ảnh hiện trường</td>
+<td>Tối đa <strong>4 ảnh/ngày</strong></td>
+</tr>
+</tbody></table></div>
+<p><strong>Cách cập nhật nhật ký ngày:</strong></p>
+<ol>
+<li>Chọn ngày trên lịch (hoặc mũi tên trái/phải).</li>
+<li>Nhấn biểu tượng <strong>bút chì</strong> ở các mục cần sửa.</li>
+<li>Nhập / tick / upload ảnh.</li>
+<li>Hệ thống <strong>tự lưu</strong> — xem trạng thái góc panel:<ul>
+<li><em>Đang lưu...</em> → <em>Đã lưu</em> (thành công) hoặc <em>Lỗi kết nối</em> (thử lại).</li>
+</ul>
+</li>
+</ol>
+<p><strong>Upload ảnh:</strong></p>
+<ul>
+<li>Chọn file từ máy; ảnh tự nén trước khi gửi.</li>
+<li>Cần quyền Google Drive nếu lần đầu upload (hệ thống có thể yêu cầu xác thực).</li>
+</ul>
+<h4 id="nhật-ký-tuần-tháng">Nhật ký tuần / tháng</h4>
+<ul>
+<li><strong>Tuần:</strong> Tổng hợp nhân lực, thời tiết, sự cố; biểu đồ nhân lực theo ngày.</li>
+<li><strong>Tháng:</strong> Báo cáo tổng hợp tháng.</li>
+</ul>
+<blockquote>
+<p><strong>Quyền:</strong> Chỉ người được <strong>gán dự án</strong> mới sửa được. Người khác thấy chế độ <strong>Chỉ xem</strong>.</p>
+</blockquote>
+<h3 id="76-s-curve">7.6. S-Curve</h3>
+<p>Biểu đồ đường cong tiến độ:</p>
+<ul>
+<li><strong>Kế hoạch (Plan)</strong> — đường mục tiêu theo thời gian.</li>
+<li><strong>Thực tế (Actual)</strong> — tiến độ ghi nhận từ site log / module.</li>
+</ul>
+<p>Dùng để báo cáo BOD: dự án đi <strong>trên</strong> hay <strong>dưới</strong> đường kế hoạch.</p>
+<h3 id="77-sáu-hạng-mục-epc-modules">7.7. Sáu hạng mục EPC (Modules)</h3>
+<p>Mỗi module là một <strong>accordion</strong> (mở/đóng). Click tiêu đề để mở rộng.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Module</th>
+<th>Nội dung chính</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td><strong>Risk</strong></td>
+<td>Danh sách rủi ro: mô tả, mức độ, người phụ trách, hạn xử lý, trạng thái</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Giấy phép (Permit)</strong></td>
+<td>Tiến độ hồ sơ, giấy phép xây dựng / điện lực…</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Thiết kế (Design)</strong></td>
+<td>Bản vẽ, BOQ, phê duyệt thiết kế</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Mua sắm (Procurement)</strong></td>
+<td>Đặt hàng tấm pin, inverter, vật tư…</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Thi công (Construction)</strong></td>
+<td>Hạng mục thi công, % hoàn thành từng hạng mục</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Bàn giao (Handover)</strong></td>
+<td>Nghiệm thu, đóng điện, bàn giao O&amp;M</td>
+</tr>
+</tbody></table></div>
+<p><strong>Cách cập nhật module:</strong></p>
+<ol>
+<li>Mở accordion module cần sửa.</li>
+<li>Chỉnh các trường (ngày, %, trạng thái, ghi chú…).</li>
+<li>Nhấn <strong>Lưu</strong> (nếu có) hoặc chờ autosave.</li>
+<li>Tiến độ module <strong>ảnh hưởng tiến độ tổng</strong> dự án và milestone.</li>
+</ol>
+<p><strong>Risk module — lưu ý:</strong></p>
+<ul>
+<li>Risk <strong>HIGH</strong> hiển thị trên Tổng quan.</li>
+<li>Đóng risk khi đã xử lý xong (cập nhật trạng thái).</li>
+</ul>
+<hr>
+<h2 id="8-quản-lý-công-việc-task">8. Quản lý công việc (Task)</h2>
+<p><strong>Đường dẫn:</strong> <code>/tasks</code> — menu <strong>CÔNG VIỆC</strong></p>
+<h3 id="81-bốn-chế-độ-xem">8.1. Bốn chế độ xem</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Chế độ</th>
+<th>Icon</th>
+<th>Mô tả</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Lưới (Grid)</strong></td>
+<td>Bảng</td>
+<td>Bảng task đầy đủ cột — mặc định</td>
+</tr>
+<tr>
+<td><strong>Board</strong></td>
+<td>Kanban</td>
+<td>Cột theo trạng thái</td>
+</tr>
+<tr>
+<td><strong>Calendar</strong></td>
+<td>Lịch</td>
+<td>Task theo ngày bắt đầu / kết thúc</td>
+</tr>
+<tr>
+<td><strong>Chart</strong></td>
+<td>Biểu đồ</td>
+<td>Thống kê theo trạng thái, ưu tiên, thành viên</td>
+</tr>
+</tbody></table></div>
+<p>Chuyển chế độ bằng các nút ở thanh công cụ phía trên.</p>
+<h3 id="82-thống-kê-nhanh-5-ô-trên-cùng">8.2. Thống kê nhanh (5 ô trên cùng)</h3>
+<ul>
+<li><strong>Tổng task</strong></li>
+<li><strong>Chưa bắt đầu</strong></li>
+<li><strong>Đang diễn ra</strong></li>
+<li><strong>Trễ hạn</strong></li>
+<li><strong>Hoàn thành</strong></li>
+</ul>
+<h3 id="83-tìm-kiếm-lọc">8.3. Tìm kiếm &amp; lọc</h3>
+<ul>
+<li>Ô <strong>Tìm kiếm:</strong> theo tên task, mô tả, tên dự án.</li>
+<li>Có thể vào từ Tổng quan kèm tham số <code>?q=...</code> hoặc <code>?project=...</code>.</li>
+</ul>
+<h3 id="84-thêm-công-việc-mới-pmsmadmin">8.4. Thêm công việc mới <em>(PM/SM/Admin)</em></h3>
+<ol>
+<li>Nhấn nút <strong>+ Thêm công việc</strong> (hoặc tương đương).</li>
+<li>Chọn loại:<ul>
+<li><strong>Công việc Dự án</strong> — gắn với một dự án cụ thể.</li>
+<li><strong>Công việc Văn phòng / Nội bộ</strong> — không gắn dự án.</li>
+</ul>
+</li>
+<li>Điền:<ul>
+<li><strong>Tác vụ</strong> (tiêu đề) *</li>
+<li><strong>Mô tả</strong></li>
+<li><strong>Dự án</strong> (nếu loại Dự án)</li>
+<li><strong>Nhân sự</strong> — người được giao</li>
+<li><strong>Ưu tiên:</strong> Khẩn cấp / Quan trọng / Bình thường / Thấp</li>
+<li><strong>Ngày bắt đầu</strong>, <strong>Ngày kết thúc</strong> (dd/mm/yyyy)</li>
+</ul>
+</li>
+<li>Nhấn <strong>Lưu</strong>.</li>
+</ol>
+<h3 id="85-cập-nhật-hoàn-thành-task">8.5. Cập nhật / hoàn thành task</h3>
+<ul>
+<li>Người được giao (<code>NHÂN_SỰ</code> khớp tên đăng nhập) hoặc Admin mới sửa được.</li>
+<li>Đổi <strong>trạng thái</strong> trực tiếp trên bảng hoặc trong form chi tiết.</li>
+<li><strong>Ghim (Pin)</strong> task quan trọng lên đầu danh sách.</li>
+</ul>
+<h3 id="86-xuất-dữ-liệu">8.6. Xuất dữ liệu</h3>
+<p>Nút <strong>Xuất</strong> — tải CSV danh sách task đang hiển thị.</p>
+<hr>
+<h2 id="9-tài-khoản-cá-nhân">9. Tài khoản cá nhân</h2>
+<p><strong>Đường dẫn:</strong> <code>/account</code> — menu <strong>TÀI KHOẢN</strong> hoặc click avatar sidebar.</p>
+<h3 id="91-thông-tin-hiển-thị">9.1. Thông tin hiển thị</h3>
+<ul>
+<li>Họ tên, Email, Vai trò (PM, SM…).</li>
+<li><strong>Dự án được gán</strong> — số lượng dự án bạn có quyền sửa.</li>
+</ul>
+<h3 id="92-đổi-mật-khẩu">9.2. Đổi mật khẩu</h3>
+<ol>
+<li>Nhập <strong>Mật khẩu hiện tại</strong>.</li>
+<li>Nhập <strong>Mật khẩu mới</strong> (tối thiểu 6 ký tự).</li>
+<li>Nhập lại <strong>Xác nhận mật khẩu</strong>.</li>
+<li>Nhấn <strong>Đổi mật khẩu</strong>.</li>
+</ol>
+<p>Biểu tượng <strong>mắt</strong> để hiện/ẩn mật khẩu khi gõ.</p>
+<hr>
+<h2 id="10-cài-đặt-hệ-thống-admin">10. Cài đặt hệ thống (Admin)</h2>
+<p><strong>Chỉ role Admin</strong> truy cập được.</p>
+<h3 id="101-quản-lý-tài-khoản">10.1. Quản lý tài khoản</h3>
+<p><strong>Đường dẫn:</strong> <code>/settings/users</code></p>
+<h4 id="danh-sách-user">Danh sách user</h4>
+<ul>
+<li>Tìm theo tên, username, email, role.</li>
+<li>Cột: Họ tên, Username, Email, Role, Dự án gán, Trạng thái.</li>
+</ul>
+<h4 id="tạo-tài-khoản-mới-3-bước">Tạo tài khoản mới (3 bước)</h4>
+<p><strong>Bước 1 — Chọn nhân viên</strong></p>
+<ul>
+<li>Chọn từ danh sách <strong>Employee</strong> (đồng bộ từ sheet nhân sự).</li>
+<li>Hệ thống tự điền họ tên, email <code>@vuphong.com</code>, role theo chức vụ.</li>
+</ul>
+<p><strong>Bước 2 — Tài khoản đăng nhập</strong></p>
+<ul>
+<li><strong>Username</strong> — không trùng.</li>
+<li><strong>Mật khẩu</strong> — mặc định <code>123123</code>; có thể đổi khi tạo.</li>
+<li><strong>Role</strong> — PM, SM, GS, SA, TK, P.SC, Nhân viên.</li>
+</ul>
+<p><strong>Bước 3 — Gán dự án</strong></p>
+<ul>
+<li>Tick các dự án user được phép <strong>sửa</strong>.</li>
+<li>PM/SM thường gán đúng dự án phụ trách.</li>
+</ul>
+<h4 id="thao-tác-trên-user">Thao tác trên user</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Nút</th>
+<th>Tác dụng</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Sửa</strong></td>
+<td>Đổi role, gán dự án, reset mật khẩu</td>
+</tr>
+<tr>
+<td><strong>Khóa</strong></td>
+<td>User không đăng nhập được</td>
+</tr>
+<tr>
+<td><strong>Mở khóa</strong></td>
+<td>Khôi phục đăng nhập</td>
+</tr>
+<tr>
+<td><strong>Vô hiệu hóa</strong></td>
+<td>Tắt tài khoản (không xóa dữ liệu)</td>
+</tr>
+<tr>
+<td><strong>Kích hoạt lại</strong></td>
+<td>Bật lại tài khoản đã vô hiệu</td>
+</tr>
+</tbody></table></div>
+<blockquote>
+<p>Không sửa/xóa tài khoản <strong>Admin</strong> qua UI.</p>
+</blockquote>
+<h3 id="102-nhật-ký-hoạt-động-audit-log">10.2. Nhật ký hoạt động (Audit Log)</h3>
+<p><strong>Đường dẫn:</strong> <code>/settings/audit</code></p>
+<p>Ghi lại mọi hành động quan trọng:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Loại</th>
+<th>Ví dụ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Đăng nhập / Đăng xuất</td>
+<td>User A login lúc 8:00</td>
+</tr>
+<tr>
+<td>Dự án</td>
+<td>Tạo, sửa, xóa dự án</td>
+</tr>
+<tr>
+<td>Task</td>
+<td>Tạo, sửa, xóa task</td>
+</tr>
+<tr>
+<td>Tài khoản</td>
+<td>Tạo user, khóa, đổi role</td>
+</tr>
+<tr>
+<td>Site log / ảnh</td>
+<td>Upload ảnh, sửa nhật ký</td>
+</tr>
+</tbody></table></div>
+<p><strong>Lọc:</strong> Theo loại hành động, tìm theo tên user / nội dung.<br><strong>Chi tiết:</strong> Nhấn &quot;Chi tiết&quot; để xem JSON thay đổi.</p>
+<p><strong>Cấu hình email thông báo:</strong> Admin có thể bật/tắt gửi email và cấu hình URL app.</p>
+<hr>
+<h2 id="11-chia-sẻ-tiến-độ-cho-khách-hàng">11. Chia sẻ tiến độ cho khách hàng</h2>
+<h3 id="111-ai-được-bật-link">11.1. Ai được bật link?</h3>
+<p>Chỉ <strong>Admin chủ</strong> (username <code>tien.nguyen</code>) thấy nút chia sẻ trên header chi tiết dự án.</p>
+<h3 id="112-cách-bật-link">11.2. Cách bật link</h3>
+<ol>
+<li>Vào <strong>Chi tiết dự án</strong>.</li>
+<li>Nhấn <strong>Bật link</strong> → hệ thống tạo token.</li>
+<li>Nhấn <strong>Copy link</strong> — URL dạng:<br><code>https://vpeg-pxd-dashboard.vercel.app/share/{token}</code></li>
+</ol>
+<h3 id="113-khách-hàng-thấy-gì">11.3. Khách hàng thấy gì?</h3>
+<p>Trang <strong>read-only</strong> (chỉ xem):</p>
+<ul>
+<li>KPI, Milestone, S-Curve.</li>
+<li>Nhật ký site (không sửa được).</li>
+<li>Các module (Permit, Design, Procurement, Construction, Handover).</li>
+<li><strong>Không</strong> thấy: Risk nội bộ, task, dữ liệu nhạy cảm khác.</li>
+</ul>
+<p>Hỗ trợ <strong>Tiếng Việt / English</strong>.</p>
+<h3 id="114-tắt-link">11.4. Tắt link</h3>
+<p>Nhấn <strong>Tắt link chia sẻ</strong> — link cũ hết hiệu lực ngay.</p>
+<hr>
+<h2 id="12-trợ-lý-ai-ai-pxd">12. Trợ lý AI (AI PXD)</h2>
+<h3 id="121-vị-trí">12.1. Vị trí</h3>
+<p>Nút <strong>bot</strong> góc dưới phải màn hình (mọi trang sau đăng nhập).</p>
+<h3 id="122-ai-có-thể-giúp-gì">12.2. AI có thể giúp gì?</h3>
+<ul>
+<li>Hướng dẫn thao tác từng màn hình.</li>
+<li>Đọc số liệu dự án / task bạn đang xem.</li>
+<li>Tư vấn kỹ thuật điện mặt trời EPC.</li>
+</ul>
+<h3 id="123-gợi-ý-câu-hỏi-nhanh">12.3. Gợi ý câu hỏi nhanh</h3>
+<ul>
+<li><em>&quot;Hướng dẫn trang tôi đang xem&quot;</em></li>
+<li><em>&quot;Làm sao thêm dự án?&quot;</em></li>
+<li><em>&quot;Làm sao thêm công việc?&quot;</em></li>
+<li><em>&quot;Giải thích S-Curve và milestone&quot;</em></li>
+</ul>
+<h3 id="124-lưu-ý">12.4. Lưu ý</h3>
+<ul>
+<li>AI đọc dữ liệu từ cache trình duyệt + ngữ cảnh trang hiện tại.</li>
+<li>Câu trả lời mang tính <strong>hỗ trợ</strong> — quyết định chính thức vẫn theo dữ liệu trên dashboard và quy trình công ty.</li>
+</ul>
+<hr>
+<h2 id="13-thông-báo">13. Thông báo</h2>
+<h3 id="131-chuông-thông-báo">13.1. Chuông thông báo</h3>
+<p>Biểu tượng <strong>chuông</strong> ở sidebar — hiện số badge khi có thông báo chưa đọc.</p>
+<h3 id="132-loại-thông-báo">13.2. Loại thông báo</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Loại</th>
+<th>Khi nào</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Task được giao</td>
+<td>Admin/PM giao task cho bạn</td>
+</tr>
+<tr>
+<td>Task sắp đến hạn</td>
+<td>Nhắc trước deadline</td>
+</tr>
+<tr>
+<td>Task quá hạn</td>
+<td>Quá ngày kết thúc</td>
+</tr>
+<tr>
+<td>Dự án được gán / bỏ gán</td>
+<td>Admin đổi phân quyền dự án</td>
+</tr>
+<tr>
+<td>Dự án hoàn thành</td>
+<td>COD / bàn giao xong</td>
+</tr>
+<tr>
+<td>Risk quá hạn</td>
+<td>Risk chưa xử lý quá hạn</td>
+</tr>
+</tbody></table></div>
+<h3 id="133-thao-tác">13.3. Thao tác</h3>
+<ul>
+<li>Nhấn thông báo → chuyển đến trang liên quan (task / dự án).</li>
+<li><strong>Đánh dấu đã đọc</strong> từng mục hoặc <strong>Đọc tất cả</strong>.</li>
+</ul>
+<hr>
+<h2 id="14-mẹo-vận-hành-xử-lý-sự-cố">14. Mẹo vận hành &amp; xử lý sự cố</h2>
+<h3 id="141-mẹo-hàng-ngày-cho-smgs">14.1. Mẹo hàng ngày cho SM/GS</h3>
+<ol>
+<li><strong>Sáng:</strong> Mở <strong>Tổng quan</strong> → xem task hôm nay / quá hạn.</li>
+<li><strong>Trong ngày:</strong> Cập nhật <strong>Nhật ký site</strong> + <strong>4 ảnh</strong> trước 17h.</li>
+<li><strong>Cuối tuần:</strong> Kiểm tra <strong>Nhật ký tuần</strong>, tổng hợp sự cố.</li>
+<li><strong>Khi có vấn đề:</strong> Thêm <strong>Risk</strong> + cập nhật <strong>Vướng mắc</strong> trên bảng dự án.</li>
+</ol>
+<h3 id="142-mẹo-cho-pm">14.2. Mẹo cho PM</h3>
+<ol>
+<li>Rà <strong>Δ Kế hoạch</strong> âm (đỏ) mỗi sáng trên <strong>Danh sách dự án</strong>.</li>
+<li>Sort theo <strong>Risk HIGH</strong> trước khi họp tuần.</li>
+<li>Giao task rõ <strong>NHÂN_SỰ + deadline</strong> trên trang Công việc.</li>
+<li><strong>Xuất Excel</strong> trước họp BOD.</li>
+</ol>
+<h3 id="143-xử-lý-sự-cố-kỹ-thuật">14.3. Xử lý sự cố kỹ thuật</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Vấn đề</th>
+<th>Cách xử lý</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>&quot;Đang lưu...&quot; mãi</td>
+<td>Kiểm tra mạng; F5; thử lại</td>
+</tr>
+<tr>
+<td>&quot;Lỗi kết nối&quot; khi lưu nhật ký</td>
+<td>Không tắt tab; đợi mạng ổn; sửa lại 1 trường để trigger save</td>
+</tr>
+<tr>
+<td>Ảnh không upload</td>
+<td>Giảm kích thước ảnh; tối đa 4 ảnh/ngày; xác thực Google Drive</td>
+</tr>
+<tr>
+<td>Không sửa được dự án</td>
+<td>Kiểm tra <strong>Tài khoản → Dự án được gán</strong>; liên hệ Admin</td>
+</tr>
+<tr>
+<td>Trang trắng sau update</td>
+<td><code>Ctrl + Shift + R</code> (hard refresh)</td>
+</tr>
+<tr>
+<td>Dữ liệu cũ</td>
+<td>Hệ thống tự refresh nền; chuyển tab rồi quay lại</td>
+</tr>
+</tbody></table></div>
+<h3 id="144-định-dạng-ngày">14.4. Định dạng ngày</h3>
+<p>Toàn hệ thống dùng <strong>dd/mm/yyyy</strong> (ví dụ: <code>25/05/2026</code>).</p>
+<hr>
+<h2 id="15-kịch-bản-training-đề-xuất">15. Kịch bản training đề xuất</h2>
+<p>Dùng checklist này cho buổi training nhân viên mới (~2–3 giờ):</p>
+<h3 id="buổi-1-làm-quen-45-phút">Buổi 1 — Làm quen (45 phút)</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Đăng nhập, đổi mật khẩu.</li>
+<li><input disabled="" type="checkbox"> Khám phá sidebar, theme sáng/tối, chuông thông báo.</li>
+<li><input disabled="" type="checkbox"> Xem <strong>Tổng quan</strong>: giải thích 4 thẻ KPI.</li>
+<li><input disabled="" type="checkbox"> Mở <strong>Danh sách dự án</strong>: tìm kiếm, lọc, sort, phân trang.</li>
+<li><input disabled="" type="checkbox"> Hỏi thử <strong>AI PXD</strong>: &quot;Trang này dùng để làm gì?&quot;</li>
+</ul>
+<h3 id="buổi-2-vận-hành-dự-án-60-phút">Buổi 2 — Vận hành dự án (60 phút)</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Vào <strong>Chi tiết dự án</strong> được gán.</li>
+<li><input disabled="" type="checkbox"> Đọc KPI, Milestone, S-Curve.</li>
+<li><input disabled="" type="checkbox"> <strong>Thực hành:</strong> Cập nhật nhật ký ngày + upload 1 ảnh.</li>
+<li><input disabled="" type="checkbox"> Mở từng <strong>Module</strong> — cập nhật 1 trường trong Construction hoặc Permit.</li>
+<li><input disabled="" type="checkbox"> Thêm 1 <strong>Risk</strong> mẫu và đóng lại.</li>
+</ul>
+<h3 id="buổi-3-task-quy-trình-45-phút">Buổi 3 — Task &amp; quy trình (45 phút)</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Xem <strong>Công việc</strong> — 4 chế độ xem.</li>
+<li><input disabled="" type="checkbox"> PM demo: tạo task, giao cho trainee.</li>
+<li><input disabled="" type="checkbox"> Trainee: đổi trạng thái task → Hoàn thành.</li>
+<li><input disabled="" type="checkbox"> Xem task trên <strong>Kanban Tổng quan</strong>.</li>
+</ul>
+<h3 id="buổi-4-admin-chỉ-adminhr-30-phút">Buổi 4 — Admin (chỉ Admin/HR) (30 phút)</h3>
+<ul>
+<li><input disabled="" type="checkbox"> Tạo tài khoản mẫu (3 bước).</li>
+<li><input disabled="" type="checkbox"> Gán / bỏ gán dự án.</li>
+<li><input disabled="" type="checkbox"> Khóa / mở khóa tài khoản.</li>
+<li><input disabled="" type="checkbox"> Xem <strong>Audit Log</strong>.</li>
+<li><input disabled="" type="checkbox"> Demo <strong>link chia sẻ khách</strong> (nếu có quyền).</li>
+</ul>
+<hr>
+<h2 id="phụ-lục-a-thuật-ngữ">Phụ lục A — Thuật ngữ</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thuật ngữ</th>
+<th>Giải thích</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>EPC</strong></td>
+<td>Engineering, Procurement, Construction — trọn gói thi công</td>
+</tr>
+<tr>
+<td><strong>COD</strong></td>
+<td>Commercial Operation Date — ngày vận hành thương mại / đóng điện</td>
+</tr>
+<tr>
+<td><strong>kWp</strong></td>
+<td>Kilowatt-peak — công suất lắp đặt</td>
+</tr>
+<tr>
+<td><strong>S-Curve</strong></td>
+<td>Đường cong tiến độ lũy kế theo thời gian</td>
+</tr>
+<tr>
+<td><strong>PM</strong></td>
+<td>Project Manager</td>
+</tr>
+<tr>
+<td><strong>SM</strong></td>
+<td>Site Manager</td>
+</tr>
+<tr>
+<td><strong>GS</strong></td>
+<td>Giám sát thi công</td>
+</tr>
+<tr>
+<td><strong>Δ Kế hoạch</strong></td>
+<td>Chênh lệch % thực tế so với kế hoạch</td>
+</tr>
+<tr>
+<td><strong>Milestone</strong></td>
+<td>Mốc tiến độ quan trọng trong vòng đời dự án</td>
+</tr>
+</tbody></table></div>
+<h2 id="phụ-lục-b-liên-hệ-hỗ-trợ">Phụ lục B — Liên hệ hỗ trợ</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Vấn đề</th>
+<th>Liên hệ</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Quên mật khẩu / bị khóa tài khoản</td>
+<td>Admin hệ thống</td>
+</tr>
+<tr>
+<td>Không được gán dự án</td>
+<td>PM hoặc Admin</td>
+</tr>
+<tr>
+<td>Lỗi kỹ thuật / mất dữ liệu</td>
+<td>IT / Admin (kèm screenshot + thời gian)</td>
+</tr>
+<tr>
+<td>Yêu cầu tính năng mới</td>
+<td>PMO / Ban quản lý dự án</td>
+</tr>
+</tbody></table></div>
+<hr>
+<p><em>Tài liệu thuộc Vu Phong Energy Group — VPEG-PXD Dashboard. Cập nhật khi phát hành phiên bản mới của phần mềm.</em></p>
+
+
+    </main>
+  </div>
+  <script>
+    (function () {
+      var appUrl = "https://vpeg-pxd-dashboard.vercel.app";
+      if (location.protocol !== 'file:') {
+        var home = document.getElementById('app-home');
+        var dash = document.getElementById('app-dashboard');
+        if (home) home.href = '/';
+        if (dash) dash.href = '/';
+      }
+    })();
+  </script>
+</body>
+</html>

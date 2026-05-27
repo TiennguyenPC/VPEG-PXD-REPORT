@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/huong-dan", "destination": "/HUONG_DAN_SU_DUNG.html" },
     { "source": "/((?!.*\\..*).*)", "destination": "/index.html" }
   ],
   "headers": [
