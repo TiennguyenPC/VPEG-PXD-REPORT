@@ -230,12 +230,11 @@
         <li><a href="#7-chi-tiết-dự-án">7. Chi tiết dự án</a></li>
         <li><a href="#8-quản-lý-công-việc-task">8. Quản lý công việc (Task)</a></li>
         <li><a href="#9-tài-khoản-cá-nhân">9. Tài khoản cá nhân</a></li>
-        <li><a href="#10-cài-đặt-hệ-thống-admin">10. Cài đặt hệ thống (Admin)</a></li>
-        <li><a href="#11-chia-sẻ-tiến-độ-cho-khách-hàng">11. Chia sẻ tiến độ cho khách hàng</a></li>
-        <li><a href="#12-trợ-lý-ai-ai-pxd">12. Trợ lý AI (AI PXD)</a></li>
-        <li><a href="#13-thông-báo">13. Thông báo</a></li>
-        <li><a href="#14-mẹo-vận-hành-xử-lý-sự-cố">14. Mẹo vận hành &amp; xử lý sự cố</a></li>
-        <li><a href="#15-kịch-bản-training-đề-xuất">15. Kịch bản training đề xuất</a></li>
+        <li><a href="#10-chia-sẻ-tiến-độ-cho-khách-hàng">10. Chia sẻ tiến độ cho khách hàng</a></li>
+        <li><a href="#11-trợ-lý-ai-ai-pxd">11. Trợ lý AI (AI PXD)</a></li>
+        <li><a href="#12-thông-báo">12. Thông báo</a></li>
+        <li><a href="#13-mẹo-vận-hành-xử-lý-sự-cố">13. Mẹo vận hành &amp; xử lý sự cố</a></li>
+        <li><a href="#14-kịch-bản-training-đề-xuất">14. Kịch bản training đề xuất</a></li>
         <li><a href="#phụ-lục-a-thuật-ngữ">Phụ lục A — Thuật ngữ</a></li>
         <li><a href="#phụ-lục-b-liên-hệ-hỗ-trợ">Phụ lục B — Liên hệ hỗ trợ</a></li>
       </ol>
@@ -243,7 +242,7 @@
     <main class="content">
       <h1>Hướng dẫn sử dụng Dashboard VPEG-PXD</h1>
 <blockquote>
-<p><strong>Phiên bản tài liệu:</strong> 1.0<br><strong>Đối tượng:</strong> Nhân viên mới, PM, SM, GS, SA, TK, P.SC và Admin<br><strong>Mục đích:</strong> Training từ A–Z — đọc xong có thể tự thao tác trên hệ thống</p>
+<p><strong>Phiên bản tài liệu:</strong> 1.1<br><strong>Đối tượng:</strong> PM, SM, GS, SA, TK, P.SC — vận hành hàng ngày<br><strong>Mục đích:</strong> Training từ A–Z — đọc xong có thể tự thao tác trên hệ thống<br><strong>Đọc trên web:</strong> <a href="https://vpeg-pxd-dashboard.vercel.app/huong-dan">https://vpeg-pxd-dashboard.vercel.app/huong-dan</a></p>
 </blockquote>
 <hr>
 <h2 id="1-giới-thiệu">1. Giới thiệu</h2>
@@ -256,7 +255,6 @@
 <li>Theo dõi <strong>6 hạng mục EPC</strong>: Risk, Giấy phép, Thiết kế, Mua sắm, Thi công, Bàn giao.</li>
 <li>Xem <strong>S-Curve</strong>, milestone, KPI tuần.</li>
 <li><strong>Chia sẻ read-only</strong> cho khách hàng qua link công khai.</li>
-<li>Quản trị <strong>tài khoản, phân quyền, nhật ký hoạt động</strong> (Admin).</li>
 </ul>
 <h3 id="12-dữ-liệu-lưu-ở-đâu">1.2. Dữ liệu lưu ở đâu?</h3>
 <p>Dữ liệu được đồng bộ qua <strong>Google Apps Script (GAS)</strong> — backend kết nối Google Sheets / Drive. Trình duyệt có <strong>cache cục bộ</strong> để tải nhanh; khi mất mạng tạm thời vẫn xem được dữ liệu đã cache, nhưng <strong>lưu mới cần có kết nối</strong>.</p>
@@ -350,7 +348,7 @@
 <tr>
 <td><strong>CÀI ĐẶT</strong></td>
 <td><code>/settings/users</code></td>
-<td>Chỉ <strong>Admin</strong> thấy menu này</td>
+<td>Quản trị hệ thống — Admin nội bộ (không cần thao tác vận hành)</td>
 </tr>
 </tbody></table></div>
 <p><strong>Thu gọn sidebar:</strong> Nút <strong>Thu gọn</strong> / biểu tượng mũi tên ở cuối sidebar — tiết kiệm không gian màn hình.</p>
@@ -618,7 +616,7 @@
 <ul>
 <li><strong>Quay lại</strong> — về Tổng quan.</li>
 <li>Thông tin: tên, khách hàng, công suất, tiến độ, COD.</li>
-<li><strong>Copy link / Bật link</strong> — chỉ admin được phép chia sẻ khách (xem <a href="#11-chia-sẻ-tiến-độ-cho-khách-hàng">mục 11</a>).</li>
+<li><strong>Copy link / Bật link</strong> — chỉ Admin chủ định được phép chia sẻ khách (xem <a href="#10-chia-sẻ-tiến-độ-cho-khách-hàng">mục 10</a>).</li>
 </ul>
 <h3 id="72-thanh-điều-hướng-nội-bộ-sticky">7.2. Thanh điều hướng nội bộ (sticky)</h3>
 <p>Cuộn trang sẽ tự highlight mục đang xem:</p>
@@ -657,70 +655,261 @@
 <li><strong>Chênh lệch / Delay</strong> (%).</li>
 <li><strong>Thời gian còn lại</strong> đến COD.</li>
 </ul>
-<h3 id="74-milestone-timeline">7.4. Milestone Timeline</h3>
-<p>Timeline các mốc: Kickoff, Giấy phép, Thiết kế, Mua sắm, Thi công, COD, Bàn giao…<br>Màu sắc thể hiện trạng thái: hoàn thành / đang làm / chưa tới / trễ.</p>
-<h3 id="75-nhật-ký-vận-hành-site-log">7.5. Nhật ký &amp; Vận hành (Site Log)</h3>
-<p><strong>Ba chế độ xem:</strong> <strong>Ngày | Tuần | Tháng</strong></p>
-<h4 id="nhật-ký-theo-ngày">Nhật ký theo ngày</h4>
+<h3 id="74-trục-milestone-kiểm-soát-tiến-độ">7.4. Trục Milestone kiểm soát tiến độ</h3>
+<p><strong>Vị trí:</strong> Tab <strong>Milestone</strong> — khối <strong>TRỤC MILESTONE KIỂM SOÁT TIẾN ĐỘ</strong>.</p>
+<p>Đây là “đồng hồ chiến lược” của dự án: nhìn một lần biết đang ở giai đoạn nào, mốc nào trễ, COD còn bao xa.</p>
+<h4 id="741-bảy-mốc-trên-timeline">7.4.1. Bảy mốc trên timeline</h4>
 <div class="table-wrap"><table>
 <thead>
 <tr>
-<th>Trường</th>
-<th>Mô tả</th>
+<th>#</th>
+<th>Mốc</th>
+<th>Nguồn ngày hiển thị</th>
+<th>% dưới mốc</th>
 </tr>
 </thead>
 <tbody><tr>
-<td>Nhân lực Site</td>
-<td>Số công nhân hiện trường</td>
+<td>1</td>
+<td><strong>KICKOFF</strong></td>
+<td>Ngày kickoff dự án / hợp đồng</td>
+<td>100% khi đã qua ngày kickoff</td>
 </tr>
 <tr>
-<td>Kỹ sư / GS</td>
-<td>Số kỹ sư giám sát</td>
+<td>2</td>
+<td><strong>PHÁP LÝ</strong> (Giấy phép)</td>
+<td>Ngày <strong>kết thúc</strong> lịch module Giấy phép</td>
+<td>Tiến độ module Giấy phép</td>
 </tr>
 <tr>
-<td>Thời tiết</td>
-<td>Nắng / Mưa / Nhiều mây…</td>
+<td>3</td>
+<td><strong>THIẾT KẾ</strong></td>
+<td>Ngày kết thúc lịch module Thiết kế</td>
+<td>Tiến độ module Thiết kế</td>
 </tr>
 <tr>
-<td>Công việc chính</td>
-<td>Checklist công việc trong ngày</td>
+<td>4</td>
+<td><strong>VẬT TƯ</strong> (Mua sắm)</td>
+<td>Ngày kết thúc lịch module Mua sắm</td>
+<td>Tiến độ module Mua sắm</td>
 </tr>
 <tr>
-<td>Sự cố</td>
-<td>Số sự cố, mức độ</td>
+<td>5</td>
+<td><strong>THI CÔNG</strong></td>
+<td>Ngày kết thúc lịch module Thi công</td>
+<td>Tiến độ module Thi công</td>
 </tr>
 <tr>
-<td>Ghi chú hiện trường</td>
-<td>Mô tả tự do</td>
+<td>6</td>
+<td><strong>COD</strong></td>
+<td>Ngày COD dự kiến của dự án</td>
+<td>100% khi dự án hoàn thành / bàn giao xong</td>
 </tr>
 <tr>
-<td>Ảnh hiện trường</td>
-<td>Tối đa <strong>4 ảnh/ngày</strong></td>
+<td>7</td>
+<td><strong>BÀN GIAO HỒ SƠ</strong></td>
+<td>Ngày kết thúc lịch module Bàn giao</td>
+<td>Tiến độ module Bàn giao</td>
 </tr>
 </tbody></table></div>
-<p><strong>Cách cập nhật nhật ký ngày:</strong></p>
-<ol>
-<li>Chọn ngày trên lịch (hoặc mũi tên trái/phải).</li>
-<li>Nhấn biểu tượng <strong>bút chì</strong> ở các mục cần sửa.</li>
-<li>Nhập / tick / upload ảnh.</li>
-<li>Hệ thống <strong>tự lưu</strong> — xem trạng thái góc panel:<ul>
-<li><em>Đang lưu...</em> → <em>Đã lưu</em> (thành công) hoặc <em>Lỗi kết nối</em> (thử lại).</li>
-</ul>
-</li>
-</ol>
-<p><strong>Upload ảnh:</strong></p>
+<blockquote>
+<p><strong>Quan trọng:</strong> Ngày trên mỗi mốc là <strong>ngày kế hoạch kết thúc</strong> giai đoạn đó (trừ KICKOFF là mốc mở đầu). % là <strong>tiến độ thực tế</strong> lấy từ bảng hạng mục bên dưới trang — cập nhật module thì milestone tự đổi theo.</p>
+</blockquote>
+<h4 id="742-bốn-trạng-thái-màu-chú-thích-góc-phải">7.4.2. Bốn trạng thái màu (chú thích góc phải)</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Màu</th>
+<th>Trạng thái</th>
+<th>Ý nghĩa vận hành</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>🟢 <strong>Xanh lá</strong></td>
+<td>HOÀN THÀNH</td>
+<td>Mốc đã xong (100%) <strong>và</strong> đã qua ngày kết thúc kế hoạch</td>
+</tr>
+<tr>
+<td>🔵 <strong>Xanh dương</strong></td>
+<td>ĐANG THỰC HIỆN</td>
+<td>Đang trong khung thời gian của mốc — kể cả khi % đã 100% nhưng <strong>chưa tới ngày kết thúc</strong></td>
+</tr>
+<tr>
+<td>⚪ <strong>Xám</strong></td>
+<td>CHƯA BẮT ĐẦU</td>
+<td>Chưa tới ngày bắt đầu hoặc chưa có tiến độ</td>
+</tr>
+<tr>
+<td>🔴 <strong>Đỏ</strong></td>
+<td>DELAY</td>
+<td><strong>Đã qua ngày kết thúc</strong> mà % vẫn &lt; 100% — badge hiện số ngày trễ</td>
+</tr>
+</tbody></table></div>
+<p><strong>Ví dụ thường gặp:</strong> Giấy phép hiện <strong>100%</strong> nhưng vẫn <strong>xanh dương (Đang thực hiện)</strong> — vì hôm nay chưa qua ngày kết thúc lịch Giấy phép (vd. 26/07). Hệ thống coi giai đoạn vẫn “đang chạy” cho đến hết ngày KH.</p>
+<h4 id="743-vạch-hôm-nay-và-thanh-tiến-thời-gian">7.4.3. Vạch HÔM NAY và thanh tiến thời gian</h4>
 <ul>
-<li>Chọn file từ máy; ảnh tự nén trước khi gửi.</li>
-<li>Cần quyền Google Drive nếu lần đầu upload (hệ thống có thể yêu cầu xác thực).</li>
+<li><strong>Vạch đứt nét xanh “HÔM NAY”</strong> — vị trí ngày hiện tại trên trục thời gian (từ Kickoff → COD).</li>
+<li><strong>Thanh gradient xanh</strong> bên trái vạch — phần timeline đã “trôi qua”.</li>
+<li>Kéo ngang timeline trên mobile nếu không thấy hết 7 mốc.</li>
 </ul>
-<h4 id="nhật-ký-tuần-tháng">Nhật ký tuần / tháng</h4>
+<h4 id="744-ô-dự-kiến-cod">7.4.4. Ô Dự kiến COD</h4>
+<p>Góc phải header milestone: <strong>DỰ KIẾN COD</strong> + ngày tím — lấy từ ngày COD của dự án / hợp đồng. Dùng đối chiếu nhanh với các mốc Thi công, Bàn giao.</p>
+<h4 id="745-theo-dõi-hđ-sm">7.4.5. Theo dõi HĐ (SM+)</h4>
+<p>Ngay <strong>phía trên</strong> timeline, có dòng <strong>“Theo dõi HĐ · SM+”</strong> (mũi tên mở rộng):</p>
 <ul>
-<li><strong>Tuần:</strong> Tổng hợp nhân lực, thời tiết, sự cố; biểu đồ nhân lực theo ngày.</li>
-<li><strong>Tháng:</strong> Báo cáo tổng hợp tháng.</li>
+<li><strong>Mục đích:</strong> Theo dõi <strong>mốc hợp đồng nội bộ</strong> (SM/PM) — song song với milestone kỹ thuật.</li>
+<li><strong>Chấm xanh nhỏ</strong> bên cạnh = đã có ít nhất một ngày hợp đồng được nhập.</li>
+<li>Mở ra xem <strong>sơ đồ luồng hợp đồng</strong> (flow) với các deadline tính tự động từ ngày đã nhập + lịch module.</li>
+<li><strong>Không hiện</strong> trên link chia sẻ khách — chỉ nội bộ Vu Phong.</li>
+<li>PM/SM được gán dự án có thể cập nhật ngày (biểu tượng bút chì → chế độ nhập).</li>
 </ul>
 <blockquote>
-<p><strong>Quyền:</strong> Chỉ người được <strong>gán dự án</strong> mới sửa được. Người khác thấy chế độ <strong>Chỉ xem</strong>.</p>
+<p><strong>Cách đọc kết hợp:</strong> Milestone = tiến độ <strong>kỹ thuật EPC</strong>; Theo dõi HĐ = mốc <strong>cam kết hợp đồng</strong>. Họp nội bộ nên đối chiếu cả hai.</p>
 </blockquote>
+<h4 id="746-milestone-lấy-dữ-liệu-từ-đâu">7.4.6. Milestone lấy dữ liệu từ đâu?</h4>
+<pre><code>Bảng hạng mục (Giấy phép, Thiết kế, …)
+    ↓ cập nhật % hoàn thành + ngày BĐ/KT module
+Trục Milestone (tự tính trạng thái + %)
+    ↓
+KPI tổng dự án + S-Curve
+</code></pre>
+<p><strong>Việc cần làm:</strong> Giữ <strong>ngày Bắt đầu / Số ngày</strong> trên header mỗi module chính xác; cập nhật <strong>Kết quả cuối</strong> từng dòng trong bảng → % module đổi → milestone đổi theo.</p>
+<hr>
+<h3 id="75-nhật-ký-vận-hành-site-log">7.5. Nhật ký &amp; Vận hành (Site Log)</h3>
+<p><strong>Vị trí:</strong> Tab <strong>Nhật ký</strong> — khối <strong>NHẬT KÝ &amp; VẬN HÀNH</strong>.</p>
+<p>Công cụ chính của <strong>SM/GS hàng ngày</strong>: ghi nhận hiện trường, tiến độ thi công trong ngày, và kế hoạch ngày mai.</p>
+<h4 id="751-ba-chế-độ-xem">7.5.1. Ba chế độ xem</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Chế độ</th>
+<th>Dùng khi</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Ngày</strong></td>
+<td>Ghi / xem nhật ký từng ngày (mặc định)</td>
+</tr>
+<tr>
+<td><strong>Tuần</strong></td>
+<td>Tổng hợp 7 ngày — nhân lực, thời tiết, sự cố</td>
+</tr>
+<tr>
+<td><strong>Tháng</strong></td>
+<td>Báo cáo tháng</td>
+</tr>
+</tbody></table></div>
+<p>Chọn ngày bằng <strong>mũi tên trái/phải</strong> hoặc <strong>bấm vào ngày</strong> để mở lịch.</p>
+<h4 id="752-bốn-thẻ-kpi-hàng-trên">7.5.2. Bốn thẻ KPI (hàng trên)</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Thẻ</th>
+<th>Ý nghĩa</th>
+<th>Nguồn dữ liệu</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Nhân lực Site</strong></td>
+<td>Số công nhân + Kỹ sư/GS</td>
+<td>Nhập khi <strong>Sửa nhật ký</strong></td>
+</tr>
+<tr>
+<td><strong>Thời tiết</strong></td>
+<td>Điều kiện + nhiệt độ</td>
+<td>Nhập thủ công hoặc <strong>Tự động</strong> (API thời tiết)</td>
+</tr>
+<tr>
+<td><strong>Công việc chính</strong></td>
+<td>Số hạng mục thi công ghi tiến độ trong ngày</td>
+<td>Từ phần <strong>Tiến độ thi công</strong> khi sửa nhật ký</td>
+</tr>
+<tr>
+<td><strong>Sự cố</strong></td>
+<td>Số vụ sự cố + badge trạng thái ngày</td>
+<td>Nhập khi sửa; badge <strong>Bình thường</strong> khi = 0</td>
+</tr>
+</tbody></table></div>
+<p>Thẻ <strong>Công việc chính</strong> hiện “Không ghi nhận” nếu chưa ai ghi tiến độ thi công ngày đó.</p>
+<h4 id="753-ghi-chú-hiện-trường">7.5.3. Ghi chú hiện trường</h4>
+<p>Vùng text tự do — mỗi dòng một ghi chú (mưa gián đoạn, chờ vật tư, an toàn…).<br>Chỉnh bằng <strong>Sửa nhật ký</strong> → ô “Ghi chú hiện trường”.</p>
+<h4 id="754-tóm-tắt-ngày-góc-trái-dưới">7.5.4. Tóm tắt ngày (góc trái dưới)</h4>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Chỉ số</th>
+<th>Giải thích</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Tiến độ thực tế</strong></td>
+<td>% dự án ghi nhận <strong>trong ngày</strong> từ tiến độ thi công (delta % từng việc × trọng số hạng mục)</td>
+</tr>
+<tr>
+<td><strong>Chênh lệch</strong></td>
+<td>Thực tế − Kế hoạch ngày</td>
+</tr>
+<tr>
+<td><strong>Trạng thái ngày</strong></td>
+<td>Bình thường / Có vấn đề — theo sự cố và mức chênh lệch</td>
+</tr>
+<tr>
+<td><strong>Kế hoạch</strong> (dòng nhỏ)</td>
+<td>% dự án <strong>lẽ ra</strong> phải đạt trong ngày theo lịch module + thi công</td>
+</tr>
+<tr>
+<td><strong>Chênh lệch tác động</strong></td>
+<td>Gợi ý ngắn (vd. số việc KH trong ngày)</td>
+</tr>
+</tbody></table></div>
+<p><strong>Logic kế hoạch ngày:</strong> Hệ thống chia đều tiến độ kế hoạch theo <strong>ngày bắt đầu – kết thúc</strong> từng việc trong bảng Thi công / Mua sắm / Giấy phép…<br><strong>Logic thực tế ngày:</strong> Chỉ tính từ <strong>Tiến độ thi công</strong> bạn nhập khi sửa nhật ký (vd. <code>[TC01] Lắp khung +3%</code>).</p>
+<blockquote>
+<p><strong>Tip PM:</strong> Cuối ngày nếu <strong>Thực tế &lt; Kế hoạch</strong> → ghi rõ lý do ở Ghi chú hiện trường hoặc thêm Risk.</p>
+</blockquote>
+<h4 id="755-công-việc-ngày-mai-góc-phải-dưới">7.5.5. Công việc ngày mai (góc phải dưới)</h4>
+<p>Badge <strong>Ưu tiên cao</strong> — danh sách việc cần chú ý ngày hôm sau.</p>
+<p><strong>Ba nguồn tự động:</strong></p>
+<ol>
+<li><strong>Lịch hạng mục ngày D+1</strong> — module đang trong khung KH (Giấy phép, Thiết kế, Vật tư…).</li>
+<li><strong>Việc thi công cụ thể</strong> — tên việc + mã <code>[TCxx]</code> nếu có lịch thi công ngày mai.</li>
+<li><strong>Carry-over</strong> — việc ghi ở “ngày mai” hôm qua mà hôm nay <strong>chưa</strong> ghi tiến độ thi công.</li>
+</ol>
+<p><strong>Nút “Xem bảng ↓”</strong> (bên cạnh Giấy phép, Thiết kế…):</p>
+<ul>
+<li>Bấm → trang <strong>cuộn xuống</strong> đúng bảng hạng mục (Giấy phép / Thiết kế / …).</li>
+<li>Module <strong>tự mở</strong> accordion + viền tím nhấn 2 giây.</li>
+<li>Dùng khi cần xem <strong>checklist chi tiết</strong> thay vì chỉ tên module trên nhật ký.</li>
+</ul>
+<p><strong>Khi sửa nhật ký:</strong></p>
+<ul>
+<li>Danh sách gợi ý có nút <strong>X</strong> để bỏ nhắc việc không còn relevant.</li>
+<li>Ô <strong>“Thêm công việc khác”</strong> — mỗi dòng một việc bổ sung thủ công.</li>
+</ul>
+<h4 id="756-quy-trình-sửa-nhật-ký-ngày-smgs">7.5.6. Quy trình sửa nhật ký ngày (SM/GS)</h4>
+<ol>
+<li>Chọn đúng <strong>ngày</strong> trên thanh lịch.</li>
+<li>Nhấn <strong>Sửa nhật ký</strong> (góc phải header).</li>
+<li>Form chỉnh sửa mở ra — các nhóm chính:<ul>
+<li><strong>Nhân lực / Thời tiết / Sự cố</strong></li>
+<li><strong>Tiến độ thi công</strong> — chọn việc, nhập % tăng trong ngày (delta)</li>
+<li><strong>Ghi chú hiện trường</strong></li>
+<li><strong>Công việc ngày mai</strong> — xem gợi ý, bỏ nhắc (X), thêm việc khác</li>
+<li><strong>Vấn đề / Rủi ro</strong></li>
+</ul>
+</li>
+<li>Nhấn <strong>Lưu ngay</strong> (desktop: góc form; mobile: thanh cuối màn hình).</li>
+<li>Theo dõi badge trạng thái: <em>Đang lưu…</em> → <em>Đã lưu</em>.</li>
+</ol>
+<p><strong>Ảnh hiện trường:</strong> Tối đa <strong>4 ảnh/ngày</strong> — panel riêng <strong>Ảnh hiện trường</strong> ngay dưới Nhật ký (không bắt buộc điền nhân lực).</p>
+<h4 id="757-nhật-ký-tuần">7.5.7. Nhật ký tuần</h4>
+<ul>
+<li>Bảng lịch 7 cột: nhân lực, kỹ sư, thời tiết, sự cố, ghi chú chính từng ngày.</li>
+<li>Biểu đồ cột <strong>nhân lực theo ngày</strong> trong tuần.</li>
+<li>Dùng họp tuần SM → PM.</li>
+</ul>
+<blockquote>
+<p><strong>Quyền:</strong> Chỉ user <strong>được gán dự án</strong> mới sửa. Người khác xem read-only. Không có quyền → liên hệ Admin gán dự án (Admin tự setup, không cần thao tác trên dashboard).</p>
+</blockquote>
+<hr>
 <h3 id="76-s-curve">7.6. S-Curve</h3>
 <p>Biểu đồ đường cong tiến độ:</p>
 <ul>
@@ -872,108 +1061,16 @@
 </ol>
 <p>Biểu tượng <strong>mắt</strong> để hiện/ẩn mật khẩu khi gõ.</p>
 <hr>
-<h2 id="10-cài-đặt-hệ-thống-admin">10. Cài đặt hệ thống (Admin)</h2>
-<p><strong>Chỉ role Admin</strong> truy cập được.</p>
-<h3 id="101-quản-lý-tài-khoản">10.1. Quản lý tài khoản</h3>
-<p><strong>Đường dẫn:</strong> <code>/settings/users</code></p>
-<h4 id="danh-sách-user">Danh sách user</h4>
-<ul>
-<li>Tìm theo tên, username, email, role.</li>
-<li>Cột: Họ tên, Username, Email, Role, Dự án gán, Trạng thái.</li>
-</ul>
-<h4 id="tạo-tài-khoản-mới-3-bước">Tạo tài khoản mới (3 bước)</h4>
-<p><strong>Bước 1 — Chọn nhân viên</strong></p>
-<ul>
-<li>Chọn từ danh sách <strong>Employee</strong> (đồng bộ từ sheet nhân sự).</li>
-<li>Hệ thống tự điền họ tên, email <code>@vuphong.com</code>, role theo chức vụ.</li>
-</ul>
-<p><strong>Bước 2 — Tài khoản đăng nhập</strong></p>
-<ul>
-<li><strong>Username</strong> — không trùng.</li>
-<li><strong>Mật khẩu</strong> — mặc định <code>123123</code>; có thể đổi khi tạo.</li>
-<li><strong>Role</strong> — PM, SM, GS, SA, TK, P.SC, Nhân viên.</li>
-</ul>
-<p><strong>Bước 3 — Gán dự án</strong></p>
-<ul>
-<li>Tick các dự án user được phép <strong>sửa</strong>.</li>
-<li>PM/SM thường gán đúng dự án phụ trách.</li>
-</ul>
-<h4 id="thao-tác-trên-user">Thao tác trên user</h4>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>Nút</th>
-<th>Tác dụng</th>
-</tr>
-</thead>
-<tbody><tr>
-<td><strong>Sửa</strong></td>
-<td>Đổi role, gán dự án, reset mật khẩu</td>
-</tr>
-<tr>
-<td><strong>Khóa</strong></td>
-<td>User không đăng nhập được</td>
-</tr>
-<tr>
-<td><strong>Mở khóa</strong></td>
-<td>Khôi phục đăng nhập</td>
-</tr>
-<tr>
-<td><strong>Vô hiệu hóa</strong></td>
-<td>Tắt tài khoản (không xóa dữ liệu)</td>
-</tr>
-<tr>
-<td><strong>Kích hoạt lại</strong></td>
-<td>Bật lại tài khoản đã vô hiệu</td>
-</tr>
-</tbody></table></div>
-<blockquote>
-<p>Không sửa/xóa tài khoản <strong>Admin</strong> qua UI.</p>
-</blockquote>
-<h3 id="102-nhật-ký-hoạt-động-audit-log">10.2. Nhật ký hoạt động (Audit Log)</h3>
-<p><strong>Đường dẫn:</strong> <code>/settings/audit</code></p>
-<p>Ghi lại mọi hành động quan trọng:</p>
-<div class="table-wrap"><table>
-<thead>
-<tr>
-<th>Loại</th>
-<th>Ví dụ</th>
-</tr>
-</thead>
-<tbody><tr>
-<td>Đăng nhập / Đăng xuất</td>
-<td>User A login lúc 8:00</td>
-</tr>
-<tr>
-<td>Dự án</td>
-<td>Tạo, sửa, xóa dự án</td>
-</tr>
-<tr>
-<td>Task</td>
-<td>Tạo, sửa, xóa task</td>
-</tr>
-<tr>
-<td>Tài khoản</td>
-<td>Tạo user, khóa, đổi role</td>
-</tr>
-<tr>
-<td>Site log / ảnh</td>
-<td>Upload ảnh, sửa nhật ký</td>
-</tr>
-</tbody></table></div>
-<p><strong>Lọc:</strong> Theo loại hành động, tìm theo tên user / nội dung.<br><strong>Chi tiết:</strong> Nhấn &quot;Chi tiết&quot; để xem JSON thay đổi.</p>
-<p><strong>Cấu hình email thông báo:</strong> Admin có thể bật/tắt gửi email và cấu hình URL app.</p>
-<hr>
-<h2 id="11-chia-sẻ-tiến-độ-cho-khách-hàng">11. Chia sẻ tiến độ cho khách hàng</h2>
-<h3 id="111-ai-được-bật-link">11.1. Ai được bật link?</h3>
+<h2 id="10-chia-sẻ-tiến-độ-cho-khách-hàng">10. Chia sẻ tiến độ cho khách hàng</h2>
+<h3 id="101-ai-được-bật-link">10.1. Ai được bật link?</h3>
 <p>Chỉ <strong>Admin chủ</strong> (username <code>tien.nguyen</code>) thấy nút chia sẻ trên header chi tiết dự án.</p>
-<h3 id="112-cách-bật-link">11.2. Cách bật link</h3>
+<h3 id="102-cách-bật-link">10.2. Cách bật link</h3>
 <ol>
 <li>Vào <strong>Chi tiết dự án</strong>.</li>
 <li>Nhấn <strong>Bật link</strong> → hệ thống tạo token.</li>
 <li>Nhấn <strong>Copy link</strong> — URL dạng:<br><code>https://vpeg-pxd-dashboard.vercel.app/share/{token}</code></li>
 </ol>
-<h3 id="113-khách-hàng-thấy-gì">11.3. Khách hàng thấy gì?</h3>
+<h3 id="103-khách-hàng-thấy-gì">10.3. Khách hàng thấy gì?</h3>
 <p>Trang <strong>read-only</strong> (chỉ xem):</p>
 <ul>
 <li>KPI, Milestone, S-Curve.</li>
@@ -982,35 +1079,35 @@
 <li><strong>Không</strong> thấy: Risk nội bộ, task, dữ liệu nhạy cảm khác.</li>
 </ul>
 <p>Hỗ trợ <strong>Tiếng Việt / English</strong>.</p>
-<h3 id="114-tắt-link">11.4. Tắt link</h3>
+<h3 id="104-tắt-link">10.4. Tắt link</h3>
 <p>Nhấn <strong>Tắt link chia sẻ</strong> — link cũ hết hiệu lực ngay.</p>
 <hr>
-<h2 id="12-trợ-lý-ai-ai-pxd">12. Trợ lý AI (AI PXD)</h2>
-<h3 id="121-vị-trí">12.1. Vị trí</h3>
+<h2 id="11-trợ-lý-ai-ai-pxd">11. Trợ lý AI (AI PXD)</h2>
+<h3 id="111-vị-trí">11.1. Vị trí</h3>
 <p>Nút <strong>bot</strong> góc dưới phải màn hình (mọi trang sau đăng nhập).</p>
-<h3 id="122-ai-có-thể-giúp-gì">12.2. AI có thể giúp gì?</h3>
+<h3 id="112-ai-có-thể-giúp-gì">11.2. AI có thể giúp gì?</h3>
 <ul>
 <li>Hướng dẫn thao tác từng màn hình.</li>
 <li>Đọc số liệu dự án / task bạn đang xem.</li>
 <li>Tư vấn kỹ thuật điện mặt trời EPC.</li>
 </ul>
-<h3 id="123-gợi-ý-câu-hỏi-nhanh">12.3. Gợi ý câu hỏi nhanh</h3>
+<h3 id="113-gợi-ý-câu-hỏi-nhanh">11.3. Gợi ý câu hỏi nhanh</h3>
 <ul>
 <li><em>&quot;Hướng dẫn trang tôi đang xem&quot;</em></li>
 <li><em>&quot;Làm sao thêm dự án?&quot;</em></li>
 <li><em>&quot;Làm sao thêm công việc?&quot;</em></li>
 <li><em>&quot;Giải thích S-Curve và milestone&quot;</em></li>
 </ul>
-<h3 id="124-lưu-ý">12.4. Lưu ý</h3>
+<h3 id="114-lưu-ý">11.4. Lưu ý</h3>
 <ul>
 <li>AI đọc dữ liệu từ cache trình duyệt + ngữ cảnh trang hiện tại.</li>
 <li>Câu trả lời mang tính <strong>hỗ trợ</strong> — quyết định chính thức vẫn theo dữ liệu trên dashboard và quy trình công ty.</li>
 </ul>
 <hr>
-<h2 id="13-thông-báo">13. Thông báo</h2>
-<h3 id="131-chuông-thông-báo">13.1. Chuông thông báo</h3>
+<h2 id="12-thông-báo">12. Thông báo</h2>
+<h3 id="121-chuông-thông-báo">12.1. Chuông thông báo</h3>
 <p>Biểu tượng <strong>chuông</strong> ở sidebar — hiện số badge khi có thông báo chưa đọc.</p>
-<h3 id="132-loại-thông-báo">13.2. Loại thông báo</h3>
+<h3 id="122-loại-thông-báo">12.2. Loại thông báo</h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -1043,28 +1140,28 @@
 <td>Risk chưa xử lý quá hạn</td>
 </tr>
 </tbody></table></div>
-<h3 id="133-thao-tác">13.3. Thao tác</h3>
+<h3 id="123-thao-tác">12.3. Thao tác</h3>
 <ul>
 <li>Nhấn thông báo → chuyển đến trang liên quan (task / dự án).</li>
 <li><strong>Đánh dấu đã đọc</strong> từng mục hoặc <strong>Đọc tất cả</strong>.</li>
 </ul>
 <hr>
-<h2 id="14-mẹo-vận-hành-xử-lý-sự-cố">14. Mẹo vận hành &amp; xử lý sự cố</h2>
-<h3 id="141-mẹo-hàng-ngày-cho-smgs">14.1. Mẹo hàng ngày cho SM/GS</h3>
+<h2 id="13-mẹo-vận-hành-xử-lý-sự-cố">13. Mẹo vận hành &amp; xử lý sự cố</h2>
+<h3 id="131-mẹo-hàng-ngày-cho-smgs">13.1. Mẹo hàng ngày cho SM/GS</h3>
 <ol>
 <li><strong>Sáng:</strong> Mở <strong>Tổng quan</strong> → xem task hôm nay / quá hạn.</li>
 <li><strong>Trong ngày:</strong> Cập nhật <strong>Nhật ký site</strong> + <strong>4 ảnh</strong> trước 17h.</li>
 <li><strong>Cuối tuần:</strong> Kiểm tra <strong>Nhật ký tuần</strong>, tổng hợp sự cố.</li>
 <li><strong>Khi có vấn đề:</strong> Thêm <strong>Risk</strong> + cập nhật <strong>Vướng mắc</strong> trên bảng dự án.</li>
 </ol>
-<h3 id="142-mẹo-cho-pm">14.2. Mẹo cho PM</h3>
+<h3 id="132-mẹo-cho-pm">13.2. Mẹo cho PM</h3>
 <ol>
 <li>Rà <strong>Δ Kế hoạch</strong> âm (đỏ) mỗi sáng trên <strong>Danh sách dự án</strong>.</li>
 <li>Sort theo <strong>Risk HIGH</strong> trước khi họp tuần.</li>
 <li>Giao task rõ <strong>NHÂN_SỰ + deadline</strong> trên trang Công việc.</li>
 <li><strong>Xuất Excel</strong> trước họp BOD.</li>
 </ol>
-<h3 id="143-xử-lý-sự-cố-kỹ-thuật">14.3. Xử lý sự cố kỹ thuật</h3>
+<h3 id="133-xử-lý-sự-cố-kỹ-thuật">13.3. Xử lý sự cố kỹ thuật</h3>
 <div class="table-wrap"><table>
 <thead>
 <tr>
@@ -1086,7 +1183,7 @@
 </tr>
 <tr>
 <td>Không sửa được dự án</td>
-<td>Kiểm tra <strong>Tài khoản → Dự án được gán</strong>; liên hệ Admin</td>
+<td>Kiểm tra <strong>Tài khoản → Dự án được gán</strong>; liên hệ Admin gán quyền</td>
 </tr>
 <tr>
 <td>Trang trắng sau update</td>
@@ -1097,10 +1194,10 @@
 <td>Hệ thống tự refresh nền; chuyển tab rồi quay lại</td>
 </tr>
 </tbody></table></div>
-<h3 id="144-định-dạng-ngày">14.4. Định dạng ngày</h3>
+<h3 id="134-định-dạng-ngày">13.4. Định dạng ngày</h3>
 <p>Toàn hệ thống dùng <strong>dd/mm/yyyy</strong> (ví dụ: <code>25/05/2026</code>).</p>
 <hr>
-<h2 id="15-kịch-bản-training-đề-xuất">15. Kịch bản training đề xuất</h2>
+<h2 id="14-kịch-bản-training-đề-xuất">14. Kịch bản training đề xuất</h2>
 <p>Dùng checklist này cho buổi training nhân viên mới (~2–3 giờ):</p>
 <h3 id="buổi-1-làm-quen-45-phút">Buổi 1 — Làm quen (45 phút)</h3>
 <ul>
@@ -1113,10 +1210,12 @@
 <h3 id="buổi-2-vận-hành-dự-án-60-phút">Buổi 2 — Vận hành dự án (60 phút)</h3>
 <ul>
 <li><input disabled="" type="checkbox"> Vào <strong>Chi tiết dự án</strong> được gán.</li>
-<li><input disabled="" type="checkbox"> Đọc KPI, Milestone, S-Curve.</li>
-<li><input disabled="" type="checkbox"> <strong>Thực hành:</strong> Cập nhật nhật ký ngày + upload 1 ảnh.</li>
-<li><input disabled="" type="checkbox"> Mở từng <strong>Module</strong> — cập nhật 1 trường trong Construction hoặc Permit.</li>
-<li><input disabled="" type="checkbox"> Thêm 1 <strong>Risk</strong> mẫu và đóng lại.</li>
+<li><input disabled="" type="checkbox"> Đọc <strong>KPI</strong> + giải thích chênh lệch kế hoạch.</li>
+<li><input disabled="" type="checkbox"> <strong>Milestone:</strong> đọc 7 mốc, giải thích vì sao 100% vẫn “Đang thực hiện”, mở <strong>Theo dõi HĐ SM+</strong>.</li>
+<li><input disabled="" type="checkbox"> <strong>Nhật ký ngày:</strong> cập nhật nhân lực + tiến độ thi công 1 việc.</li>
+<li><input disabled="" type="checkbox"> Xem <strong>Tóm tắt ngày</strong> (Kế hoạch vs Thực tế) và <strong>Công việc ngày mai</strong> — thử <strong>Xem bảng ↓</strong>.</li>
+<li><input disabled="" type="checkbox"> Upload <strong>1 ảnh</strong> hiện trường.</li>
+<li><input disabled="" type="checkbox"> Mở <strong>Module Giấy phép</strong> — cập nhật 1 trường; quay lại Milestone xem % đổi.</li>
 </ul>
 <h3 id="buổi-3-task-quy-trình-45-phút">Buổi 3 — Task &amp; quy trình (45 phút)</h3>
 <ul>
@@ -1125,14 +1224,9 @@
 <li><input disabled="" type="checkbox"> Trainee: đổi trạng thái task → Hoàn thành.</li>
 <li><input disabled="" type="checkbox"> Xem task trên <strong>Kanban Tổng quan</strong>.</li>
 </ul>
-<h3 id="buổi-4-admin-chỉ-adminhr-30-phút">Buổi 4 — Admin (chỉ Admin/HR) (30 phút)</h3>
-<ul>
-<li><input disabled="" type="checkbox"> Tạo tài khoản mẫu (3 bước).</li>
-<li><input disabled="" type="checkbox"> Gán / bỏ gán dự án.</li>
-<li><input disabled="" type="checkbox"> Khóa / mở khóa tài khoản.</li>
-<li><input disabled="" type="checkbox"> Xem <strong>Audit Log</strong>.</li>
-<li><input disabled="" type="checkbox"> Demo <strong>link chia sẻ khách</strong> (nếu có quyền).</li>
-</ul>
+<blockquote>
+<p><strong>Ghi chú Admin:</strong> Tạo tài khoản, gán dự án, audit log — Admin tự vận hành qua menu Cài đặt, không nằm trong training vận hành.</p>
+</blockquote>
 <hr>
 <h2 id="phụ-lục-a-thuật-ngữ">Phụ lục A — Thuật ngữ</h2>
 <div class="table-wrap"><table>

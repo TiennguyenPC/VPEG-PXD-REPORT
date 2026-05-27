@@ -1,8 +1,9 @@
 # Hướng dẫn sử dụng Dashboard VPEG-PXD
 
-> **Phiên bản tài liệu:** 1.0  
-> **Đối tượng:** Nhân viên mới, PM, SM, GS, SA, TK, P.SC và Admin  
-> **Mục đích:** Training từ A–Z — đọc xong có thể tự thao tác trên hệ thống
+> **Phiên bản tài liệu:** 1.1  
+> **Đối tượng:** PM, SM, GS, SA, TK, P.SC — vận hành hàng ngày  
+> **Mục đích:** Training từ A–Z — đọc xong có thể tự thao tác trên hệ thống  
+> **Đọc trên web:** https://vpeg-pxd-dashboard.vercel.app/huong-dan
 
 ---
 
@@ -17,12 +18,11 @@
 7. [Chi tiết dự án](#7-chi-tiết-dự-án)
 8. [Quản lý công việc (Task)](#8-quản-lý-công-việc-task)
 9. [Tài khoản cá nhân](#9-tài-khoản-cá-nhân)
-10. [Cài đặt hệ thống (Admin)](#10-cài-đặt-hệ-thống-admin)
-11. [Chia sẻ tiến độ cho khách hàng](#11-chia-sẻ-tiến-độ-cho-khách-hàng)
-12. [Trợ lý AI (AI PXD)](#12-trợ-lý-ai-ai-pxd)
-13. [Thông báo](#13-thông-báo)
-14. [Mẹo vận hành & xử lý sự cố](#14-mẹo-vận-hành--xử-lý-sự-cố)
-15. [Kịch bản training đề xuất](#15-kịch-bản-training-đề-xuất)
+10. [Chia sẻ tiến độ cho khách hàng](#10-chia-sẻ-tiến-độ-cho-khách-hàng)
+11. [Trợ lý AI (AI PXD)](#11-trợ-lý-ai-ai-pxd)
+12. [Thông báo](#12-thông-báo)
+13. [Mẹo vận hành & xử lý sự cố](#13-mẹo-vận-hành--xử-lý-sự-cố)
+14. [Kịch bản training đề xuất](#14-kịch-bản-training-đề-xuất)
 
 ---
 
@@ -38,7 +38,6 @@
 - Theo dõi **6 hạng mục EPC**: Risk, Giấy phép, Thiết kế, Mua sắm, Thi công, Bàn giao.
 - Xem **S-Curve**, milestone, KPI tuần.
 - **Chia sẻ read-only** cho khách hàng qua link công khai.
-- Quản trị **tài khoản, phân quyền, nhật ký hoạt động** (Admin).
 
 ### 1.2. Dữ liệu lưu ở đâu?
 
@@ -88,7 +87,7 @@ Dữ liệu được đồng bộ qua **Google Apps Script (GAS)** — backend k
 | **CÔNG VIỆC** | `/tasks` | Quản lý task toàn công ty |
 | **DỰ ÁN** | `/projects` | Bảng danh sách dự án |
 | **TÀI KHOẢN** | `/account` | Thông tin cá nhân, đổi mật khẩu |
-| **CÀI ĐẶT** | `/settings/users` | Chỉ **Admin** thấy menu này |
+| **CÀI ĐẶT** | `/settings/users` | Quản trị hệ thống — Admin nội bộ (không cần thao tác vận hành) |
 
 **Thu gọn sidebar:** Nút **Thu gọn** / biểu tượng mũi tên ở cuối sidebar — tiết kiệm không gian màn hình.
 
@@ -247,7 +246,7 @@ Người có quyền sửa dự án: **double-click** ô **Vướng mắc** → 
 
 - **Quay lại** — về Tổng quan.
 - Thông tin: tên, khách hàng, công suất, tiến độ, COD.
-- **Copy link / Bật link** — chỉ admin được phép chia sẻ khách (xem [mục 11](#11-chia-sẻ-tiến-độ-cho-khách-hàng)).
+- **Copy link / Bật link** — chỉ Admin chủ định được phép chia sẻ khách (xem [mục 10](#10-chia-sẻ-tiến-độ-cho-khách-hàng)).
 
 ### 7.2. Thanh điều hướng nội bộ (sticky)
 
@@ -269,46 +268,165 @@ Hiển thị:
 - **Chênh lệch / Delay** (%).
 - **Thời gian còn lại** đến COD.
 
-### 7.4. Milestone Timeline
+### 7.4. Trục Milestone kiểm soát tiến độ
 
-Timeline các mốc: Kickoff, Giấy phép, Thiết kế, Mua sắm, Thi công, COD, Bàn giao…  
-Màu sắc thể hiện trạng thái: hoàn thành / đang làm / chưa tới / trễ.
+**Vị trí:** Tab **Milestone** — khối **TRỤC MILESTONE KIỂM SOÁT TIẾN ĐỘ**.
+
+Đây là “đồng hồ chiến lược” của dự án: nhìn một lần biết đang ở giai đoạn nào, mốc nào trễ, COD còn bao xa.
+
+#### 7.4.1. Bảy mốc trên timeline
+
+| # | Mốc | Nguồn ngày hiển thị | % dưới mốc |
+|---|-----|---------------------|------------|
+| 1 | **KICKOFF** | Ngày kickoff dự án / hợp đồng | 100% khi đã qua ngày kickoff |
+| 2 | **PHÁP LÝ** (Giấy phép) | Ngày **kết thúc** lịch module Giấy phép | Tiến độ module Giấy phép |
+| 3 | **THIẾT KẾ** | Ngày kết thúc lịch module Thiết kế | Tiến độ module Thiết kế |
+| 4 | **VẬT TƯ** (Mua sắm) | Ngày kết thúc lịch module Mua sắm | Tiến độ module Mua sắm |
+| 5 | **THI CÔNG** | Ngày kết thúc lịch module Thi công | Tiến độ module Thi công |
+| 6 | **COD** | Ngày COD dự kiến của dự án | 100% khi dự án hoàn thành / bàn giao xong |
+| 7 | **BÀN GIAO HỒ SƠ** | Ngày kết thúc lịch module Bàn giao | Tiến độ module Bàn giao |
+
+> **Quan trọng:** Ngày trên mỗi mốc là **ngày kế hoạch kết thúc** giai đoạn đó (trừ KICKOFF là mốc mở đầu). % là **tiến độ thực tế** lấy từ bảng hạng mục bên dưới trang — cập nhật module thì milestone tự đổi theo.
+
+#### 7.4.2. Bốn trạng thái màu (chú thích góc phải)
+
+| Màu | Trạng thái | Ý nghĩa vận hành |
+|-----|------------|------------------|
+| 🟢 **Xanh lá** | HOÀN THÀNH | Mốc đã xong (100%) **và** đã qua ngày kết thúc kế hoạch |
+| 🔵 **Xanh dương** | ĐANG THỰC HIỆN | Đang trong khung thời gian của mốc — kể cả khi % đã 100% nhưng **chưa tới ngày kết thúc** |
+| ⚪ **Xám** | CHƯA BẮT ĐẦU | Chưa tới ngày bắt đầu hoặc chưa có tiến độ |
+| 🔴 **Đỏ** | DELAY | **Đã qua ngày kết thúc** mà % vẫn &lt; 100% — badge hiện số ngày trễ |
+
+**Ví dụ thường gặp:** Giấy phép hiện **100%** nhưng vẫn **xanh dương (Đang thực hiện)** — vì hôm nay chưa qua ngày kết thúc lịch Giấy phép (vd. 26/07). Hệ thống coi giai đoạn vẫn “đang chạy” cho đến hết ngày KH.
+
+#### 7.4.3. Vạch HÔM NAY và thanh tiến thời gian
+
+- **Vạch đứt nét xanh “HÔM NAY”** — vị trí ngày hiện tại trên trục thời gian (từ Kickoff → COD).
+- **Thanh gradient xanh** bên trái vạch — phần timeline đã “trôi qua”.
+- Kéo ngang timeline trên mobile nếu không thấy hết 7 mốc.
+
+#### 7.4.4. Ô Dự kiến COD
+
+Góc phải header milestone: **DỰ KIẾN COD** + ngày tím — lấy từ ngày COD của dự án / hợp đồng. Dùng đối chiếu nhanh với các mốc Thi công, Bàn giao.
+
+#### 7.4.5. Theo dõi HĐ (SM+)
+
+Ngay **phía trên** timeline, có dòng **“Theo dõi HĐ · SM+”** (mũi tên mở rộng):
+
+- **Mục đích:** Theo dõi **mốc hợp đồng nội bộ** (SM/PM) — song song với milestone kỹ thuật.
+- **Chấm xanh nhỏ** bên cạnh = đã có ít nhất một ngày hợp đồng được nhập.
+- Mở ra xem **sơ đồ luồng hợp đồng** (flow) với các deadline tính tự động từ ngày đã nhập + lịch module.
+- **Không hiện** trên link chia sẻ khách — chỉ nội bộ Vu Phong.
+- PM/SM được gán dự án có thể cập nhật ngày (biểu tượng bút chì → chế độ nhập).
+
+> **Cách đọc kết hợp:** Milestone = tiến độ **kỹ thuật EPC**; Theo dõi HĐ = mốc **cam kết hợp đồng**. Họp nội bộ nên đối chiếu cả hai.
+
+#### 7.4.6. Milestone lấy dữ liệu từ đâu?
+
+```
+Bảng hạng mục (Giấy phép, Thiết kế, …)
+    ↓ cập nhật % hoàn thành + ngày BĐ/KT module
+Trục Milestone (tự tính trạng thái + %)
+    ↓
+KPI tổng dự án + S-Curve
+```
+
+**Việc cần làm:** Giữ **ngày Bắt đầu / Số ngày** trên header mỗi module chính xác; cập nhật **Kết quả cuối** từng dòng trong bảng → % module đổi → milestone đổi theo.
+
+---
 
 ### 7.5. Nhật ký & Vận hành (Site Log)
 
-**Ba chế độ xem:** **Ngày | Tuần | Tháng**
+**Vị trí:** Tab **Nhật ký** — khối **NHẬT KÝ & VẬN HÀNH**.
 
-#### Nhật ký theo ngày
+Công cụ chính của **SM/GS hàng ngày**: ghi nhận hiện trường, tiến độ thi công trong ngày, và kế hoạch ngày mai.
 
-| Trường | Mô tả |
-|--------|-------|
-| Nhân lực Site | Số công nhân hiện trường |
-| Kỹ sư / GS | Số kỹ sư giám sát |
-| Thời tiết | Nắng / Mưa / Nhiều mây… |
-| Công việc chính | Checklist công việc trong ngày |
-| Sự cố | Số sự cố, mức độ |
-| Ghi chú hiện trường | Mô tả tự do |
-| Ảnh hiện trường | Tối đa **4 ảnh/ngày** |
+#### 7.5.1. Ba chế độ xem
 
-**Cách cập nhật nhật ký ngày:**
+| Chế độ | Dùng khi |
+|--------|----------|
+| **Ngày** | Ghi / xem nhật ký từng ngày (mặc định) |
+| **Tuần** | Tổng hợp 7 ngày — nhân lực, thời tiết, sự cố |
+| **Tháng** | Báo cáo tháng |
 
-1. Chọn ngày trên lịch (hoặc mũi tên trái/phải).
-2. Nhấn biểu tượng **bút chì** ở các mục cần sửa.
-3. Nhập / tick / upload ảnh.
-4. Hệ thống **tự lưu** — xem trạng thái góc panel:
-   - *Đang lưu...* → *Đã lưu* (thành công) hoặc *Lỗi kết nối* (thử lại).
+Chọn ngày bằng **mũi tên trái/phải** hoặc **bấm vào ngày** để mở lịch.
 
-**Upload ảnh:**
+#### 7.5.2. Bốn thẻ KPI (hàng trên)
 
-- Chọn file từ máy; ảnh tự nén trước khi gửi.
-- Cần quyền Google Drive nếu lần đầu upload (hệ thống có thể yêu cầu xác thực).
+| Thẻ | Ý nghĩa | Nguồn dữ liệu |
+|-----|---------|---------------|
+| **Nhân lực Site** | Số công nhân + Kỹ sư/GS | Nhập khi **Sửa nhật ký** |
+| **Thời tiết** | Điều kiện + nhiệt độ | Nhập thủ công hoặc **Tự động** (API thời tiết) |
+| **Công việc chính** | Số hạng mục thi công ghi tiến độ trong ngày | Từ phần **Tiến độ thi công** khi sửa nhật ký |
+| **Sự cố** | Số vụ sự cố + badge trạng thái ngày | Nhập khi sửa; badge **Bình thường** khi = 0 |
 
-#### Nhật ký tuần / tháng
+Thẻ **Công việc chính** hiện “Không ghi nhận” nếu chưa ai ghi tiến độ thi công ngày đó.
 
-- **Tuần:** Tổng hợp nhân lực, thời tiết, sự cố; biểu đồ nhân lực theo ngày.
-- **Tháng:** Báo cáo tổng hợp tháng.
+#### 7.5.3. Ghi chú hiện trường
 
-> **Quyền:** Chỉ người được **gán dự án** mới sửa được. Người khác thấy chế độ **Chỉ xem**.
+Vùng text tự do — mỗi dòng một ghi chú (mưa gián đoạn, chờ vật tư, an toàn…).  
+Chỉnh bằng **Sửa nhật ký** → ô “Ghi chú hiện trường”.
+
+#### 7.5.4. Tóm tắt ngày (góc trái dưới)
+
+| Chỉ số | Giải thích |
+|--------|------------|
+| **Tiến độ thực tế** | % dự án ghi nhận **trong ngày** từ tiến độ thi công (delta % từng việc × trọng số hạng mục) |
+| **Chênh lệch** | Thực tế − Kế hoạch ngày |
+| **Trạng thái ngày** | Bình thường / Có vấn đề — theo sự cố và mức chênh lệch |
+| **Kế hoạch** (dòng nhỏ) | % dự án **lẽ ra** phải đạt trong ngày theo lịch module + thi công |
+| **Chênh lệch tác động** | Gợi ý ngắn (vd. số việc KH trong ngày) |
+
+**Logic kế hoạch ngày:** Hệ thống chia đều tiến độ kế hoạch theo **ngày bắt đầu – kết thúc** từng việc trong bảng Thi công / Mua sắm / Giấy phép…  
+**Logic thực tế ngày:** Chỉ tính từ **Tiến độ thi công** bạn nhập khi sửa nhật ký (vd. `[TC01] Lắp khung +3%`).
+
+> **Tip PM:** Cuối ngày nếu **Thực tế &lt; Kế hoạch** → ghi rõ lý do ở Ghi chú hiện trường hoặc thêm Risk.
+
+#### 7.5.5. Công việc ngày mai (góc phải dưới)
+
+Badge **Ưu tiên cao** — danh sách việc cần chú ý ngày hôm sau.
+
+**Ba nguồn tự động:**
+
+1. **Lịch hạng mục ngày D+1** — module đang trong khung KH (Giấy phép, Thiết kế, Vật tư…).
+2. **Việc thi công cụ thể** — tên việc + mã `[TCxx]` nếu có lịch thi công ngày mai.
+3. **Carry-over** — việc ghi ở “ngày mai” hôm qua mà hôm nay **chưa** ghi tiến độ thi công.
+
+**Nút “Xem bảng ↓”** (bên cạnh Giấy phép, Thiết kế…):
+
+- Bấm → trang **cuộn xuống** đúng bảng hạng mục (Giấy phép / Thiết kế / …).
+- Module **tự mở** accordion + viền tím nhấn 2 giây.
+- Dùng khi cần xem **checklist chi tiết** thay vì chỉ tên module trên nhật ký.
+
+**Khi sửa nhật ký:**
+
+- Danh sách gợi ý có nút **X** để bỏ nhắc việc không còn relevant.
+- Ô **“Thêm công việc khác”** — mỗi dòng một việc bổ sung thủ công.
+
+#### 7.5.6. Quy trình sửa nhật ký ngày (SM/GS)
+
+1. Chọn đúng **ngày** trên thanh lịch.
+2. Nhấn **Sửa nhật ký** (góc phải header).
+3. Form chỉnh sửa mở ra — các nhóm chính:
+   - **Nhân lực / Thời tiết / Sự cố**
+   - **Tiến độ thi công** — chọn việc, nhập % tăng trong ngày (delta)
+   - **Ghi chú hiện trường**
+   - **Công việc ngày mai** — xem gợi ý, bỏ nhắc (X), thêm việc khác
+   - **Vấn đề / Rủi ro**
+4. Nhấn **Lưu ngay** (desktop: góc form; mobile: thanh cuối màn hình).
+5. Theo dõi badge trạng thái: *Đang lưu…* → *Đã lưu*.
+
+**Ảnh hiện trường:** Tối đa **4 ảnh/ngày** — panel riêng **Ảnh hiện trường** ngay dưới Nhật ký (không bắt buộc điền nhân lực).
+
+#### 7.5.7. Nhật ký tuần
+
+- Bảng lịch 7 cột: nhân lực, kỹ sư, thời tiết, sự cố, ghi chú chính từng ngày.
+- Biểu đồ cột **nhân lực theo ngày** trong tuần.
+- Dùng họp tuần SM → PM.
+
+> **Quyền:** Chỉ user **được gán dự án** mới sửa. Người khác xem read-only. Không có quyền → liên hệ Admin gán dự án (Admin tự setup, không cần thao tác trên dashboard).
+
+---
 
 ### 7.6. S-Curve
 
@@ -421,84 +539,20 @@ Biểu tượng **mắt** để hiện/ẩn mật khẩu khi gõ.
 
 ---
 
-## 10. Cài đặt hệ thống (Admin)
+## 10. Chia sẻ tiến độ cho khách hàng
 
-**Chỉ role Admin** truy cập được.
-
-### 10.1. Quản lý tài khoản
-
-**Đường dẫn:** `/settings/users`
-
-#### Danh sách user
-
-- Tìm theo tên, username, email, role.
-- Cột: Họ tên, Username, Email, Role, Dự án gán, Trạng thái.
-
-#### Tạo tài khoản mới (3 bước)
-
-**Bước 1 — Chọn nhân viên**
-
-- Chọn từ danh sách **Employee** (đồng bộ từ sheet nhân sự).
-- Hệ thống tự điền họ tên, email `@vuphong.com`, role theo chức vụ.
-
-**Bước 2 — Tài khoản đăng nhập**
-
-- **Username** — không trùng.
-- **Mật khẩu** — mặc định `123123`; có thể đổi khi tạo.
-- **Role** — PM, SM, GS, SA, TK, P.SC, Nhân viên.
-
-**Bước 3 — Gán dự án**
-
-- Tick các dự án user được phép **sửa**.
-- PM/SM thường gán đúng dự án phụ trách.
-
-#### Thao tác trên user
-
-| Nút | Tác dụng |
-|-----|----------|
-| **Sửa** | Đổi role, gán dự án, reset mật khẩu |
-| **Khóa** | User không đăng nhập được |
-| **Mở khóa** | Khôi phục đăng nhập |
-| **Vô hiệu hóa** | Tắt tài khoản (không xóa dữ liệu) |
-| **Kích hoạt lại** | Bật lại tài khoản đã vô hiệu |
-
-> Không sửa/xóa tài khoản **Admin** qua UI.
-
-### 10.2. Nhật ký hoạt động (Audit Log)
-
-**Đường dẫn:** `/settings/audit`
-
-Ghi lại mọi hành động quan trọng:
-
-| Loại | Ví dụ |
-|------|-------|
-| Đăng nhập / Đăng xuất | User A login lúc 8:00 |
-| Dự án | Tạo, sửa, xóa dự án |
-| Task | Tạo, sửa, xóa task |
-| Tài khoản | Tạo user, khóa, đổi role |
-| Site log / ảnh | Upload ảnh, sửa nhật ký |
-
-**Lọc:** Theo loại hành động, tìm theo tên user / nội dung.  
-**Chi tiết:** Nhấn "Chi tiết" để xem JSON thay đổi.
-
-**Cấu hình email thông báo:** Admin có thể bật/tắt gửi email và cấu hình URL app.
-
----
-
-## 11. Chia sẻ tiến độ cho khách hàng
-
-### 11.1. Ai được bật link?
+### 10.1. Ai được bật link?
 
 Chỉ **Admin chủ** (username `tien.nguyen`) thấy nút chia sẻ trên header chi tiết dự án.
 
-### 11.2. Cách bật link
+### 10.2. Cách bật link
 
 1. Vào **Chi tiết dự án**.
 2. Nhấn **Bật link** → hệ thống tạo token.
 3. Nhấn **Copy link** — URL dạng:  
    `https://vpeg-pxd-dashboard.vercel.app/share/{token}`
 
-### 11.3. Khách hàng thấy gì?
+### 10.3. Khách hàng thấy gì?
 
 Trang **read-only** (chỉ xem):
 
@@ -509,45 +563,45 @@ Trang **read-only** (chỉ xem):
 
 Hỗ trợ **Tiếng Việt / English**.
 
-### 11.4. Tắt link
+### 10.4. Tắt link
 
 Nhấn **Tắt link chia sẻ** — link cũ hết hiệu lực ngay.
 
 ---
 
-## 12. Trợ lý AI (AI PXD)
+## 11. Trợ lý AI (AI PXD)
 
-### 12.1. Vị trí
+### 11.1. Vị trí
 
 Nút **bot** góc dưới phải màn hình (mọi trang sau đăng nhập).
 
-### 12.2. AI có thể giúp gì?
+### 11.2. AI có thể giúp gì?
 
 - Hướng dẫn thao tác từng màn hình.
 - Đọc số liệu dự án / task bạn đang xem.
 - Tư vấn kỹ thuật điện mặt trời EPC.
 
-### 12.3. Gợi ý câu hỏi nhanh
+### 11.3. Gợi ý câu hỏi nhanh
 
 - *"Hướng dẫn trang tôi đang xem"*
 - *"Làm sao thêm dự án?"*
 - *"Làm sao thêm công việc?"*
 - *"Giải thích S-Curve và milestone"*
 
-### 12.4. Lưu ý
+### 11.4. Lưu ý
 
 - AI đọc dữ liệu từ cache trình duyệt + ngữ cảnh trang hiện tại.
 - Câu trả lời mang tính **hỗ trợ** — quyết định chính thức vẫn theo dữ liệu trên dashboard và quy trình công ty.
 
 ---
 
-## 13. Thông báo
+## 12. Thông báo
 
-### 13.1. Chuông thông báo
+### 12.1. Chuông thông báo
 
 Biểu tượng **chuông** ở sidebar — hiện số badge khi có thông báo chưa đọc.
 
-### 13.2. Loại thông báo
+### 12.2. Loại thông báo
 
 | Loại | Khi nào |
 |------|---------|
@@ -558,47 +612,47 @@ Biểu tượng **chuông** ở sidebar — hiện số badge khi có thông bá
 | Dự án hoàn thành | COD / bàn giao xong |
 | Risk quá hạn | Risk chưa xử lý quá hạn |
 
-### 13.3. Thao tác
+### 12.3. Thao tác
 
 - Nhấn thông báo → chuyển đến trang liên quan (task / dự án).
 - **Đánh dấu đã đọc** từng mục hoặc **Đọc tất cả**.
 
 ---
 
-## 14. Mẹo vận hành & xử lý sự cố
+## 13. Mẹo vận hành & xử lý sự cố
 
-### 14.1. Mẹo hàng ngày cho SM/GS
+### 13.1. Mẹo hàng ngày cho SM/GS
 
 1. **Sáng:** Mở **Tổng quan** → xem task hôm nay / quá hạn.
 2. **Trong ngày:** Cập nhật **Nhật ký site** + **4 ảnh** trước 17h.
 3. **Cuối tuần:** Kiểm tra **Nhật ký tuần**, tổng hợp sự cố.
 4. **Khi có vấn đề:** Thêm **Risk** + cập nhật **Vướng mắc** trên bảng dự án.
 
-### 14.2. Mẹo cho PM
+### 13.2. Mẹo cho PM
 
 1. Rà **Δ Kế hoạch** âm (đỏ) mỗi sáng trên **Danh sách dự án**.
 2. Sort theo **Risk HIGH** trước khi họp tuần.
 3. Giao task rõ **NHÂN_SỰ + deadline** trên trang Công việc.
 4. **Xuất Excel** trước họp BOD.
 
-### 14.3. Xử lý sự cố kỹ thuật
+### 13.3. Xử lý sự cố kỹ thuật
 
 | Vấn đề | Cách xử lý |
 |--------|------------|
 | "Đang lưu..." mãi | Kiểm tra mạng; F5; thử lại |
 | "Lỗi kết nối" khi lưu nhật ký | Không tắt tab; đợi mạng ổn; sửa lại 1 trường để trigger save |
 | Ảnh không upload | Giảm kích thước ảnh; tối đa 4 ảnh/ngày; xác thực Google Drive |
-| Không sửa được dự án | Kiểm tra **Tài khoản → Dự án được gán**; liên hệ Admin |
+| Không sửa được dự án | Kiểm tra **Tài khoản → Dự án được gán**; liên hệ Admin gán quyền |
 | Trang trắng sau update | `Ctrl + Shift + R` (hard refresh) |
 | Dữ liệu cũ | Hệ thống tự refresh nền; chuyển tab rồi quay lại |
 
-### 14.4. Định dạng ngày
+### 13.4. Định dạng ngày
 
 Toàn hệ thống dùng **dd/mm/yyyy** (ví dụ: `25/05/2026`).
 
 ---
 
-## 15. Kịch bản training đề xuất
+## 14. Kịch bản training đề xuất
 
 Dùng checklist này cho buổi training nhân viên mới (~2–3 giờ):
 
@@ -613,10 +667,12 @@ Dùng checklist này cho buổi training nhân viên mới (~2–3 giờ):
 ### Buổi 2 — Vận hành dự án (60 phút)
 
 - [ ] Vào **Chi tiết dự án** được gán.
-- [ ] Đọc KPI, Milestone, S-Curve.
-- [ ] **Thực hành:** Cập nhật nhật ký ngày + upload 1 ảnh.
-- [ ] Mở từng **Module** — cập nhật 1 trường trong Construction hoặc Permit.
-- [ ] Thêm 1 **Risk** mẫu và đóng lại.
+- [ ] Đọc **KPI** + giải thích chênh lệch kế hoạch.
+- [ ] **Milestone:** đọc 7 mốc, giải thích vì sao 100% vẫn “Đang thực hiện”, mở **Theo dõi HĐ SM+**.
+- [ ] **Nhật ký ngày:** cập nhật nhân lực + tiến độ thi công 1 việc.
+- [ ] Xem **Tóm tắt ngày** (Kế hoạch vs Thực tế) và **Công việc ngày mai** — thử **Xem bảng ↓**.
+- [ ] Upload **1 ảnh** hiện trường.
+- [ ] Mở **Module Giấy phép** — cập nhật 1 trường; quay lại Milestone xem % đổi.
 
 ### Buổi 3 — Task & quy trình (45 phút)
 
@@ -625,13 +681,7 @@ Dùng checklist này cho buổi training nhân viên mới (~2–3 giờ):
 - [ ] Trainee: đổi trạng thái task → Hoàn thành.
 - [ ] Xem task trên **Kanban Tổng quan**.
 
-### Buổi 4 — Admin (chỉ Admin/HR) (30 phút)
-
-- [ ] Tạo tài khoản mẫu (3 bước).
-- [ ] Gán / bỏ gán dự án.
-- [ ] Khóa / mở khóa tài khoản.
-- [ ] Xem **Audit Log**.
-- [ ] Demo **link chia sẻ khách** (nếu có quyền).
+> **Ghi chú Admin:** Tạo tài khoản, gán dự án, audit log — Admin tự vận hành qua menu Cài đặt, không nằm trong training vận hành.
 
 ---
 
