@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hướng dẫn sử dụng — Dashboard VPEG-PXD</title>
-  <meta name="description" content="Hướng dẫn sử dụng Dashboard VPEG-PXD từ A–Z — vũ phong (by Tien Nguyen)" />
+  <meta name="description" content="Hướng dẫn sử dụng Dashboard VPEG-PXD từ A–Z — Vũ Phong Energy Group" />
   <style>
     :root {
       --purple: #5252ff;
@@ -242,12 +242,12 @@
     <main class="content">
       <h1>Hướng dẫn sử dụng Dashboard VPEG-PXD</h1>
 <blockquote>
-<p><strong>Phiên bản tài liệu:</strong> 1.2<br><strong>Đối tượng:</strong> PM, SM, GS, SA, TK, P.SC — vận hành hàng ngày<br><strong>Mục đích:</strong> Training từ A–Z — đọc xong có thể tự thao tác trên hệ thống<br><strong>Đọc trên web:</strong> <a href="https://vpeg-pxd-dashboard.vercel.app/huong-dan">https://vpeg-pxd-dashboard.vercel.app/huong-dan</a></p>
+<p><strong>Phiên bản tài liệu:</strong> 1.3<br><strong>Đối tượng:</strong> PM, SM, GS, SA, TK, P.SC — vận hành hàng ngày<br><strong>Mục đích:</strong> Training từ A–Z — đọc xong có thể tự thao tác trên hệ thống<br><strong>Đọc trên web:</strong> <a href="https://vpeg-pxd-dashboard.vercel.app/huong-dan">https://vpeg-pxd-dashboard.vercel.app/huong-dan</a></p>
 </blockquote>
 <hr>
 <h2 id="1-giới-thiệu">1. Giới thiệu</h2>
 <h3 id="11-phần-mềm-là-gì">1.1. Phần mềm là gì?</h3>
-<p><strong>Dashboard VPEG-PXD</strong> là nền tảng quản lý dự án điện mặt trời EPC của <strong>vũ phong (by Tien Nguyen)</strong>. Phần mềm giúp:</p>
+<p><strong>Dashboard VPEG-PXD</strong> là nền tảng quản lý dự án điện mặt trời EPC của <strong>Vũ Phong Energy Group</strong>. Phần mềm giúp:</p>
 <ul>
 <li>Theo dõi <strong>toàn bộ danh mục dự án</strong> (công suất, tiến độ, COD, rủi ro, vướng mắc).</li>
 <li>Quản lý <strong>công việc (task)</strong> theo dự án hoặc văn phòng.</li>
@@ -499,8 +499,8 @@
 </tr>
 <tr>
 <td>Bật link chia sẻ khách</td>
-<td>Chỉ admin chủ định</td>
-<td>❌</td>
+<td>✅</td>
+<td>✅ <em>(dự án được gán)</em></td>
 <td>❌</td>
 <td>❌</td>
 </tr>
@@ -516,6 +516,7 @@
 <li>Sửa <strong>Vướng mắc</strong> trực tiếp trên bảng danh sách dự án (double-click).</li>
 <li>Nhập / xem <strong>Theo dõi HĐ SM+</strong> trên timeline milestone.</li>
 <li><strong>Tạo, sửa, xóa task</strong> thuộc dự án đó (không bị giới hạn như nhân viên thường).</li>
+<li><strong>Bật / copy / tắt link chia sẻ khách</strong> cho dự án được gán.</li>
 </ul>
 <h4 id="422-dự-án-không-quản-lý-chỉ-view">4.2.2. Dự án không quản lý — chỉ view</h4>
 <ul>
@@ -655,7 +656,7 @@
 <ul>
 <li><strong>Quay lại</strong> — về Tổng quan.</li>
 <li>Thông tin: tên, khách hàng, công suất, tiến độ, COD.</li>
-<li><strong>Copy link / Bật link</strong> — chỉ Admin chủ định được phép chia sẻ khách (xem <a href="#10-chia-sẻ-tiến-độ-cho-khách-hàng">mục 10</a>).</li>
+<li><strong>Copy link / Bật link</strong> — Admin hoặc <strong>PM/SM được gán dự án</strong> (xem <a href="#10-chia-sẻ-tiến-độ-cho-khách-hàng">mục 10</a>).</li>
 </ul>
 <h3 id="72-thanh-điều-hướng-nội-bộ-sticky">7.2. Thanh điều hướng nội bộ (sticky)</h3>
 <p>Cuộn trang sẽ tự highlight mục đang xem:</p>
@@ -798,7 +799,7 @@
 <li><strong>Mục đích:</strong> Theo dõi <strong>mốc hợp đồng nội bộ</strong> (SM/PM) — song song với milestone kỹ thuật.</li>
 <li><strong>Chấm xanh nhỏ</strong> bên cạnh = đã có ít nhất một ngày hợp đồng được nhập.</li>
 <li>Mở ra xem <strong>sơ đồ luồng hợp đồng</strong> (flow) với các deadline tính tự động từ ngày đã nhập + lịch module.</li>
-<li><strong>Không hiện</strong> trên link chia sẻ khách — chỉ nội bộ vũ phong.</li>
+<li><strong>Không hiện</strong> trên link chia sẻ khách — chỉ nội bộ Vũ Phong Energy Group.</li>
 <li>PM/SM được gán dự án có thể cập nhật ngày (biểu tượng bút chì → chế độ nhập).</li>
 </ul>
 <blockquote>
@@ -1102,7 +1103,27 @@ KPI tổng dự án + S-Curve
 <hr>
 <h2 id="10-chia-sẻ-tiến-độ-cho-khách-hàng">10. Chia sẻ tiến độ cho khách hàng</h2>
 <h3 id="101-ai-được-bật-link">10.1. Ai được bật link?</h3>
-<p>Chỉ <strong>Admin chủ</strong> (username <code>tien.nguyen</code>) thấy nút chia sẻ trên header chi tiết dự án.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Vai trò</th>
+<th>Quyền chia sẻ khách</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>Admin</strong></td>
+<td>Mọi dự án</td>
+</tr>
+<tr>
+<td><strong>PM / SM</strong></td>
+<td>Dự án được Admin <strong>gán</strong> cho mình</td>
+</tr>
+<tr>
+<td>Khác</td>
+<td>Không có nút chia sẻ trên header chi tiết dự án</td>
+</tr>
+</tbody></table></div>
+<p>Nút <strong>Bật link / Copy link / Tắt link</strong> nằm trên header <strong>Chi tiết dự án</strong> (góc phải).</p>
 <h3 id="102-cách-bật-link">10.2. Cách bật link</h3>
 <ol>
 <li>Vào <strong>Chi tiết dự án</strong>.</li>
@@ -1167,7 +1188,7 @@ KPI tổng dự án + S-Curve
 </tr>
 <tr>
 <td><strong>Phân quyền</strong></td>
-<td>PM/SM toàn quyền dự án được gán; dự án khác chỉ xem</td>
+<td>PM/SM toàn quyền dự án được gán; dự án khác chỉ xem; PM/SM được gán có thể share link khách</td>
 </tr>
 <tr>
 <td><strong>Hướng dẫn web</strong></td>
@@ -1187,6 +1208,7 @@ KPI tổng dự án + S-Curve
 <li><em>&quot;Giải thích milestone — vì sao Giấy phép 100% mà vẫn xanh dương?&quot;</em></li>
 <li><em>&quot;Giải thích S-Curve và Tóm tắt ngày KH vs TT&quot;</em></li>
 <li><em>&quot;PM/SM được quyền gì trên dự án được gán?&quot;</em></li>
+<li><em>&quot;Làm sao share link tiến độ cho khách?&quot;</em></li>
 <li><em>&quot;Commissioning checklist&quot;</em></li>
 </ul>
 <h3 id="114-cách-hỏi-hiệu-quả">11.4. Cách hỏi hiệu quả</h3>
@@ -1398,7 +1420,7 @@ KPI tổng dự án + S-Curve
 </tr>
 </tbody></table></div>
 <hr>
-<p><em>Tài liệu thuộc <strong>vũ phong (by Tien Nguyen)</strong> — VPEG-PXD Dashboard. Cập nhật khi phát hành phiên bản mới.</em></p>
+<p><em>Tài liệu thuộc <strong>Vũ Phong Energy Group</strong> — VPEG-PXD Dashboard. Cập nhật khi phát hành phiên bản mới.</em></p>
 
 
     </main>

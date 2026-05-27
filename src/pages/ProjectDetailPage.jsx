@@ -945,7 +945,7 @@ export default function ProjectDetailPage() {
             onBack={() => navigate('/')} 
             onToggleSidebar={toggleSidebar}
             isSidebarCollapsed={isCollapsed}
-            shareMode={canShareProjectWithClient(user) ? 'public' : 'internal'}
+            shareMode={canShareProjectWithClient(user, id, project) ? 'public' : 'internal'}
             onUpdateProject={projectEditable ? handleProjectUpdate : undefined}
           />
           </div>

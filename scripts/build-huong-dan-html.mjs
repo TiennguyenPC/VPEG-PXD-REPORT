@@ -101,7 +101,7 @@ const html = `<!DOCTYPE html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hướng dẫn sử dụng — Dashboard VPEG-PXD</title>
-  <meta name="description" content="Hướng dẫn sử dụng Dashboard VPEG-PXD từ A–Z — vũ phong (by Tien Nguyen)" />
+  <meta name="description" content="Hướng dẫn sử dụng Dashboard VPEG-PXD từ A–Z — Vũ Phong Energy Group" />
   <style>
     :root {
       --purple: #5252ff;

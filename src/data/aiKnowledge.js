@@ -74,7 +74,7 @@ export const APP_USAGE_GUIDE = `
    - **4 trạng thái màu:** 🟢 Hoàn thành (100% + qua ngày KT) | 🔵 Đang thực hiện (trong khung thời gian, kể cả 100% chưa tới ngày KT) | ⚪ Chưa bắt đầu | 🔴 Delay (qua ngày KT mà % < 100%).
    - **Ví dụ:** Giấy phép 100% vẫn xanh dương vì chưa qua ngày kết thúc lịch Giấy phép — không phải lỗi.
    - Vạch **HÔM NAY** (đứt nét xanh) trên trục thời gian Kickoff → COD.
-   - **Theo dõi HĐ · SM+** (phía trên timeline): mốc hợp đồng nội bộ, chỉ nội bộ vũ phong (by Tien Nguyen), không hiện link khách. PM/SM được gán dự án có thể sửa ngày (icon bút chì).
+   - **Theo dõi HĐ · SM+** (phía trên timeline): mốc hợp đồng nội bộ, chỉ nội bộ Vũ Phong Energy Group, không hiện link khách. PM/SM được gán dự án có thể sửa ngày (icon bút chì).
    - Số ngày **âm** trên milestone cũ = **trễ**, không phải lỗi nhập.
 3. **S-Curve**: Biểu đồ tiến độ kế hoạch vs thực tế theo thời gian.
 4. **Nhật ký & Vận hành (Site Log)** — tab Nhật ký:
@@ -133,12 +133,13 @@ export const APP_USAGE_GUIDE = `
 - PM/SM **toàn quyền** trên dự án được Admin **gán**: sửa module, nhật ký, vướng mắc, Theo dõi HĐ SM+, tạo/sửa/xóa task dự án đó.
 - Dự án **không được gán** → **chỉ xem** (read-only), không nút Sửa nhật ký, không lưu module.
 - Thêm dự án: mọi user đăng nhập. Xóa dự án: Admin hoặc người tạo dự án.
-- Quản lý tài khoản / link chia sẻ khách: chỉ Admin chủ định.
+- PM/SM được gán dự án: toàn quyền sửa + **bật/copy/tắt link chia sẻ khách** dự án đó.
+- Quản lý tài khoản hệ thống: chỉ Admin.
 
 ## 6c. Hướng dẫn đầy đủ trên web
 - Tài liệu training A–Z: https://vpeg-pxd-dashboard.vercel.app/huong-dan (mục lục 16 phần, milestone, site log chi tiết).
 
-## 7. PXD — quy ước nội bộ VPEG (vũ phong by Tien Nguyen)
+## 7. PXD — quy ước nội bộ VPEG (Vũ Phong Energy Group)
 - Dự án rooftop C&I: OSAKA, VAL, v.v. — công suất kWp trên KPI tổng.
 - Module tiến độ: Permit 10%, Design 15%, Procurement 25%, Construction 40%, Handover 10%.
 - 15 hạng mục mua sắm chuẩn (xem Procurement).
@@ -151,7 +152,8 @@ export const APP_USAGE_GUIDE = `
 - "Ghi nhật ký site?" → Chi tiết dự án → tab Nhật ký → **Sửa nhật ký** → nhập → **Lưu ngay**.
 - "Công việc ngày mai / Xem bảng?" → Góc phải dưới nhật ký ngày; bấm **Xem bảng ↓** để cuộn tới module Giấy phép/Thiết kế…
 - "Milestone 100% mà vẫn xanh dương?" → Đang trong khung thời gian, chưa qua ngày kết thúc kế hoạch module.
-- "PM/SM quyền gì?" → Toàn quyền dự án được gán; dự án khác chỉ xem.
+- "PM/SM quyền gì?" → Toàn quyền dự án được gán; dự án khác chỉ xem; được share link khách dự án được gán.
+- "Share link khách / chia sẻ dự án?" → Chi tiết dự án → **Bật link** / **Copy link** (Admin mọi dự án; PM/SM dự án được gán).
 - "Hướng dẫn đầy đủ?" → https://vpeg-pxd-dashboard.vercel.app/huong-dan
 - "Xuất báo cáo?" → Chi tiết dự án → Export (in PDF) hoặc Danh sách dự án → Xuất Excel.
 - "Đăng xuất?" → Tài khoản → Đăng xuất (mobile) hoặc sidebar desktop.
@@ -1052,7 +1054,10 @@ export function getOfflineAppHint(userMessage) {
     return 'Tab Milestone → 7 mốc (Kickoff→COD). 4 màu: xanh lá=HT, xanh dương=đang làm (kể cả 100% chưa tới ngày KT), xám=chưa, đỏ=delay. **Theo dõi HĐ SM+** = mốc hợp đồng nội bộ (chỉ nội bộ).';
   }
   if (/pm\/sm|phân quyền|quyền|toàn quyền/.test(q)) {
-    return 'PM/SM **toàn quyền** dự án được Admin gán (module, nhật ký, task…). Dự án không gán → **chỉ xem**. Liên hệ Admin nếu thiếu quyền sửa.';
+    return 'PM/SM **toàn quyền** dự án được Admin gán (module, nhật ký, task, **share link khách**…). Dự án không gán → **chỉ xem**. Liên hệ Admin nếu thiếu quyền.';
+  }
+  if (/share|chia sẻ.*khách|link khách|bật link/.test(q)) {
+    return 'Chi tiết dự án → header góc phải: **Bật link** → **Copy link**. Admin: mọi dự án. PM/SM: chỉ dự án được gán.';
   }
   if (/huong dan|hướng dẫn|hdvh|tài liệu|doc/.test(q)) {
     return 'Hướng dẫn A–Z trên web: https://vpeg-pxd-dashboard.vercel.app/huong-dan';

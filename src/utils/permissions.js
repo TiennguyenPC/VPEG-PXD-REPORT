@@ -229,13 +229,15 @@ export function isAdmin(user) {
   return String(user?.role || '').toLowerCase() === 'admin';
 }
 
-/** Chỉ admin chủ (tien.nguyen) được bật/copy link chia sẻ khách */
-const PROJECT_SHARE_ADMIN_USERNAMES = ['tien.nguyen'];
-
-export function canShareProjectWithClient(user) {
-  if (!isAdmin(user)) return false;
-  const username = String(user?.username || '').trim().toLowerCase();
-  return PROJECT_SHARE_ADMIN_USERNAMES.includes(username);
+/** Admin hoặc PM/SM được gán dự án được bật/copy/tắt link chia sẻ khách */
+export function canShareProjectWithClient(user, projectId = null, project = null) {
+  if (!user) return false;
+  if (isAdmin(user)) return true;
+  const role = String(user?.role || '').toLowerCase();
+  if (role !== 'pm' && role !== 'sm') return false;
+  const pid = projectId || project?.id || project?.PROJECT_ID;
+  if (!pid) return false;
+  return isAssignedToProject(user, pid);
 }
 
 export function isProjectEditorRole(role) {
