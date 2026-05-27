@@ -10,6 +10,7 @@ import { useProjectCanEdit } from '../../../context/ProjectEditContext';
 import { useI18n } from '../../../context/I18nContext';
 import ModuleNotesCell from './ModuleNotesCell';
 import { normalizeModuleField, formatModuleProgress } from '../../../utils/moduleDisplay';
+import useModuleOpenListener from '../../../hooks/useModuleOpenListener';
 
 const initialGroups = [
   {
@@ -82,6 +83,7 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   const canEdit = useProjectCanEdit();
   const { t, tf, ts } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
+  useModuleOpenListener('construction', setIsOpen);
   const [expandedGroups, setExpandedGroups] = useState({ 'A': true, 'B': true, 'C': true, 'D': true });
 
   const normalizeItemKey = (s) => String(s || '').toLowerCase().replace(/\s+/g, '');

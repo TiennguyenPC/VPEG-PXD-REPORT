@@ -12,6 +12,7 @@ import { ModuleCell } from '../../ModuleCell';
 import ModuleNotesCell from './ModuleNotesCell';
 import ModuleSelectField from './ModuleSelectField';
 import { normalizeModuleField } from '../../../utils/moduleDisplay';
+import useModuleOpenListener from '../../../hooks/useModuleOpenListener';
 
 const defaultProcurements = [
   'An toàn tạm',
@@ -55,6 +56,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
   const canEdit = useProjectCanEdit();
   const { t, tf, ts } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
+  useModuleOpenListener('procurement', setIsOpen);
   
   const mergeProcurementData = (data) => {
     const getVal = (row, keys) => {

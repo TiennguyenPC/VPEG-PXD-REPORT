@@ -39,6 +39,12 @@ import {
 } from '../../utils/siteLogTomorrowWork';
 import { useProjectCanEdit } from '../../context/ProjectEditContext';
 import { useI18n } from '../../context/I18nContext';
+import {
+  getTomorrowItemModuleKey,
+  scrollToProjectModule,
+  shouldShowTableLink,
+  stripTableDetailSuffix,
+} from '../../utils/moduleScrollLink';
 
 const getWeekNumber = (d) => {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -54,6 +60,22 @@ const getDayOfWeek = (dateStr, weekdays) => {
   if (!date || !weekdays) return '';
   return weekdays[date.getDay()];
 };
+
+function TomorrowTableLink({ item, t }) {
+  if (!shouldShowTableLink(item)) return null;
+  const moduleKey = getTomorrowItemModuleKey(item);
+  if (!moduleKey) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={() => scrollToProjectModule(moduleKey)}
+      className="inline-flex items-center gap-0.5 px-2 py-0.5 text-[10px] font-bold rounded-md bg-indigo-500/10 text-indigo-400 border border-indigo-500/25 hover:bg-indigo-500/20 hover:text-indigo-300 transition-colors whitespace-nowrap"
+    >
+      {t('siteLog.viewTable')} <ChevronDown className="w-3 h-3" />
+    </button>
+  );
+}
 
 const parseWeather = (weatherText) => {
   const defaults = {
@@ -735,7 +757,7 @@ export default function SiteLogPanel({
               dismissedKeys: dismissedTomorrow,
               savedTomorrowText: parsedNote.congViecNgayMai,
             });
-            const listNgayMai = tomorrowWork.lines;
+            const listNgayMai = tomorrowWork.items;
             const tomorrowDateLabel = addDaysDMY(selectedDate, 1) || '';
             const summaryPlanned = calcDailyPlannedProjectPercent(selectedDate, projectId, bundles);
             const summaryActual = calcDailyActualProjectPercent(progressEntries, bundles.constructions || []);
@@ -990,7 +1012,8 @@ export default function SiteLogPanel({
                               key={item.key}
                               className="flex items-start gap-2 bg-[#141d30] border border-[var(--border-main)] rounded-md px-2.5 py-2 text-xs text-white"
                             >
-                              <span className="flex-1 min-w-0 leading-snug">{item.label}</span>
+                              <span className="flex-1 min-w-0 leading-snug">{stripTableDetailSuffix(item.label)}</span>
+                              <TomorrowTableLink item={item} t={t} />
                               <button
                                 type="button"
                                 onClick={() => handleDismissTomorrowItem(item.key)}
@@ -1213,11 +1236,14 @@ export default function SiteLogPanel({
                       </span>
                     </div>
                     
-                    <ul className="text-xs text-slate-300 space-y-1.5 list-disc pl-4 min-h-[58px]">
-                      {listNgayMai.map((item, idx) => (
-                        <li key={idx}>{ts(item)}</li>
+                    <ul className="text-xs text-slate-300 space-y-2 min-h-[58px]">
+                      {listNgayMai.map((item) => (
+                        <li key={item.key} className="flex items-start justify-between gap-3 pl-3 relative before:content-['•'] before:absolute before:left-0 before:text-slate-500">
+                          <span className="min-w-0 flex-1 leading-snug">{ts(stripTableDetailSuffix(item.label))}</span>
+                          <TomorrowTableLink item={item} t={t} />
+                        </li>
                       ))}
-                      {listNgayMai.length === 0 && <li className="italic text-slate-400 list-none pl-0">{t('siteLog.noTomorrowTasks')}</li>}
+                      {listNgayMai.length === 0 && <li className="italic text-slate-400">{t('siteLog.noTomorrowTasks')}</li>}
                     </ul>
                   </div>
                 </div>

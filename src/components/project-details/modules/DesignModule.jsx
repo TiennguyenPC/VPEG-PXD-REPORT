@@ -11,6 +11,7 @@ import { ModuleCell } from '../../ModuleCell';
 import ModuleNotesCell from './ModuleNotesCell';
 import ModuleSelectField from './ModuleSelectField';
 import { normalizeModuleField } from '../../../utils/moduleDisplay';
+import useModuleOpenListener from '../../../hooks/useModuleOpenListener';
 
 const defaultDesigns = [
   'Bản vẽ sơ bộ làm giấy phép',
@@ -23,6 +24,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
   const { t, tf, ts } = useI18n();
   const canEdit = useProjectCanEdit();
   const [isOpen, setIsOpen] = useState(false);
+  useModuleOpenListener('design', setIsOpen);
 
   const mergeDesignData = (data) => {
     const getVal = (row, keys) => {

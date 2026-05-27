@@ -11,6 +11,7 @@ import { ModuleCell } from '../../ModuleCell';
 import ModuleNotesCell from './ModuleNotesCell';
 import ModuleSelectField from './ModuleSelectField';
 import { normalizeModuleField } from '../../../utils/moduleDisplay';
+import useModuleOpenListener from '../../../hooks/useModuleOpenListener';
 
 const defaultHandovers = [
   'Hồ sơ thiết kế hoàn công',
@@ -24,7 +25,7 @@ export default function HandoverModule({ project, initialData, onProgressChange 
   const canEdit = useProjectCanEdit();
   const { t, tf, ts } = useI18n();
   const [isOpen, setIsOpen] = useState(false);
-  
+  useModuleOpenListener('handover', setIsOpen);
   const mergeHandoverData = (data) => {
     const getVal = (row, keys) => {
       if (!row) return null;

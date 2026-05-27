@@ -277,11 +277,21 @@ function ShareProjectPageContent() {
           </section>
 
           <section id="section-modules" className="scroll-mt-20 space-y-4 pt-4">
-            <PermitModule project={project} initialData={data.permits} />
-            <DesignModule project={project} initialData={data.designs} />
-            <ProcurementModule project={project} initialData={data.procurements} />
-            <ConstructionModule project={project} initialData={data.constructions} />
-            <HandoverModule project={project} initialData={data.handovers} />
+            <div id="module-permit" className="scroll-mt-20">
+              <PermitModule project={project} initialData={data.permits} />
+            </div>
+            <div id="module-design" className="scroll-mt-20">
+              <DesignModule project={project} initialData={data.designs} />
+            </div>
+            <div id="module-procurement" className="scroll-mt-20">
+              <ProcurementModule project={project} initialData={data.procurements} />
+            </div>
+            <div id="module-construction" className="scroll-mt-20">
+              <ConstructionModule project={project} initialData={data.constructions} />
+            </div>
+            <div id="module-handover" className="scroll-mt-20">
+              <HandoverModule project={project} initialData={data.handovers} />
+            </div>
           </section>
         </main>
 

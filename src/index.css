@@ -24,6 +24,12 @@
     height: 100vh;
   }
 
+  .module-scroll-highlight {
+    border-radius: 0.75rem;
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.85), 0 0 24px rgba(99, 102, 241, 0.25);
+    transition: box-shadow 0.3s ease;
+  }
+
   @supports (height: 100dvh) {
     .app-height-screen {
       height: 100dvh;

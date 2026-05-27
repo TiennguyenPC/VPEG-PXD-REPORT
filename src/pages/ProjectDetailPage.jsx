@@ -1058,12 +1058,24 @@ export default function ProjectDetailPage() {
 
           {/* SECTION 6 - MAIN ACCORDION MODULES */}
           <section id="section-modules" className="scroll-mt-16 space-y-4 pt-4">
-            <RiskModule project={enrichedProject} initialData={bundleData?.risks} />
-            <PermitModule project={enrichedProject} initialData={bundleData?.permits} onProgressChange={(pct) => handleModuleProgressChange('permit', pct)} />
-            <DesignModule project={enrichedProject} initialData={bundleData?.designs} onProgressChange={(pct) => handleModuleProgressChange('design', pct)} />
-            <ProcurementModule project={enrichedProject} initialData={bundleData?.procurements} onProgressChange={(pct) => handleModuleProgressChange('procurement', pct)} />
-            <ConstructionModule project={enrichedProject} initialData={bundleData?.constructions} onProgressChange={(pct) => handleModuleProgressChange('construction', pct)} />
-            <HandoverModule project={enrichedProject} initialData={bundleData?.handovers} onProgressChange={(pct) => handleModuleProgressChange('handover', pct)} />
+            <div id="module-risk" className="scroll-mt-16">
+              <RiskModule project={enrichedProject} initialData={bundleData?.risks} />
+            </div>
+            <div id="module-permit" className="scroll-mt-16">
+              <PermitModule project={enrichedProject} initialData={bundleData?.permits} onProgressChange={(pct) => handleModuleProgressChange('permit', pct)} />
+            </div>
+            <div id="module-design" className="scroll-mt-16">
+              <DesignModule project={enrichedProject} initialData={bundleData?.designs} onProgressChange={(pct) => handleModuleProgressChange('design', pct)} />
+            </div>
+            <div id="module-procurement" className="scroll-mt-16">
+              <ProcurementModule project={enrichedProject} initialData={bundleData?.procurements} onProgressChange={(pct) => handleModuleProgressChange('procurement', pct)} />
+            </div>
+            <div id="module-construction" className="scroll-mt-16">
+              <ConstructionModule project={enrichedProject} initialData={bundleData?.constructions} onProgressChange={(pct) => handleModuleProgressChange('construction', pct)} />
+            </div>
+            <div id="module-handover" className="scroll-mt-16">
+              <HandoverModule project={enrichedProject} initialData={bundleData?.handovers} onProgressChange={(pct) => handleModuleProgressChange('handover', pct)} />
+            </div>
           </section>
 
         </div>

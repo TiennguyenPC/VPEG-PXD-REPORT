@@ -174,9 +174,9 @@ export function calcDailyActualProjectPercent(progressEntries, constructions = [
 }
 
 const MODULE_TOMORROW_LABELS = {
-  permit: 'Giấy phép (chi tiết theo bảng)',
-  design: 'Thiết kế (chi tiết theo bảng)',
-  handover: 'Bàn giao hồ sơ (chi tiết theo bảng)',
+  permit: 'Giấy phép',
+  design: 'Thiết kế',
+  handover: 'Bàn giao hồ sơ',
 };
 
 /** Hạng mục KH active trong ngày — có key ổn định để bỏ qua / carry-over */
@@ -206,14 +206,14 @@ export function getPlannedWorkItemsForDay(refDate, projectId, bundles = {}) {
       if (moduleStart && isDayInRange(refDate, moduleStart, expected)) {
         items.push({
           key: `procurement:${name}`,
-          label: `${name} (chi tiết theo bảng)`,
+          label: name,
           source: 'schedule',
           module: 'procurement',
         });
       } else if (!moduleStart && startOfDay(refDate)?.getTime() === startOfDay(expected)?.getTime()) {
         items.push({
           key: `procurement:${name}`,
-          label: `${name} (chi tiết theo bảng)`,
+          label: name,
           source: 'schedule',
           module: 'procurement',
         });

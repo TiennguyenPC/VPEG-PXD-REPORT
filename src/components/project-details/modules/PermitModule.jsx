@@ -11,6 +11,7 @@ import { ModuleCell } from '../../ModuleCell';
 import ModuleNotesCell from './ModuleNotesCell';
 import ModuleSelectField from './ModuleSelectField';
 import { normalizeModuleField } from '../../../utils/moduleDisplay';
+import useModuleOpenListener from '../../../hooks/useModuleOpenListener';
 
 const defaultPermits = [
   'Sở công thương',
@@ -24,6 +25,7 @@ export default function PermitModule({ project, initialData, onProgressChange })
   const { t, tf, ts } = useI18n();
   const canEdit = useProjectCanEdit();
   const [isOpen, setIsOpen] = useState(false);
+  useModuleOpenListener('permit', setIsOpen);
 
   const mergePermitData = (data) => {
     const getVal = (row, keys) => {
