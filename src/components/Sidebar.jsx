@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Briefcase, Folder, PanelLeftClose, PanelLeftOpen, LogOut, Settings, UserCircle } from 'lucide-react';
+import { Activity, Briefcase, Folder, PanelLeftClose, PanelLeftOpen, LogOut, Settings, UserCircle, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getRoleLabel, getUserInitials, isAdmin } from '../utils/permissions';
@@ -45,23 +45,39 @@ export default function Sidebar({ activeItem, isCollapsed, toggleSidebar }) {
             { key: 'tasks',     label: 'CÔNG VIỆC',  Icon: Briefcase, href: '/tasks',   onClick: (e) => { e.preventDefault(); navigate('/tasks'); } },
             { key: 'projects',  label: 'DỰ ÁN',      Icon: Folder,    href: '/projects',onClick: (e) => { e.preventDefault(); navigate('/projects'); } },
             { key: 'account',   label: 'TÀI KHOẢN',  Icon: UserCircle, href: '/account', onClick: (e) => { e.preventDefault(); navigate('/account'); } },
+            { key: 'guide',     label: 'HƯỚNG DẪN VẬN HÀNH', Icon: BookOpen, href: '/huong-dan', external: true },
             ...(isAdmin(user) ? [{ key: 'settings', label: 'CÀI ĐẶT', Icon: Settings, href: '/settings/users', onClick: (e) => { e.preventDefault(); navigate('/settings/users'); } }] : []),
-          ].map(({ key, label, Icon, href, onClick }) => (
+          ].map(({ key, label, Icon, href, onClick, external }) => {
+            const className = `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-xs font-semibold
+                ${activeItem === key
+                  ? 'bg-[#5252ff]/10 text-[#7373ff] border-l-2 border-[#5252ff]'
+                  : 'text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-hover)]'}
+                ${isCollapsed ? 'justify-center' : ''}`;
+            const iconEl = (
+              <>
+                <Icon className={`w-4 h-4 shrink-0 ${activeItem === key ? 'text-[#5252ff]' : 'text-[var(--text-muted)]'}`} />
+                {!isCollapsed && <span className="truncate [font-variant-ligatures:normal] leading-snug">{label}</span>}
+              </>
+            );
+            if (external) {
+              return (
+                <a key={key} href={href} title={label} className={className}>
+                  {iconEl}
+                </a>
+              );
+            }
+            return (
             <a
               key={key}
               href={href}
               onClick={onClick}
               title={label}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all text-xs font-semibold
-                ${activeItem === key
-                  ? 'bg-[#5252ff]/10 text-[#7373ff] border-l-2 border-[#5252ff]'
-                  : 'text-[var(--text-muted)] hover:text-[var(--text-strong)] hover:bg-[var(--bg-hover)]'}
-                ${isCollapsed ? 'justify-center' : ''}`}
+              className={className}
             >
-              <Icon className={`w-4 h-4 shrink-0 ${activeItem === key ? 'text-[#5252ff]' : 'text-[var(--text-muted)]'}`} />
-              {!isCollapsed && <span className="truncate [font-variant-ligatures:normal]">{label}</span>}
+              {iconEl}
             </a>
-          ))}
+            );
+          })}
           {activeItem === 'project-detail' && (
             <a href="#" onClick={e => e.preventDefault()} title="CHI TIẾT DỰ ÁN"
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg bg-[#5252ff]/10 text-[#7373ff] border-l-2 border-[#5252ff] text-xs font-semibold ${isCollapsed ? 'justify-center' : ''}`}>

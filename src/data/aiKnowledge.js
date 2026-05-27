@@ -12,6 +12,7 @@ export const APP_USAGE_GUIDE = `
 - **CÔNG VIỆC** (\`/tasks\`): Quản lý tác vụ đa chế độ xem.
 - **DỰ ÁN** (\`/projects\`): Bảng danh sách dự án, lọc, xuất Excel, thêm/sửa dự án.
 - **TÀI KHOẢN** (\`/account\`): Thông tin cá nhân, đổi mật khẩu, giao diện Sáng/Tối, đăng xuất.
+- **HƯỚNG DẪN VẬN HÀNH** (\`/huong-dan\`): Tài liệu training A–Z cho toàn bộ nhân sự (sidebar, ngay dưới Tài khoản).
 - **CÀI ĐẶT** (\`/settings/users\`): Chỉ Admin — quản lý user, audit log.
 - **Chi tiết dự án** (\`/projects/:id\`): Click dòng dự án ở Tổng quan hoặc Danh sách dự án.
 - Cuối sidebar: thông báo, chế độ sáng/tối, đăng xuất, thu gọn menu.

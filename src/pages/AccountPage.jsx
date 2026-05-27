@@ -12,6 +12,7 @@ import {
   Shield,
   LogOut,
   Palette,
+  BookOpen,
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import ThemeModePicker from '../components/ThemeModePicker';
@@ -155,6 +156,20 @@ export default function AccountPage() {
         </header>
 
         <div className="p-4 md:p-6 max-w-4xl mx-auto space-y-6 max-md:pb-8 mobile-content-compact">
+          {/* Hướng dẫn vận hành — mobile (sidebar ẩn) */}
+          <a
+            href="/huong-dan"
+            className="md:hidden flex items-center gap-4 p-4 rounded-2xl border border-[#5252ff]/30 bg-[#5252ff]/5 hover:bg-[#5252ff]/10 transition-colors"
+          >
+            <div className="p-2.5 rounded-xl bg-[#5252ff]/15 text-[#7373ff] shrink-0">
+              <BookOpen className="w-5 h-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-[var(--text-strong)]">Hướng dẫn vận hành</p>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">Đọc tài liệu A–Z: dự án, nhật ký, task, phân quyền…</p>
+            </div>
+          </a>
+
           {/* Profile hero */}
           <div className="rounded-2xl border border-[var(--border-main)]/80 bg-[var(--bg-panel)] overflow-hidden shadow-lg shadow-black/5">
             <div className="h-28 bg-gradient-to-r from-[#5252ff]/25 via-[#3b82f6]/15 to-transparent" />
