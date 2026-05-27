@@ -596,27 +596,7 @@ export default function SiteLogPanel({
         
         {/* Day/Week Tabs + Edit */}
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
-          {selectedView === 'day' && canEdit && (
-            isEditing ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleCancelEdit}
-                  disabled={saveStatus === 'Saving...'}
-                  className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all disabled:opacity-50"
-                >
-                  <X className="w-3.5 h-3.5" /> Hủy
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveEdit}
-                  disabled={saveStatus === 'Saving...'}
-                  className="hidden md:inline-flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold rounded-lg bg-[#5252ff] hover:bg-[#4040ff] text-white transition-all disabled:opacity-50"
-                >
-                  <Check className="w-3.5 h-3.5" /> Lưu ngay
-                </button>
-              </>
-            ) : (
+          {selectedView === 'day' && canEdit && !isEditing && (
               <button
                 type="button"
                 onClick={handleStartEdit}
@@ -625,7 +605,6 @@ export default function SiteLogPanel({
               >
                 <Pencil className="w-3.5 h-3.5" /> Sửa nhật ký
               </button>
-            )
           )}
 
           <div className="flex rounded-lg bg-[var(--bg-panel)] p-0.5 border border-[var(--border-main)]">
@@ -772,18 +751,16 @@ export default function SiteLogPanel({
             if (isEditing && editData) {
               return (
                 <div className="bg-[var(--bg-panel)]/80 border border-[var(--border-main)] rounded-xl p-4 md:p-5 mb-4 space-y-4 max-md:pb-24">
-                  <div className="hidden md:flex items-center justify-between border-b border-[var(--border-main)] pb-3 gap-3">
-                    <div>
-                      <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                        📝 Chỉnh sửa nhật ký ngày {selectedDate}
-                      </h4>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
+                  <div className="hidden md:flex items-center justify-between border-b border-[var(--border-main)] pb-3 gap-6">
+                    <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      📝 Chỉnh sửa nhật ký ngày {selectedDate}
+                    </h4>
+                    <div className="flex items-center gap-2 shrink-0 rounded-lg bg-[#0b1221] p-1 border border-[var(--border-main)]">
                       <button
                         type="button"
                         onClick={handleCancelEdit}
                         disabled={saveStatus === 'Saving...'}
-                        className="px-2.5 py-1 text-[10px] font-bold rounded bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all flex items-center gap-1 disabled:opacity-50"
+                        className="px-3 py-1.5 text-[10px] font-bold rounded-md bg-transparent hover:bg-slate-800 text-slate-400 hover:text-white transition-all flex items-center gap-1.5 disabled:opacity-50"
                       >
                         <X className="w-3.5 h-3.5" /> Hủy
                       </button>
@@ -791,7 +768,7 @@ export default function SiteLogPanel({
                         type="button"
                         onClick={handleSaveEdit}
                         disabled={saveStatus === 'Saving...'}
-                        className="px-2.5 py-1 text-[10px] font-bold rounded bg-[#5252ff] hover:bg-[#4040ff] text-white transition-all flex items-center gap-1 disabled:opacity-50"
+                        className="px-3 py-1.5 text-[10px] font-bold rounded-md bg-[#5252ff] hover:bg-[#4040ff] text-white shadow-[0_0_12px_rgba(82,82,255,0.25)] transition-all flex items-center gap-1.5 disabled:opacity-50"
                       >
                         <Check className="w-3.5 h-3.5" /> Lưu ngay
                       </button>
