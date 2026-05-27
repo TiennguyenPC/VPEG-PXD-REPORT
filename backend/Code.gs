@@ -2739,8 +2739,11 @@ function canEditTask_(session, payload) {
   if (!session) return false;
   if (String(session.role || '').toLowerCase() === 'admin') return true;
   payload = payload || {};
+  var ss = getSpreadsheet();
 
-  if (hasFullTaskEditRights_(session, payload, getSpreadsheet())) return true;
+  if (isOfficeTask_(payload, ss) && !canViewOfficeTasks_(session)) return false;
+
+  if (hasFullTaskEditRights_(session, payload, ss)) return true;
 
   var assignee = resolveTaskAssigneeForPermission_(payload);
   var assignees = parseAssigneeNames_(assignee);
