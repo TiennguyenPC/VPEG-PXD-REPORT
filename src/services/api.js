@@ -3,6 +3,27 @@ export const GAS_URL = 'https://script.google.com/macros/s/AKfycbz2YizKLfy0pjrjE
 
 const AUTH_TOKEN_KEY = 'epc_auth_token';
 
+/** Admin mock user — chỉ dùng khi npm run dev trên localhost, không ảnh hưởng production. */
+export const LOCAL_DEV_USER = {
+  userId: 'local-dev',
+  username: 'dev.local',
+  displayName: 'Dev (localhost)',
+  email: 'dev@localhost',
+  role: 'admin',
+  employeeId: '',
+  assignedProjects: [],
+};
+
+export function isLocalDevHost() {
+  if (typeof window === 'undefined') return false;
+  const host = window.location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+}
+
+export function isLocalDevBypass() {
+  return import.meta.env.DEV && isLocalDevHost();
+}
+
 export function getAuthToken() {
   try {
     return localStorage.getItem(AUTH_TOKEN_KEY) || '';

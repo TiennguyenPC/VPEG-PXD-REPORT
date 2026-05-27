@@ -649,11 +649,11 @@ export default function App() {
       {/* 1. LEFT SIDEBAR */}
       <Sidebar activeItem="projects" isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
-      {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col min-w-0 overflow-y-auto pb-mobile-nav">
+      {/* MAIN CONTENT AREA — mobile: header cố định, body scroll riêng (giống TaskList) */}
+      <main className="flex-1 flex flex-col min-w-0 pb-mobile-nav max-md:h-[100dvh] max-md:max-h-[100dvh] max-md:overflow-hidden md:overflow-y-auto">
         
-        {/* Mobile: cố định tiêu đề + tìm kiếm/bộ lọc khi scroll */}
-        <div className="max-md:sticky max-md:top-0 max-md:z-40 max-md:bg-[var(--bg-main)] max-md:backdrop-blur-md max-md:border-b max-md:border-[var(--border-main)]/50 max-md:shadow-sm">
+        {/* Mobile: cố định tiêu đề + nút + tìm kiếm/bộ lọc — không scroll */}
+        <div className="max-md:shrink-0 max-md:z-40 max-md:relative max-md:bg-[var(--bg-main)] max-md:border-b max-md:border-[var(--border-main)]/50 max-md:shadow-sm">
         {/* 2. TOP HEADER */}
         <header className="max-md:mobile-page-x md:px-6 pt-3 pb-2 border-b border-[var(--border-main)]/30 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center bg-[var(--bg-panel)]/60 backdrop-blur-md max-md:mobile-header-offset md:border-b-0">
           <div className="flex items-center gap-3 min-w-0">
@@ -827,8 +827,11 @@ export default function App() {
         </section>
         </div>
 
+        {/* Mobile: KPI + danh sách scroll; desktop: flow bình thường trong main */}
+        <div className="flex-1 min-h-0 max-md:overflow-y-auto md:overflow-visible flex flex-col">
+
         {/* 4. KPI SUMMARY CARDS */}
-        <section className="max-md:mobile-page-x md:px-6 py-1.5 grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 bg-[var(--bg-main)]">
+        <section className="max-md:mobile-page-x md:px-6 py-1.5 grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 bg-[var(--bg-main)] shrink-0">
           
           {/* Card 1: Total projects */}
           <div className="glass-panel rounded-lg p-2.5 md:p-3 flex items-start gap-2 md:gap-3 relative overflow-hidden transition-all shadow-md hover:border-[#263554] group min-w-0">
@@ -1311,6 +1314,8 @@ export default function App() {
             </div>
           </div>
         </section>
+
+        </div>
 
       </main>
 

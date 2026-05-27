@@ -286,6 +286,17 @@ export default function ConstructionModule({ project, initialData, onProgressCha
   const totalTaskCount = allTasks.length;
   const completedCount = allTasks.filter(t => Number(t.TIẾN_ĐỘ_THỰC_TẾ || 0) >= 100).length;
 
+  const TH = 'p-3 align-middle text-[10px] leading-snug font-bold uppercase tracking-wider text-[var(--text-muted)]';
+  const TD = 'p-3 align-middle';
+  const TH_CENTER = `${TH} text-center`;
+  const TH_LEFT = `${TH} text-left`;
+  const TD_CENTER = `${TD} text-center`;
+  const TD_LEFT = `${TD} text-left`;
+  const TH_DATE = `${TH_CENTER} whitespace-nowrap w-[5.75rem]`;
+  const TD_DATE = `${TD_CENTER} whitespace-nowrap w-[5.75rem]`;
+  const TH_PROGRESS = `${TH_CENTER} w-[7.25rem] min-w-[7.25rem]`;
+  const TD_PROGRESS = `${TD_CENTER} whitespace-nowrap w-[7.25rem] min-w-[7.25rem]`;
+
   return (
     <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
       <button
@@ -369,27 +380,49 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                           transition={{ duration: 0.2 }}
                         >
                           <div className="overflow-x-auto custom-scrollbar touch-pan-x">
-                            <table className="w-full text-left text-xs min-w-[950px]">
+                            <table className="w-full text-xs min-w-[950px] table-fixed [&_th]:align-middle [&_td]:align-middle">
+                              <colgroup>
+                                <col className="w-12" />
+                                <col />
+                                <col className="w-[5.75rem]" />
+                                <col className="w-[5.75rem]" />
+                                <col className="w-[5.75rem]" />
+                                <col className="w-[7.25rem]" />
+                                <col className="w-[140px]" />
+                              </colgroup>
                               <thead>
-                                <tr className="bg-[var(--bg-main)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                                  <th className="p-2 md:p-3">{t('table.taskCode')}</th>
-                                  <th className="p-2 md:p-3">{t('table.taskItem')}</th>
-                                  <th className="px-1.5 py-2 md:px-2 md:py-3 text-[10px] leading-tight">{t('table.startDate')}</th>
-                                  <th className="px-1.5 py-2 md:px-2 md:py-3 text-[10px] leading-tight">{t('table.endDate')}</th>
-                                  <th className="px-1.5 py-2 md:px-2 md:py-3 text-[10px] leading-tight">{t('table.actualEnd')}</th>
-                                  <th className="p-2 md:p-3 text-right pr-2 md:pr-4">{t('table.actualProgress')}</th>
-                                  <th className="p-2 md:p-3">{t('table.notes')}</th>
+                                <tr className="bg-[var(--bg-main)] border-b border-[var(--border-main)]">
+                                  <th className={`${TH_CENTER} w-12`}>{t('table.taskCode')}</th>
+                                  <th className={`${TH_LEFT} min-w-[220px]`}>{t('table.taskItem')}</th>
+                                  <th className={TH_DATE}>{t('table.startDate')}</th>
+                                  <th className={TH_DATE}>{t('table.endDate')}</th>
+                                  <th className={TH_DATE}>{t('table.actualEnd')}</th>
+                                  <th className={TH_PROGRESS}>
+                                    {(() => {
+                                      const parts = String(t('table.actualProgress')).trim().split(/\s+/);
+                                      if (parts.length < 2) return t('table.actualProgress');
+                                      const mid = Math.ceil(parts.length / 2);
+                                      return (
+                                        <>
+                                          {parts.slice(0, mid).join(' ')}
+                                          <br />
+                                          {parts.slice(mid).join(' ')}
+                                        </>
+                                      );
+                                    })()}
+                                  </th>
+                                  <th className={`${TH_LEFT} min-w-[140px]`}>{t('table.notes')}</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-[var(--border-main)]">
                                 {group.tasks.map(task => (
                                   <tr key={task.id} className="hover:bg-[#141c2f]/40 transition-colors">
-                                    <td className="p-3 font-semibold text-[var(--text-muted)]">{task.code}</td>
-                                    <td className="p-3 font-semibold text-slate-200 align-top">{ts(task.item)}</td>
-                                    <td className="px-1.5 py-2 md:px-2 md:py-3 align-middle whitespace-nowrap w-0">
+                                    <td className={`${TD_CENTER} w-12 font-semibold text-[var(--text-muted)]`}>{task.code}</td>
+                                    <td className={`${TD_LEFT} font-semibold text-slate-200`}>{ts(task.item)}</td>
+                                    <td className={TD_DATE}>
                                       <DateInputDMY
                                         displayMode="dm"
-                                        className={`bg-transparent font-semibold tabular-nums focus:outline-none border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
+                                        className={`bg-transparent font-semibold tabular-nums text-center focus:outline-none border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_BẮT_ĐẦU || ''}
                                         placeholder={canEdit ? 'dd/mm' : ''}
                                         disabled={!canEdit || isUpdating}
@@ -401,10 +434,10 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                         onBlur={(_e, val) => handleUpdate(group.id, task.id, 'NGÀY_BẮT_ĐẦU', val)}
                                       />
                                     </td>
-                                    <td className="px-1.5 py-2 md:px-2 md:py-3 align-middle whitespace-nowrap w-0">
+                                    <td className={TD_DATE}>
                                       <DateInputDMY
                                         displayMode="dm"
-                                        className={`bg-transparent font-semibold tabular-nums focus:outline-none border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
+                                        className={`bg-transparent font-semibold tabular-nums text-center focus:outline-none border-b border-transparent focus:border-[#5252ff] text-slate-300 ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_KẾT_THÚC || ''}
                                         placeholder={canEdit ? 'dd/mm' : ''}
                                         disabled={!canEdit || isUpdating}
@@ -416,10 +449,10 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                         onBlur={(_e, val) => handleUpdate(group.id, task.id, 'NGÀY_KẾT_THÚC', val)}
                                       />
                                     </td>
-                                    <td className="px-1.5 py-2 md:px-2 md:py-3 align-middle whitespace-nowrap w-0">
+                                    <td className={TD_DATE}>
                                       <DateInputDMY
                                         displayMode="dm"
-                                        className={`bg-transparent font-semibold tabular-nums focus:outline-none border-b border-transparent focus:border-[#5252ff] ${task.NGÀY_HT_THỰC_TẾ && task.NGÀY_HT_THỰC_TẾ !== '-' ? 'text-emerald-400' : 'text-slate-400'} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
+                                        className={`bg-transparent font-semibold tabular-nums text-center focus:outline-none border-b border-transparent focus:border-[#5252ff] ${task.NGÀY_HT_THỰC_TẾ && task.NGÀY_HT_THỰC_TẾ !== '-' ? 'text-emerald-400' : 'text-slate-400'} ${(!canEdit || isUpdating) ? 'opacity-50 pointer-events-none' : ''}`}
                                         value={task.NGÀY_HT_THỰC_TẾ || ''}
                                         placeholder={canEdit ? 'dd/mm' : ''}
                                         disabled={!canEdit || isUpdating}
@@ -431,16 +464,15 @@ export default function ConstructionModule({ project, initialData, onProgressCha
                                         onBlur={(_e, val) => handleUpdate(group.id, task.id, 'NGÀY_HT_THỰC_TẾ', val)}
                                       />
                                     </td>
-                                    <td className="p-3 text-right pr-4 align-top">
-                                      <div className="flex items-center justify-end" title="Cập nhật qua Nhật ký hiện trường">
-                                        <span
-                                          className={`font-bold tabular-nums ${task.TIẾN_ĐỘ_THỰC_TẾ === 100 ? 'text-emerald-400' : 'text-slate-300'}`}
-                                        >
-                                          {formatModuleProgress(task.TIẾN_ĐỘ_THỰC_TẾ)}
-                                        </span>
-                                      </div>
+                                    <td className={TD_PROGRESS}>
+                                      <span
+                                        className={`inline-block font-bold tabular-nums ${task.TIẾN_ĐỘ_THỰC_TẾ === 100 ? 'text-emerald-400' : 'text-slate-300'}`}
+                                        title="Cập nhật qua Nhật ký hiện trường"
+                                      >
+                                        {formatModuleProgress(task.TIẾN_ĐỘ_THỰC_TẾ)}
+                                      </span>
                                     </td>
-                                    <td className="p-3 align-top">
+                                    <td className={`${TD_LEFT} min-w-[140px]`}>
                                       <ModuleNotesCell
                                         value={task.GHI_CHÚ || ''}
                                         canEdit={canEdit && !isUpdating}

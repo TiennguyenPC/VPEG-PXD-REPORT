@@ -31,6 +31,12 @@ import {
   calcDailyPlannedProjectPercent,
   getPlannedWorkLabelsForDay,
 } from '../../utils/dailyPlannedProgress';
+import {
+  computeTomorrowWork,
+  parseDismissedTomorrowKeys,
+  serializeDismissedTomorrowKeys,
+  addDaysDMY,
+} from '../../utils/siteLogTomorrowWork';
 import { useProjectCanEdit } from '../../context/ProjectEditContext';
 import { useI18n } from '../../context/I18nContext';
 
@@ -224,6 +230,40 @@ export default function SiteLogPanel({
     const parsedNote = parseDailyNote(noteText);
     const parsedW = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
     const progressEntries = parseProgressEntries(noteText);
+    const projectId = project?.PROJECT_ID || project?.id;
+    const bundles = {
+      permits: moduleBundles.permits,
+      designs: moduleBundles.designs,
+      procurements: moduleBundles.procurements,
+      constructions: constructions.length ? constructions : moduleBundles.constructions,
+      handovers: moduleBundles.handovers,
+    };
+    const constructionRows = bundles.constructions || [];
+    const dismissedTomorrow = parseDismissedTomorrowKeys(noteText);
+    const tomorrowWork = computeTomorrowWork({
+      logDate: selectedDate,
+      projectId,
+      bundles,
+      logs,
+      constructions: constructionRows,
+      dismissedKeys: dismissedTomorrow,
+      savedTomorrowText: parsedNote.congViecNgayMai,
+    });
+    const autoOnly = computeTomorrowWork({
+      logDate: selectedDate,
+      projectId,
+      bundles,
+      logs,
+      constructions: constructionRows,
+      dismissedKeys: dismissedTomorrow,
+      savedTomorrowText: '',
+    });
+    const autoLabelSet = new Set(autoOnly.lines.map((line) => line.toLowerCase()));
+    const manualTomorrow = String(parsedNote.congViecNgayMai || '')
+      .split('\n')
+      .map((line) => line.replace(/^-\s*/, '').trim())
+      .filter((line) => line && !autoLabelSet.has(line.toLowerCase()))
+      .join('\n');
 
     setEditData({
       manpower: activeLog?.MANPOWER !== undefined ? activeLog?.MANPOWER : (activeLog?.NHÂN_LỰC_SITE || 0),
@@ -233,7 +273,10 @@ export default function SiteLogPanel({
       weatherDetail: parsedW.detail,
       ghiChu: parsedNote.ghiChu,
       congViecChinh: parsedNote.congViecChinh,
-      congViecNgayMai: parsedNote.congViecNgayMai,
+      congViecNgayMai: tomorrowWork.text,
+      tomorrowItems: tomorrowWork.items,
+      dismissedTomorrow,
+      congViecNgayMaiManual: manualTomorrow,
       vanDeRuiRo: parsedNote.vanDeRuiRo,
       dayStatus: parsedNote.dayStatus,
       dayStatusSubtext: parsedNote.dayStatusSubtext,
@@ -243,6 +286,40 @@ export default function SiteLogPanel({
     });
     setProgressSaveError('');
     setIsEditing(true);
+  };
+
+  const rebuildTomorrowEditState = (prev, dismissedTomorrow) => {
+    const projectId = project?.PROJECT_ID || project?.id;
+    const bundles = {
+      permits: moduleBundles.permits,
+      designs: moduleBundles.designs,
+      procurements: moduleBundles.procurements,
+      constructions: constructions.length ? constructions : moduleBundles.constructions,
+      handovers: moduleBundles.handovers,
+    };
+    const tomorrowWork = computeTomorrowWork({
+      logDate: selectedDate,
+      projectId,
+      bundles,
+      logs,
+      constructions: bundles.constructions || [],
+      dismissedKeys: dismissedTomorrow,
+      savedTomorrowText: prev.congViecNgayMaiManual,
+    });
+    return {
+      ...prev,
+      dismissedTomorrow,
+      tomorrowItems: tomorrowWork.items,
+      congViecNgayMai: tomorrowWork.text,
+    };
+  };
+
+  const handleDismissTomorrowItem = (itemKey) => {
+    setEditData((prev) => {
+      if (!prev) return prev;
+      const nextDismissed = [...new Set([...(prev.dismissedTomorrow || []), itemKey])];
+      return rebuildTomorrowEditState(prev, nextDismissed);
+    });
   };
 
   const addProgressEntryRow = () => {
@@ -314,6 +391,7 @@ export default function SiteLogPanel({
       progressEntries: serializedProgress,
       dayStatus: editData.dayStatus,
       dayStatusSubtext: editData.dayStatusSubtext,
+      boQuaNgayMai: serializeDismissedTomorrowKeys(editData.dismissedTomorrow),
     });
 
     const existingWeather = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
@@ -659,7 +737,6 @@ export default function SiteLogPanel({
                   .map((entry) => `[${entry.taskCode}] ${entry.taskName}: +${Number(entry.deltaPercent)}%`)
               : parsedNote.congViecChinh.split('\n').map(line => line.replace(/^-\s*/, '').trim()).filter(Boolean);
             const listGhiChu = parsedNote.ghiChu.split('\n').map(line => line.replace(/^-\s*/, '').trim()).filter(Boolean);
-            const listNgayMai = parsedNote.congViecNgayMai.split('\n').map(line => line.replace(/^-\s*/, '').trim()).filter(Boolean);
 
             const projectId = project?.PROJECT_ID || project?.id;
             const bundles = {
@@ -669,6 +746,18 @@ export default function SiteLogPanel({
               constructions: constructions.length ? constructions : moduleBundles.constructions,
               handovers: moduleBundles.handovers,
             };
+            const dismissedTomorrow = parseDismissedTomorrowKeys(getLogNoteText(activeLog));
+            const tomorrowWork = computeTomorrowWork({
+              logDate: selectedDate,
+              projectId,
+              bundles,
+              logs,
+              constructions: bundles.constructions || [],
+              dismissedKeys: dismissedTomorrow,
+              savedTomorrowText: parsedNote.congViecNgayMai,
+            });
+            const listNgayMai = tomorrowWork.lines;
+            const tomorrowDateLabel = addDaysDMY(selectedDate, 1) || '';
             const summaryPlanned = calcDailyPlannedProjectPercent(selectedDate, projectId, bundles);
             const summaryActual = calcDailyActualProjectPercent(progressEntries, bundles.constructions || []);
             const plannedLabels = getPlannedWorkLabelsForDay(selectedDate, projectId, bundles);
@@ -908,11 +997,51 @@ export default function SiteLogPanel({
                       />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Công việc ngày mai (Mỗi dòng là 1 công việc)</label>
+                      <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                        Công việc ngày mai
+                        {tomorrowDateLabel ? (
+                          <span className="normal-case font-medium text-slate-500 ml-1">({tomorrowDateLabel})</span>
+                        ) : null}
+                      </label>
+                      <p className="text-[10px] text-slate-500 mb-2">
+                        Tự động theo lịch hạng mục + việc chưa xong hôm nay. Bấm X để bỏ nhắc.
+                      </p>
+                      {(editData.tomorrowItems || []).length > 0 ? (
+                        <ul className="space-y-1.5 mb-2">
+                          {(editData.tomorrowItems || []).map((item) => (
+                            <li
+                              key={item.key}
+                              className="flex items-start gap-2 bg-[#141d30] border border-[var(--border-main)] rounded-md px-2.5 py-2 text-xs text-white"
+                            >
+                              <span className="flex-1 min-w-0 leading-snug">{item.label}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDismissTomorrowItem(item.key)}
+                                className="shrink-0 p-1 rounded hover:bg-red-500/15 text-slate-400 hover:text-red-400 transition-colors"
+                                title="Bỏ nhắc việc này"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-[11px] italic text-slate-500 mb-2">Chưa có việc gợi ý cho ngày mai.</p>
+                      )}
+                      <label className="block text-[9px] font-bold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">
+                        Thêm công việc khác (tuỳ chọn)
+                      </label>
                       <textarea
-                        value={editData.congViecNgayMai}
-                        onChange={(e) => setEditData(prev => ({ ...prev, congViecNgayMai: e.target.value }))}
-                        rows={4}
+                        value={editData.congViecNgayMaiManual || ''}
+                        onChange={(e) => {
+                          const manual = e.target.value;
+                          setEditData((prev) => rebuildTomorrowEditState(
+                            { ...prev, congViecNgayMaiManual: manual },
+                            prev.dismissedTomorrow || []
+                          ));
+                        }}
+                        rows={3}
+                        placeholder="Mỗi dòng là 1 công việc bổ sung..."
                         className="w-full bg-[#141d30] border border-[var(--border-main)] rounded-md p-2 text-xs text-white focus:outline-none focus:border-[#5252ff] resize-y"
                       />
                     </div>
@@ -1098,6 +1227,9 @@ export default function SiteLogPanel({
                     <div className="flex items-center justify-between mb-3">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                         <CalendarClock className="w-3.5 h-3.5 text-indigo-400" /> {t('siteLog.tomorrowTasks')}
+                        {tomorrowDateLabel ? (
+                          <span className="normal-case font-medium text-slate-500">· {tomorrowDateLabel}</span>
+                        ) : null}
                       </p>
                       <span className="text-[8px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded">
                         {t('siteLog.highPriority')}

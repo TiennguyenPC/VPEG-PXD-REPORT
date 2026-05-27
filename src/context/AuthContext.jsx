@@ -8,11 +8,17 @@ import {
   clearSessionUserCache,
   clearCache,
   prefetchOverviewRoute,
+  isLocalDevBypass,
+  LOCAL_DEV_USER,
 } from '../services/api';
 
 const AuthContext = createContext(null);
 
 function getInitialAuthState() {
+  if (isLocalDevBypass()) {
+    return { user: LOCAL_DEV_USER, loading: false };
+  }
+
   const token = getAuthToken();
   if (!token) return { user: null, loading: false };
   const cachedUser = readSessionUserCache();
@@ -31,6 +37,12 @@ export function AuthProvider({ children }) {
   }, []);
 
   const invalidateSession = useCallback(() => {
+    if (isLocalDevBypass()) {
+      setUser(LOCAL_DEV_USER);
+      writeSessionUserCache(LOCAL_DEV_USER);
+      return;
+    }
+
     setAuthToken(null);
     setUser(null);
     clearSessionUserCache();
@@ -38,6 +50,14 @@ export function AuthProvider({ children }) {
   }, []);
 
   const validateSession = useCallback(async () => {
+    if (isLocalDevBypass()) {
+      setUser(LOCAL_DEV_USER);
+      writeSessionUserCache(LOCAL_DEV_USER);
+      setLoading(false);
+      warmAppAfterAuth();
+      return;
+    }
+
     const token = getAuthToken();
     if (!token) {
       setUser(null);

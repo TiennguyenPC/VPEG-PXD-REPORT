@@ -173,9 +173,15 @@ export function calcDailyActualProjectPercent(progressEntries, constructions = [
   return round2(total);
 }
 
-/** Danh sách việc KH active trong ngày (hiển thị gợi ý) */
-export function getPlannedWorkLabelsForDay(refDate, projectId, bundles = {}) {
-  const labels = [];
+const MODULE_TOMORROW_LABELS = {
+  permit: 'Giấy phép (chi tiết theo bảng)',
+  design: 'Thiết kế (chi tiết theo bảng)',
+  handover: 'Bàn giao hồ sơ (chi tiết theo bảng)',
+};
+
+/** Hạng mục KH active trong ngày — có key ổn định để bỏ qua / carry-over */
+export function getPlannedWorkItemsForDay(refDate, projectId, bundles = {}) {
+  const items = [];
   const schedules = collectModuleSchedules(projectId, bundles);
 
   for (const key of ['permit', 'design', 'handover']) {
@@ -183,18 +189,34 @@ export function getPlannedWorkLabelsForDay(refDate, projectId, bundles = {}) {
     if (!sched?.start || !sched?.days) continue;
     const end = moduleEndDate(sched.start, sched.days);
     if (end && isDayInRange(refDate, sched.start, end)) {
-      labels.push(key);
+      items.push({
+        key: `module:${key}`,
+        label: MODULE_TOMORROW_LABELS[key],
+        source: 'schedule',
+        module: key,
+      });
     }
   }
 
   for (const item of bundles.procurements || []) {
+    const name = String(item.HẠNG_MỤC_MUA_HÀNG || item.name || 'Vật tư').trim();
     const expected = normalizeToDMY(item.NGÀY_VỀ_DỰ_KIẾN);
     const moduleStart = schedules?.procurement?.start;
     if (expected) {
       if (moduleStart && isDayInRange(refDate, moduleStart, expected)) {
-        labels.push(item.HẠNG_MỤC_MUA_HÀNG || 'VT');
+        items.push({
+          key: `procurement:${name}`,
+          label: `${name} (chi tiết theo bảng)`,
+          source: 'schedule',
+          module: 'procurement',
+        });
       } else if (!moduleStart && startOfDay(refDate)?.getTime() === startOfDay(expected)?.getTime()) {
-        labels.push(item.HẠNG_MỤC_MUA_HÀNG || 'VT');
+        items.push({
+          key: `procurement:${name}`,
+          label: `${name} (chi tiết theo bảng)`,
+          source: 'schedule',
+          module: 'procurement',
+        });
       }
     }
   }
@@ -202,9 +224,20 @@ export function getPlannedWorkLabelsForDay(refDate, projectId, bundles = {}) {
   const weightMap = buildConstructionTaskWeights(bundles.constructions || []);
   for (const meta of Object.values(weightMap)) {
     if (meta.start && meta.end && isDayInRange(refDate, meta.start, meta.end)) {
-      labels.push(meta.taskName);
+      const label = meta.taskCode ? `[${meta.taskCode}] ${meta.taskName}` : meta.taskName;
+      items.push({
+        key: `construction:${taskProgressKey(meta)}`,
+        label,
+        source: 'schedule',
+        module: 'construction',
+      });
     }
   }
 
-  return labels;
+  return items;
+}
+
+/** Danh sách việc KH active trong ngày (hiển thị gợi ý) */
+export function getPlannedWorkLabelsForDay(refDate, projectId, bundles = {}) {
+  return getPlannedWorkItemsForDay(refDate, projectId, bundles).map((item) => item.label);
 }
