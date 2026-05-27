@@ -61,9 +61,13 @@ function doGet(e) {
       case 'projects':
         data = getSheetDataAsObjects(ss, 'PROJECT_MASTER');
         break;
-      case 'tasks':
-        data = getSheetDataAsObjects(ss, 'PROJECT_TASKS');
+      case 'tasks': {
+        var allTasks = getSheetDataAsObjects(ss, 'PROJECT_TASKS');
+        var taskToken = e.parameter.token || '';
+        var taskSession = getAuthSession_(taskToken);
+        data = filterTasksForSession_(allTasks, taskSession, ss);
         break;
+      }
       case 'employees':
         data = getSheetDataAsObjects(ss, 'EMPLOYEE').map(sanitizeEmployeeForClient_);
         break;
@@ -77,13 +81,17 @@ function doGet(e) {
       case 'risks':
         data = getSheetDataAsObjects(ss, 'PROJECT_RISK');
         break;
-      case 'overview':
+      case 'overview': {
+        var overviewToken = e.parameter.token || '';
+        var overviewSession = getAuthSession_(overviewToken);
+        var overviewTasks = getSheetDataAsObjects(ss, 'PROJECT_TASKS');
         data = {
           projects: getSheetDataAsObjects(ss, 'PROJECT_MASTER'),
-          tasks: getSheetDataAsObjects(ss, 'PROJECT_TASKS'),
+          tasks: filterTasksForSession_(overviewTasks, overviewSession, ss),
           risks: getSheetDataAsObjects(ss, 'PROJECT_RISK')
         };
         break;
+      }
       case 'permit':
         data = getSheetDataAsObjects(ss, 'PROJECT_PERMIT').filter(row => (row.PROJECT_ID == id || row.projectId == id));
         break;
@@ -229,11 +237,11 @@ function doGet(e) {
         break;
       }
       case 'project-share-status': {
-        var shareStatusAdmin = requireProjectShareAdminSession_(null, e);
-        if (shareStatusAdmin.error) {
-          return createResponse({ status: 'error', message: shareStatusAdmin.error }, shareStatusAdmin.code || 403);
+        var shareStatusCheck = requireProjectShareSession_(null, e, e.parameter.projectId);
+        if (shareStatusCheck.error) {
+          return createResponse({ status: 'error', message: shareStatusCheck.error }, shareStatusCheck.code || 403);
         }
-        data = getProjectShareStatus_(ss, e.parameter.projectId);
+        data = getProjectShareStatus_(ss, shareStatusCheck.projectId);
         break;
       }
       default:
@@ -2772,7 +2780,7 @@ function hasFullTaskEditRights_(session, payload, ss) {
 
   if (isProjectEditorRole_(session.role)) {
     if (isUserAssignedToTaskProject_(session, payload, ss)) return true;
-    if (isOfficeTask_(payload, ss)) return true;
+    if (isOfficeTask_(payload, ss) && canViewOfficeTasks_(session)) return true;
   }
 
   return false;
@@ -2887,6 +2895,25 @@ function isOfficeTask_(payload, ss) {
   return container.indexOf('VAN PHONG') >= 0 || projectName.indexOf('VAN PHONG') >= 0 || !hasProject;
 }
 
+function canViewOfficeTasks_(session) {
+  if (!session) return false;
+  if (String(session.role || '').toLowerCase() === 'admin') return true;
+  var username = String(session.username || '').trim().toLowerCase();
+  if (username === 'tien.nguyen') return true;
+  var norm = normalizeAuthName_(session.displayName || '');
+  var tokens = ['thieu', 'doan', 'sang', 'quang', 'thuan', 'cuong', 'duy', 'tien'];
+  for (var i = 0; i < tokens.length; i++) {
+    if (norm.indexOf(tokens[i]) >= 0) return true;
+  }
+  return false;
+}
+
+function filterTasksForSession_(tasks, session, ss) {
+  if (!tasks || !tasks.length) return tasks || [];
+  if (canViewOfficeTasks_(session)) return tasks;
+  return tasks.filter(function(t) { return !isOfficeTask_(t, ss); });
+}
+
 function resolveTaskAssigneeForPermission_(payload) {
   payload = payload || {};
   try {
@@ -2908,9 +2935,13 @@ function resolveTaskAssigneeForPermission_(payload) {
 
 function canCreateTask_(session, payload) {
   if (!session) return false;
+  payload = payload || {};
+  var ss = getSpreadsheet();
+  if (isOfficeTask_(payload, ss)) {
+    return canViewOfficeTasks_(session);
+  }
   if (String(session.role || '').toLowerCase() === 'admin') return true;
   if (isProjectEditorRole_(session.role)) return true;
-  payload = payload || {};
   return namesMatch_(session.displayName, payload.NHÂN_SỰ || '');
 }
 
@@ -3172,17 +3203,34 @@ function requireAdminSession_(payload, e) {
   return { session: session };
 }
 
-/** Chỉ admin chủ (tien.nguyen) được bật/tắt link chia sẻ khách */
-var PROJECT_SHARE_ADMIN_USERNAMES_ = ['tien.nguyen'];
+/** Admin hoặc PM/SM được gán dự án — bật/tắt link chia sẻ khách */
+function canShareProjectWithClient_(session, projectId) {
+  if (!session || !projectId) return false;
+  var role = String(session.role || '').toLowerCase();
+  if (role === 'admin') return true;
+  if (isProjectEditorRole_(session.role) && isAssignedToProject_(session, projectId)) return true;
+  return false;
+}
+
+function requireProjectShareSession_(payload, e, projectId) {
+  var token = getAuthTokenFromRequest_(payload, e);
+  var session = getAuthSession_(token);
+  if (!session) {
+    return { error: 'Phiên đăng nhập hết hạn hoặc không hợp lệ', code: 401 };
+  }
+  var ss = getSpreadsheet();
+  var pid = resolveProjectIdFlexible_(ss, projectId);
+  if (!pid) {
+    return { error: 'Thiếu projectId', code: 400 };
+  }
+  if (!canShareProjectWithClient_(session, pid)) {
+    return { error: 'Bạn không có quyền chia sẻ link khách cho dự án này', code: 403 };
+  }
+  return { session: session, projectId: pid };
+}
 
 function requireProjectShareAdminSession_(payload, e) {
-  var adminCheck = requireAdminSession_(payload, e);
-  if (adminCheck.error) return adminCheck;
-  var username = String(adminCheck.session.username || '').trim().toLowerCase();
-  if (PROJECT_SHARE_ADMIN_USERNAMES_.indexOf(username) === -1) {
-    return { error: 'Chỉ quản trị viên chủ sở hữu mới có quyền chia sẻ link khách', code: 403 };
-  }
-  return adminCheck;
+  return requireProjectShareSession_(payload, e, (payload && (payload.projectId || payload.id)) || (e && e.parameter && e.parameter.projectId));
 }
 
 function validateVuphongEmail_(email) {
@@ -4502,19 +4550,19 @@ function setProjectShareEnabled_(ss, projectId, enabled, token) {
 }
 
 function handleEnableProjectShare_(payload) {
-  var adminCheck = requireProjectShareAdminSession_(payload, null);
-  if (adminCheck.error) {
-    return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+  var shareCheck = requireProjectShareSession_(payload, null, payload.projectId || payload.id);
+  if (shareCheck.error) {
+    return createResponse({ status: 'error', message: shareCheck.error }, shareCheck.code || 403);
   }
   var ss = getSpreadsheet();
-  var projectId = resolveProjectIdFlexible_(ss, payload.projectId || payload.id);
-  if (!projectId || !getProjectById_(ss, projectId)) {
+  var projectId = shareCheck.projectId;
+  if (!getProjectById_(ss, projectId)) {
     return createResponse({ status: 'error', message: 'Không tìm thấy dự án' }, 404);
   }
   var existing = findShareRowByProjectId_(ss, projectId);
   var token = existing && existing.SHARE_TOKEN ? String(existing.SHARE_TOKEN) : generateShareToken_();
   setProjectShareEnabled_(ss, projectId, true, token);
-  auditMutation_('enable-project-share', { projectId: projectId }, adminCheck.session);
+  auditMutation_('enable-project-share', { projectId: projectId }, shareCheck.session);
   return createResponse({
     status: 'success',
     data: { projectId: projectId, token: token, enabled: true }
@@ -4522,17 +4570,14 @@ function handleEnableProjectShare_(payload) {
 }
 
 function handleDisableProjectShare_(payload) {
-  var adminCheck = requireProjectShareAdminSession_(payload, null);
-  if (adminCheck.error) {
-    return createResponse({ status: 'error', message: adminCheck.error }, adminCheck.code || 403);
+  var shareCheck = requireProjectShareSession_(payload, null, payload.projectId || payload.id);
+  if (shareCheck.error) {
+    return createResponse({ status: 'error', message: shareCheck.error }, shareCheck.code || 403);
   }
   var ss = getSpreadsheet();
-  var projectId = resolveProjectIdFlexible_(ss, payload.projectId || payload.id);
-  if (!projectId) {
-    return createResponse({ status: 'error', message: 'Thiếu projectId' }, 400);
-  }
+  var projectId = shareCheck.projectId;
   setProjectShareEnabled_(ss, projectId, false);
-  auditMutation_('disable-project-share', { projectId: projectId }, adminCheck.session);
+  auditMutation_('disable-project-share', { projectId: projectId }, shareCheck.session);
   return createResponse({
     status: 'success',
     data: { projectId: projectId, enabled: false }
