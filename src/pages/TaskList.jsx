@@ -387,8 +387,8 @@ export default function TaskList() {
     }
   }, [projects]);
 
-  const requestCloseTaskDetail = useCallback(() => {
-    if (draftDirty) {
+  const requestCloseTaskDetail = useCallback((skipDirtyCheck = false) => {
+    if (!skipDirtyCheck && draftDirty) {
       if (!window.confirm('Thay đổi chưa được lưu. Bỏ và thoát?')) return;
     }
     clearTimeout(saveTimerRef.current);
@@ -414,7 +414,8 @@ export default function TaskList() {
     }
     setIsSavingDraft(true);
     try {
-      await persistTaskUpdate(taskMatchRef.current, draftTask);
+      const ok = await persistTaskUpdate(taskMatchRef.current, draftTask);
+      if (ok) requestCloseTaskDetail(true);
     } finally {
       setIsSavingDraft(false);
     }
