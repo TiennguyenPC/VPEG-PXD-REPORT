@@ -120,11 +120,6 @@ export default function TaskAttachmentsPanel({
         </div>
       )}
 
-      <p className="text-[11px] text-slate-400 leading-relaxed">
-        Tệp lưu trên <strong>Google Drive</strong> (folder VPEG-Task-Attachments) và ghi link vào Sheet{' '}
-        <strong>PROJECT_TASKS → TỆP_ĐÍNH_KÈM</strong>. Người có quyền xem task bấm <strong>Tải về</strong> để tải.
-      </p>
-
       {attachments.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-10 text-center">
           <Paperclip className="w-8 h-8 text-slate-300 mx-auto mb-2" />
