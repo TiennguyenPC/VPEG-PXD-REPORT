@@ -27,6 +27,20 @@ import { canEditTask, canEditTaskField, canCreateTask, canDeleteTask, canViewTas
 
 const NEW_TASK_PROJECT_CUSTOM = '__custom__';
 
+const TASK_STATUS_SORT_RANK = {
+  'Trễ': 0,
+  'Đang diễn ra': 1,
+  'Chưa bắt đầu': 2,
+  'Đã hoàn thành': 3,
+};
+
+function compareTaskStatus(statusA, statusB, direction = 'asc') {
+  const rankA = TASK_STATUS_SORT_RANK[statusA] ?? 99;
+  const rankB = TASK_STATUS_SORT_RANK[statusB] ?? 99;
+  const cmp = rankA - rankB;
+  return direction === 'asc' ? cmp : -cmp;
+}
+
 function initDraftProjectPickerState(task, projectList) {
   const name = String(task?.TÊN_DỰ_ÁN || '').trim();
   const container = String(task?.BỘ_CHỨA || '').toUpperCase();
@@ -89,7 +103,7 @@ export default function TaskList() {
   const [isLoading, setIsLoading] = useState(() => tasks.length === 0);
   const [viewMode, setViewMode] = useState('grid'); // grid, board, calendar, chart
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'computedStatus', direction: 'asc' });
 
   useEffect(() => {
     const q = searchParams.get('q');
@@ -142,7 +156,7 @@ export default function TaskList() {
            const cmp = compareDateStrings(valA, valB);
            return sortConfig.direction === 'asc' ? cmp : -cmp;
         } else if (sortConfig.key === 'computedStatus') {
-           // Custom sort for status maybe, but string is fine
+          return compareTaskStatus(valA, valB, sortConfig.direction);
         } else {
            valA = String(valA || '').toLowerCase();
            valB = String(valB || '').toLowerCase();
