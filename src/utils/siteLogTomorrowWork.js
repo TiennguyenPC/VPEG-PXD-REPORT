@@ -65,9 +65,12 @@ export function matchLineToTaskKey(line, constructions = []) {
   }
 
   const lower = text.toLowerCase();
-  if (lower.includes('giấy phép') || lower.includes('giay phep')) return 'module:permit';
-  if (lower.includes('thiết kế') || lower.includes('thiet ke')) return 'module:design';
-  if (lower.includes('bàn giao') || lower.includes('ban giao')) return 'module:handover';
+  // Dòng có mã [1], [2]… là hạng mục thi công — không suy ra GP/TK/BGHS theo từ khóa
+  if (!codeFromLine) {
+    if (lower.includes('giấy phép') || lower.includes('giay phep')) return 'module:permit';
+    if (lower.includes('thiết kế') || lower.includes('thiet ke')) return 'module:design';
+    if (lower.includes('bàn giao') || lower.includes('ban giao')) return 'module:handover';
+  }
 
   return lineToFallbackKey(text);
 }

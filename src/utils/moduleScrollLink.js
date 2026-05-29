@@ -25,6 +25,11 @@ export function stripTableDetailSuffix(label) {
 export function getTomorrowItemModuleKey(item) {
   if (!item) return null;
 
+  // Mã CV thi công [1], [2]… — không có bảng module riêng
+  if (item.key?.startsWith('construction:') || item.module === 'construction') {
+    return null;
+  }
+
   if (item.key?.startsWith('module:')) {
     return item.key.replace(/^module:/, '');
   }
