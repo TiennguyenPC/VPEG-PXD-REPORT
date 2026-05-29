@@ -1,6 +1,6 @@
 import { getLogNoteText, parseDailyNote } from './sitePhotoCache';
 import { getPlannedWorkItemsForDay } from './dailyPlannedProgress';
-import { parseProgressEntries, taskProgressKey } from './siteLogConstructionProgress';
+import { parseProgressEntries, taskProgressKey, sumProgressThroughDate } from './siteLogConstructionProgress';
 import { parseFlexibleDate, formatDateStr, normalizeToDMY } from './timelineDates';
 
 const TABLE_DETAIL_SUFFIX = '(chi tiết theo bảng)';
@@ -75,18 +75,73 @@ export function matchLineToTaskKey(line, constructions = []) {
   return lineToFallbackKey(text);
 }
 
+function formatRemainingPercent(total) {
+  const remaining = Math.round((100 - total) * 100) / 100;
+  if (Number.isInteger(remaining)) return String(remaining);
+  return String(remaining).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+}
+
 function isConstructionLineCompletedOnDay(line, logs, dateStr, constructions) {
   const key = matchLineToTaskKey(line, constructions);
   if (!key.startsWith('construction:')) return false;
 
   const progressKey = key.replace(/^construction:/, '');
-  const log = findLogByDate(logs, dateStr);
-  if (!log) return false;
+  const cumulative = sumProgressThroughDate(logs, dateStr);
+  return (cumulative[progressKey] || 0) >= 100;
+}
 
-  const entries = parseProgressEntries(getLogNoteText(log));
-  return entries.some(
-    (entry) => taskProgressKey(entry) === progressKey && Number(entry.deltaPercent || 0) > 0
-  );
+/** Việc thi công đã ghi % nhưng chưa đủ 100% → carry sang ngày mai (còn X%) */
+function getIncompleteProgressCarryOver(logDate, logs, constructions, dismissedKeys) {
+  const cumulative = sumProgressThroughDate(logs, logDate);
+  const metaByKey = {};
+
+  for (const row of constructions || []) {
+    const taskCode = String(row.MÃ_CV ?? row.code ?? '').trim();
+    const taskName = String(row.HẠNG_MỤC_CÔNG_VIỆC ?? row.item ?? '').trim();
+    if (!taskName) continue;
+    metaByKey[taskProgressKey({ taskCode, taskName })] = { taskCode, taskName };
+  }
+
+  for (const log of logs || []) {
+    const logDateNorm = normalizeToDMY(log.LOG_DATE || log.NGÀY);
+    const through = parseFlexibleDate(normalizeToDMY(logDate));
+    const d = parseFlexibleDate(logDateNorm);
+    if (!through || !d || d > through) continue;
+
+    for (const entry of parseProgressEntries(getLogNoteText(log))) {
+      const pk = taskProgressKey(entry);
+      if (metaByKey[pk]) continue;
+      const taskCode = String(entry.taskCode || '').trim();
+      const taskName = String(entry.taskName || '').trim();
+      if (taskName) metaByKey[pk] = { taskCode, taskName };
+    }
+  }
+
+  const dismissed = new Set(dismissedKeys || []);
+  const items = [];
+
+  for (const [pk, total] of Object.entries(cumulative)) {
+    if (total <= 0 || total >= 100) continue;
+    const meta = metaByKey[pk];
+    if (!meta?.taskName) continue;
+
+    const key = `construction:${pk}`;
+    if (dismissed.has(key)) continue;
+
+    const remainingLabel = formatRemainingPercent(total);
+    const label = meta.taskCode
+      ? `[${meta.taskCode}] ${meta.taskName} (còn ${remainingLabel}%)`
+      : `${meta.taskName} (còn ${remainingLabel}%)`;
+
+    items.push({
+      key,
+      label,
+      source: 'incomplete_progress',
+      module: 'construction',
+    });
+  }
+
+  return items;
 }
 
 function getCarryOverItems(logDate, logs, constructions, dismissedKeys) {
@@ -131,6 +186,7 @@ function getManualExtraLines(savedText, autoLabels) {
 /**
  * Tự động gợi ý công việc ngày mai:
  * - Lịch KH ngày D+1 (thi công: tên việc; GP/TK/BGHS: chi tiết theo bảng)
+ * - Việc thi công chưa đủ 100% tính đến hết ngày D (còn X%)
  * - Việc từ nhật ký hôm qua chưa hoàn thành hôm nay
  * - Trừ các dòng đã bấm X (bỏ qua)
  */
@@ -157,7 +213,16 @@ export function computeTomorrowWork({
     items.push(item);
   };
 
-  getPlannedWorkItemsForDay(tomorrow, projectId, bundles).forEach(addItem);
+  const incompleteCarry = getIncompleteProgressCarryOver(logDate, logs, constructions, dismissedKeys);
+  const incompleteKeys = new Set(incompleteCarry.map((item) => item.key));
+
+  incompleteCarry.forEach(addItem);
+
+  getPlannedWorkItemsForDay(tomorrow, projectId, bundles).forEach((item) => {
+    if (incompleteKeys.has(item.key)) return;
+    addItem(item);
+  });
+
   getCarryOverItems(logDate, logs, constructions, dismissedKeys).forEach(addItem);
 
   const autoLabels = items.map((item) => item.label);

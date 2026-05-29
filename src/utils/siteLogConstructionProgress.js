@@ -1,5 +1,5 @@
 import { getLogNoteText, parseDailyNote } from './sitePhotoCache';
-import { normalizeToDMY } from './timelineDates';
+import { normalizeToDMY, parseFlexibleDate } from './timelineDates';
 
 export const PROGRESS_SECTION_HEADING = 'TIẾN ĐỘ HẠNG MỤC';
 
@@ -67,6 +67,19 @@ export function sumProgressDeltasFromLogs(logs, { excludeDate } = {}) {
     }
   }
   return sums;
+}
+
+/** Tổng % đã ghi nhận qua nhật ký đến hết ngày throughDateStr (bao gồm ngày đó) */
+export function sumProgressThroughDate(logs, throughDateStr) {
+  const through = parseFlexibleDate(normalizeToDMY(throughDateStr));
+  if (!through) return {};
+
+  const filtered = (logs || []).filter((log) => {
+    const d = parseFlexibleDate(normalizeToDMY(log.LOG_DATE || log.NGÀY));
+    return d && d <= through;
+  });
+
+  return sumProgressDeltasFromLogs(filtered);
 }
 
 export function validateProgressEntries(entries, logs, currentDate) {
