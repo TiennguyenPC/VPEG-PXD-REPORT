@@ -349,6 +349,24 @@ function dispatchOverviewRefresh(bundle) {
   }
 }
 
+function syncProjectRisksInCache(projectId, projectRisks) {
+  const pid = String(projectId || '').trim();
+  if (!pid) return;
+  try {
+    const all = readLocalJson('epc_risks_cache');
+    const other = all.filter((r) => String(r.PROJECT_ID || r.projectId || '').trim() !== pid);
+    const merged = [...other, ...(projectRisks || [])];
+    localStorage.setItem('epc_risks_cache', JSON.stringify(merged));
+    dispatchOverviewRefresh({
+      projects: readLocalJson('epc_projects_cache'),
+      tasks: readLocalJson('epc_tasks_cache'),
+      risks: merged,
+    });
+  } catch {
+    /* ignore cache errors */
+  }
+}
+
 function isOverviewCacheUsable(cached) {
   return (
     (cached?.projects?.length > 0) ||
@@ -701,6 +719,90 @@ export const api = {
     }
     return { url, dailyLogs: result?.data?.dailyLogs };
   },
+  uploadTaskAttachment: async (data) => {
+    let base64 = String(data.base64 || '');
+    if (base64.includes('base64,')) {
+      base64 = base64.split('base64,')[1];
+    }
+    if (!base64) {
+      throw new Error('Tệp rỗng');
+    }
+
+    const uploadMeta = { ...data };
+    delete uploadMeta.base64;
+    delete uploadMeta.fileName;
+    delete uploadMeta.mimeType;
+
+    const SMALL_BASE64_LIMIT = 280_000;
+    if (base64.length <= SMALL_BASE64_LIMIT) {
+      const result = await postToGAS('upload-task-file', {
+        base64: `data:application/octet-stream;base64,${base64}`,
+        fileName: data.fileName,
+        mimeType: data.mimeType,
+        ...uploadMeta,
+      });
+      const tasks = result?.tasks || result?.data?.tasks;
+      if (Array.isArray(tasks)) {
+        tasksCache = tasks;
+        localStorage.setItem('epc_tasks_cache', JSON.stringify(tasks));
+      }
+      return { ...(result?.data || {}), tasks };
+    }
+
+    const sessionId = `task_${String(data._matchTask || 't').replace(/\W/g, '_')}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const CHUNK_SIZE = 90_000;
+    const chunks = [];
+    for (let i = 0; i < base64.length; i += CHUNK_SIZE) {
+      chunks.push(base64.slice(i, i + CHUNK_SIZE));
+    }
+
+    for (let i = 0; i < chunks.length; i++) {
+      await postToGAS('upload-task-file-chunk', {
+        sessionId,
+        index: i,
+        total: chunks.length,
+        chunk: chunks[i],
+        fileName: data.fileName,
+        mimeType: data.mimeType,
+        ...uploadMeta,
+      });
+    }
+
+    const commitUrl = new URL(GAS_URL);
+    commitUrl.searchParams.append('action', 'upload-task-file-commit');
+    commitUrl.searchParams.append('sessionId', sessionId);
+    commitUrl.searchParams.append('t', Date.now().toString());
+
+    const response = await fetch(commitUrl.toString(), { redirect: 'follow' });
+    const text = await response.text();
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch {
+      throw new Error('API trả về dữ liệu không hợp lệ. Chạy npm run gas:sync để deploy lại backend.');
+    }
+    if (result.status === 'error') {
+      const msg = String(result.message || '').replace(/^Exception:\s*/i, '');
+      throw new Error(msg || 'Upload Drive thất bại');
+    }
+    const payload = result?.data || {};
+    const tasks = result?.tasks || payload.tasks;
+    if (Array.isArray(tasks)) {
+      tasksCache = tasks;
+      localStorage.setItem('epc_tasks_cache', JSON.stringify(tasks));
+    }
+    return { ...payload, tasks };
+  },
+  removeTaskAttachment: async (data) => {
+    invalidateTasksCache();
+    const result = await postToGAS('remove-task-attachment', data);
+    const tasks = result?.tasks || result?.data?.tasks;
+    if (Array.isArray(tasks)) {
+      tasksCache = tasks;
+      localStorage.setItem('epc_tasks_cache', JSON.stringify(tasks));
+    }
+    return { ...(result?.data || {}), tasks };
+  },
   updateModuleDates: (data) => postToGAS('update-module-dates', data),
   updateProject: async (data) => {
     projectsCache = null;
@@ -720,6 +822,22 @@ export const api = {
     return result;
   },
   addRisk: (data) => postToGAS('add-risk', data),
+  deleteRisk: async (risk) => {
+    const projectId = risk.PROJECT_ID || risk.projectId;
+    const rowIndex = Number(risk._rowIndex);
+    if (!rowIndex || rowIndex <= 1 || String(risk._rowIndex || '').startsWith('new-')) {
+      throw new Error('Không xóa được dòng chưa lưu');
+    }
+    const result = await postToGAS('delete-risk', {
+      PROJECT_ID: projectId,
+      _rowIndex: rowIndex,
+      NỘI_DUNG: risk.NỘI_DUNG || '',
+    });
+    if (result?.data && projectId) {
+      syncProjectRisksInCache(projectId, result.data);
+    }
+    return result;
+  },
   addPermit: (data) => postToGAS('add-permit', data),
   addDesign: (data) => postToGAS('add-design', data),
   addProcurement: (data) => postToGAS('add-procurement', data),

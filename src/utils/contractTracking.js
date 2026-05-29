@@ -1,5 +1,9 @@
 import { formatDateDMY, normalizeToDMY, parseFlexibleDate } from './timelineDates';
-import { evaluateHandoverAcceptance, evaluateMainMaterialDelivery } from './moduleProgress';
+import {
+  evaluateHandoverAcceptance,
+  evaluateMainMaterialDelivery,
+  evaluateConstructionGroupCComplete,
+} from './moduleProgress';
 
 /** Các mốc theo dõi HĐ EPC — nhập ẩn, không hiển thị trên timeline chính */
 export const CONTRACT_TRACKING_GROUPS = [
@@ -43,7 +47,12 @@ export const CONTRACT_TRACKING_GROUPS = [
         linkedLabel: 'Module Thi công',
       },
       { key: 'paymentPhase2', label: 'Thanh toán đợt 2' },
-      { key: 'constructionComplete', label: 'Hoàn thành lắp đặt (xong hạng mục C)' },
+      {
+        key: 'constructionComplete',
+        label: 'Hoàn thành lắp đặt (xong hạng mục C)',
+        linkedConstructionGroup: 'C',
+        linkedLabel: 'Module Thi công · Hạng mục C',
+      },
     ],
   },
   {
@@ -80,8 +89,14 @@ export const EMPTY_CONTRACT_TRACKING = Object.fromEntries(
 );
 
 const LINKED_FIELD_KEYS = new Set(
-  CONTRACT_TRACKING_GROUPS.flatMap((g) => g.fields.filter((f) => f.linkedModule).map((f) => f.key))
+  CONTRACT_TRACKING_GROUPS.flatMap((g) =>
+    g.fields.filter((f) => f.linkedModule || f.linkedConstructionGroup).map((f) => f.key)
+  )
 );
+
+export function isAutoContractTrackingField(field) {
+  return !!(field?.linkedModule || field?.linkedConstructionGroup);
+}
 
 /** Ngày kế hoạch từ module — chỉ tham chiếu, không tích xanh */
 function getLinkedPlanDate(data, key) {
@@ -142,6 +157,16 @@ export function resolveTrackingStep(data, key, moduleContext = null) {
     };
   }
 
+  if (key === 'constructionComplete') {
+    const ev = evaluateConstructionGroupCComplete(ctx.constructions);
+    return {
+      achieved: ev.achieved,
+      moduleNote: ev.achieved ? null : ev.note,
+      planDate: null,
+      displayDate: ev.achieved ? (ev.completionDate || '') : '',
+    };
+  }
+
   const achieved = isTrackingDateAchieved(data, key);
   return {
     achieved,
@@ -190,7 +215,7 @@ export function getModuleScheduleDate(projectId, moduleKey, kind = 'end', sheetR
 }
 
 /** Gắn ngày từ module — không nhập trùng trong Theo dõi HĐ */
-export function enrichContractTrackingWithModuleDates(tracking, projectId) {
+export function enrichContractTrackingWithModuleDates(tracking, projectId, moduleContext = null) {
   const out = { ...tracking };
   CONTRACT_TRACKING_GROUPS.forEach((group) => {
     group.fields.forEach((field) => {
@@ -203,6 +228,11 @@ export function enrichContractTrackingWithModuleDates(tracking, projectId) {
       out[field.key] = linked || '';
     });
   });
+  const constructions = moduleContext?.constructions;
+  if (Array.isArray(constructions)) {
+    const ev = evaluateConstructionGroupCComplete(constructions);
+    out.constructionComplete = ev.achieved ? (ev.completionDate || '') : '';
+  }
   return out;
 }
 
@@ -690,6 +720,30 @@ export function deadlineStatus(deadline, actual) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return today.getTime() > dl.getTime() ? 'overdue' : 'pending';
+}
+
+/** Ngày Kickoff trên trục milestone — chỉ từ Theo dõi HĐ, không fallback project/sheet */
+export function getContractKickoffDate(project) {
+  const projectId = project?.PROJECT_ID || project?.id;
+  const tracking = enrichContractTrackingWithModuleDates(
+    parseContractTracking(project?.THEO_DÕI_HĐ || project?.contractTracking, null),
+    projectId
+  );
+  const raw = tracking.kickoff || '';
+  if (!raw || raw === '-') return '';
+  return normalizeToDMY(raw) || raw;
+}
+
+/** COD chỉ hiện khi đã nhập — không fallback ngày mặc định hay milestone sheet ảo */
+export function resolveExplicitCodDate(project, contractDates = null) {
+  const dates = contractDates ?? getContractMilestoneDates(project);
+  const fromTracking = dates?.cod;
+  if (fromTracking && fromTracking !== '-') {
+    return normalizeToDMY(fromTracking) || fromTracking;
+  }
+  const raw = project?.KẾ_HOẠCH_COD || project?.cod || project?.codDate || project?.COD || '';
+  if (!raw || raw === '-' || raw === '—') return '';
+  return normalizeToDMY(raw) || raw;
 }
 
 /** Ngày KICKOFF / COD / bàn giao cho trục milestone */

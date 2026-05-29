@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line, ComposedChart, ReferenceDot, useXAxisScale, useYAxisScale, usePlotArea } from 'recharts';
 import { Loader2 } from 'lucide-react';
 import { api } from '../../services/api';
+import { resolveExplicitCodDate } from '../../utils/contractTracking';
 import { useI18n } from '../../context/I18nContext';
 
 const MILESTONE_LABEL_KEYS = {
@@ -23,72 +24,61 @@ const translateMilestoneTitle = (title, tr) => {
   }).join(' & ');
 };
 
-const formatMonthLabel = (monthStr, monthPrefix) => {
-  if (!monthStr) return monthStr;
-  return monthStr.replace(/^THÁNG\s/, `${monthPrefix} `);
+
+const formatMonthBandLabel = (monthKey) => {
+  const [month, year] = String(monthKey || '').split('/');
+  if (!month || !year) return monthKey || '';
+  return `${month}/${year}`;
 };
 
-/** Trục X: bước đều + đầu/cuối tháng — không chen thêm milestone (tránh lệch nhãn) */
+/** Trục X: tối đa ~7 nhãn ngày; tháng hiển thị ở footer HTML (không chồng SVG) */
+const MAX_DAY_TICKS = 7;
+
 const buildXAxisTickPlan = (chartData) => {
   const n = chartData.length;
-  if (!n) return { tickIndices: new Set(), monthLabels: new Map(), tickLabels: new Map() };
+  if (!n) return { tickIndices: new Set(), tickLabels: new Map(), monthSegments: [] };
 
-  let step = 3;
-  if (n > 120) step = 10;
-  else if (n > 90) step = 7;
-  else if (n > 60) step = 5;
-  else if (n > 30) step = 4;
-
-  const tickIndices = new Set([0, n - 1]);
-  for (let i = 0; i < n; i += step) tickIndices.add(i);
-
-  const monthLabels = new Map();
-  const tickLabels = new Map();
+  const monthSegments = [];
+  let monthStart = 0;
   let prevMonthKey = null;
 
   chartData.forEach((d, i) => {
     const parts = (d.originalDate || '').split('/');
     if (parts.length < 3) return;
     const monthKey = `${parts[1]}/${parts[2]}`;
-    if (monthKey !== prevMonthKey) {
-      monthLabels.set(i, d.monthStr);
-      tickIndices.add(i);
-      prevMonthKey = monthKey;
+    if (prevMonthKey != null && monthKey !== prevMonthKey) {
+      monthSegments.push({
+        startIdx: monthStart,
+        endIdx: i - 1,
+        label: formatMonthBandLabel(prevMonthKey),
+      });
+      monthStart = i;
     }
+    prevMonthKey = monthKey;
   });
+  if (prevMonthKey) {
+    monthSegments.push({
+      startIdx: monthStart,
+      endIdx: n - 1,
+      label: formatMonthBandLabel(prevMonthKey),
+    });
+  }
 
-  const sortedTicks = [...tickIndices].sort((a, b) => a - b);
-  const filteredTicks = new Set([0, n - 1]);
-  let lastKept = -999;
-  sortedTicks.forEach((idx) => {
-    if (monthLabels.has(idx)) {
-      filteredTicks.add(idx);
-      lastKept = idx;
-      return;
-    }
-    if (idx - lastKept >= 2) {
-      filteredTicks.add(idx);
-      lastKept = idx;
-    }
-  });
+  const tickIndices = new Set([0, n - 1]);
+  const innerSlots = Math.min(MAX_DAY_TICKS - 2, Math.max(0, n - 2));
+  for (let i = 1; i <= innerSlots; i += 1) {
+    tickIndices.add(Math.round((i * (n - 1)) / (innerSlots + 1)));
+  }
 
-  sortedTicks.forEach((idx, tickPos) => {
-    if (!filteredTicks.has(idx)) return;
-    const parts = (chartData[idx].originalDate || '').split('/');
+  const tickLabels = new Map();
+  [...tickIndices].sort((a, b) => a - b).forEach((idx) => {
+    const parts = (chartData[idx]?.originalDate || '').split('/');
     if (parts.length < 3) return;
-    const [day, month] = parts;
-    const prevTickIdx = tickPos > 0 ? sortedTicks[tickPos - 1] : null;
-    const prevMonth = prevTickIdx != null
-      ? (chartData[prevTickIdx].originalDate || '').split('/')[1]
-      : null;
-
-    tickLabels.set(
-      idx,
-      monthLabels.has(idx) || month !== prevMonth ? `${day}/${month}` : day
-    );
+    const isEdge = idx === 0 || idx === n - 1;
+    tickLabels.set(idx, isEdge ? `${parts[0]}/${parts[1]}` : parts[0]);
   });
 
-  return { tickIndices: filteredTicks, monthLabels, tickLabels };
+  return { tickIndices, tickLabels, monthSegments };
 };
 
 const DOT_R = 6;
@@ -100,7 +90,7 @@ const LABEL_GAP = 8;
 const STACK_STEP = 22;
 const LABEL_OFFSET_X = 10;
 
-const CHART_MARGIN = { top: 48, right: 36, left: 8, bottom: 44 };
+const CHART_MARGIN = { top: 48, right: 36, left: 8, bottom: 30 };
 
 const measureBadge = (title) => ({
   w: Math.min(148, Math.max(72, title.length * CHAR_W + BADGE_PAD_X * 2)),
@@ -218,6 +208,44 @@ const buildLeaderPoints = (b) => {
   const elbowY = b.placeAbove ? b.y + b.h + 3 : b.y - 3;
   return `${b.cx},${dotY} ${b.cx},${elbowY} ${anchorX},${elbowY} ${anchorX},${labelEdgeY}`;
 };
+
+/** Hàng tháng HTML — căn theo margin plot, không chồng tick Recharts */
+function ScurveMonthFooter({ monthSegments, chartData }) {
+  const n = chartData?.length || 0;
+  if (!n || !monthSegments?.length) return null;
+
+  const inset = CHART_MARGIN.left + CHART_MARGIN.right;
+
+  return (
+    <div
+      className="shrink-0 w-full"
+      style={{ paddingLeft: CHART_MARGIN.left, paddingRight: CHART_MARGIN.right }}
+      aria-hidden="true"
+    >
+      <div
+        className="flex overflow-hidden rounded-md border border-[var(--border-main)]/50 bg-[var(--bg-hover)]/25"
+        style={{ width: `calc(100% - 0px)`, maxWidth: `calc(100vw - ${inset}px)` }}
+      >
+        {monthSegments.map((seg, i) => {
+          const days = seg.endIdx - seg.startIdx + 1;
+          const pct = (days / n) * 100;
+          return (
+            <div
+              key={`${seg.label}-${seg.startIdx}`}
+              className={`min-w-0 py-1.5 text-center text-[9px] font-semibold text-slate-500 tabular-nums truncate ${
+                i > 0 ? 'border-l border-[var(--border-main)]/50' : ''
+              }`}
+              style={{ width: `${pct}%` }}
+              title={seg.label}
+            >
+              {seg.label}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 /** Vẽ nhãn milestone bằng hook Recharts 3 — tọa độ khớp chấm, có đường nối */
 function MilestoneLabelsGroup({ chartData, tr }) {
@@ -635,15 +663,14 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
       };
 
       const kickoffSheetData = milestonesData?.find(m => String(m.MILESTONE).toUpperCase() === 'KICKOFF');
-      const codSheetData = milestonesData?.find(m => String(m.MILESTONE).toUpperCase() === 'COD' || String(m.MILESTONE).toUpperCase() === 'BÀN GIAO & ĐÓNG ĐIỆN (COD)');
+      const cDateStr = resolveExplicitCodDate(project);
 
       const startDateStr = project?.startDate || project?.NGÀY_BẮT_ĐẦU;
       const kDateStr = kickoffSheetData?.NGÀY_KẾ_HOẠCH || project?.kickoffDate || project?.KICKOFF_DATE;
-      const cDateStr = codSheetData?.NGÀY_KẾ_HOẠCH || project?.cod || project?.codDate;
 
       const projectStart = parseD(startDateStr);
       const kickoff = parseD(kDateStr) || new Date(new Date().setMonth(new Date().getMonth() - 1));
-      const cod = parseD(cDateStr) || new Date(new Date().setMonth(new Date().getMonth() + 1));
+      const cod = parseD(cDateStr);
       
       // Ensure global span covers all milestones
       const allDates = [];
@@ -744,7 +771,7 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
       });
       
       let globalStart = allDates.length > 0 ? new Date(Math.min(...allDates)) : kickoff;
-      let globalEnd = allDates.length > 0 ? new Date(Math.max(...allDates)) : cod;
+      let globalEnd = allDates.length > 0 ? new Date(Math.max(...allDates)) : (cod || kickoff);
       
       const today = new Date();
       today.setHours(0,0,0,0);
@@ -935,7 +962,8 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
             </div>
           </div>
         ) : (
-        <div className="relative w-full h-full">
+        <div className="relative w-full h-full flex flex-col min-h-0">
+        <div className="flex-1 min-h-0">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartData}
@@ -955,11 +983,11 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
             <XAxis
               dataKey="originalDate"
               stroke="#4d5e7a"
-              tickMargin={10}
+              tickMargin={4}
               axisLine={false}
               tickLine={false}
               interval={0}
-              height={60}
+              height={22}
               tick={(props) => {
                 const { x, y, payload } = props;
                 if (!payload?.value) return null;
@@ -969,35 +997,20 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
 
                 const dataPoint = chartData[dataIndex];
                 const label = xAxisTickPlan.tickLabels.get(dataIndex) || payload.value.split('/')[0];
-                const monthLabel = xAxisTickPlan.monthLabels.get(dataIndex);
                 const hasMilestone = Boolean(dataPoint?.milestoneColor);
 
                 return (
-                  <g>
-                    <text
-                      x={x}
-                      y={y + 14}
-                      fill={hasMilestone ? dataPoint.milestoneColor : 'var(--text-muted)'}
-                      fontSize={9}
-                      fontWeight={hasMilestone ? 700 : 500}
-                      textAnchor="middle"
-                    >
-                      {label}
-                    </text>
-                    {monthLabel && (
-                      <text
-                        x={x}
-                        y={y + 28}
-                        fill="#64748b"
-                        fontSize={9}
-                        fontWeight={700}
-                        textAnchor="middle"
-                        className="uppercase tracking-wider"
-                      >
-                        {formatMonthLabel(monthLabel, t('scurve.monthPrefix'))}
-                      </text>
-                    )}
-                  </g>
+                  <text
+                    x={x}
+                    y={y + 12}
+                    fill={hasMilestone ? dataPoint.milestoneColor : '#94a3b8'}
+                    fontSize={10}
+                    fontWeight={hasMilestone ? 700 : 500}
+                    textAnchor="middle"
+                    style={{ fontVariantNumeric: 'tabular-nums' }}
+                  >
+                    {label}
+                  </text>
                 );
               }}
             />
@@ -1080,6 +1093,11 @@ export default function SCurveChart({ project, milestonesData = [], initialData,
             <MilestoneLabelsGroup chartData={chartData} tr={t} />
           </ComposedChart>
         </ResponsiveContainer>
+        </div>
+        <ScurveMonthFooter
+          monthSegments={xAxisTickPlan.monthSegments}
+          chartData={chartData}
+        />
         </div>
         )}
       </div>

@@ -113,6 +113,42 @@ export function validateProgressEntries(entries, logs, currentDate) {
   return errors;
 }
 
+export function parseProgressEntriesFromSummary(text) {
+  return String(text || '')
+    .split('\n')
+    .map((line) => line.replace(/^-\s*/, '').trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^\[([^\]]*)\]\s*(.+?):\s*\+?\s*([\d.]+)\s*%?\s*$/);
+      if (!match) return null;
+      const deltaPercent = Number(match[3]);
+      if (!Number.isFinite(deltaPercent) || deltaPercent <= 0) return null;
+      return {
+        taskCode: String(match[1] || '').trim(),
+        taskName: String(match[2] || '').trim(),
+        deltaPercent,
+        note: '',
+      };
+    })
+    .filter(Boolean);
+}
+
+/** Gộp JSON tiến độ + dòng tóm tắt CÔNG VIỆC CHÍNH (fallback khi Sheet thiếu JSON) */
+export function resolveMainTaskEntries(noteText) {
+  const parsed = parseDailyNote(noteText || '');
+  const fromJson = parseProgressEntries(noteText).filter((entry) => Number(entry.deltaPercent) > 0);
+  if (fromJson.length) return fromJson;
+
+  const fromSummary = parseProgressEntriesFromSummary(parsed.congViecChinh);
+  if (fromSummary.length) return fromSummary;
+
+  return [];
+}
+
+export function formatMainTaskLabel(entry) {
+  return `[${entry.taskCode}] ${entry.taskName}: +${Number(entry.deltaPercent)}%`;
+}
+
 export function formatEntriesAsSummaryLines(entries) {
   return (entries || [])
     .filter((entry) => Number(entry.deltaPercent) > 0)

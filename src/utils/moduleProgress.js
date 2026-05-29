@@ -1,6 +1,8 @@
+import { formatDateDMY, parseFlexibleDate } from './timelineDates';
+
 export const CONSTRUCTION_GROUP_WEIGHTS = { A: 15, B: 40, C: 30, D: 15 };
 
-function getConstructionGroupKey(row) {
+export function getConstructionGroupKey(row) {
   const group = String(row?.NHÓM_THI_CÔNG || '');
   if (group.includes('[A]')) return 'A';
   if (group.includes('[B]')) return 'B';
@@ -83,6 +85,37 @@ export function evaluateMainMaterialDelivery(rows) {
     };
   }
   return { achieved: true, note: null };
+}
+
+function pickConstructionCompletionDate(row) {
+  const raw = row?.NGÀY_HT_THỰC_TẾ || row?.NGÀY_KẾT_THÚC || '';
+  const s = String(raw || '').trim();
+  if (!s || s === '-') return null;
+  return parseFlexibleDate(s);
+}
+
+/** Hoàn thành hạng mục C — tất cả CV nhóm C đạt 100%; ngày = HT thực tế muộn nhất */
+export function evaluateConstructionGroupCComplete(rows) {
+  if (!rows?.length) {
+    return { achieved: false, completionDate: '', note: 'Chưa có dữ liệu module Thi công' };
+  }
+  const groupRows = rows.filter((r) => getConstructionGroupKey(r) === 'C');
+  if (!groupRows.length) {
+    return { achieved: false, completionDate: '', note: 'Chưa có công việc hạng mục C' };
+  }
+  const incomplete = groupRows.filter((r) => Number(r.TIẾN_ĐỘ_THỰC_TẾ || 0) < 100);
+  if (incomplete.length) {
+    return {
+      achieved: false,
+      completionDate: '',
+      note: `Còn ${incomplete.length}/${groupRows.length} công việc hạng mục C`,
+    };
+  }
+  const dates = groupRows.map(pickConstructionCompletionDate).filter(Boolean);
+  const completionDate = dates.length
+    ? formatDateDMY(new Date(Math.max(...dates.map((d) => d.getTime()))))
+    : '';
+  return { achieved: true, completionDate, note: null };
 }
 
 /** Bàn giao / nghiệm thu — tất cả hạng mục con phải có kết quả cuối */

@@ -3,7 +3,7 @@ import {
   CheckCircle2, Circle, Clock, LayoutGrid, Calendar, 
   BarChart3, Columns, Plus, Search, Filter, Download, 
   ChevronDown, AlertTriangle, MoreHorizontal, Calendar as CalendarIcon,
-  PlayCircle, Flag, Star, MoreVertical, Bell, Sun, Moon, User, ClipboardList, X, Menu, ChevronLeft, Loader2
+  PlayCircle, Flag, Star, MoreVertical, Bell, Sun, Moon, User, ClipboardList, X, Menu, ChevronLeft, Loader2, Paperclip
 } from 'lucide-react';
 import PriorityBadge from '../components/PriorityBadge';
 import { api } from '../services/api';
@@ -14,11 +14,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import DateInputDMY from '../components/DateInputDMY';
 import { updateDashboardContext } from '../utils/dashboardContext';
-import { getTaskDescription, isSameTask, UI_ONLY_TASK_FIELDS, enrichTaskForUI, applyTaskFieldUpdate, enrichTaskProjectIds, parseAssignees, getAssigneeGivenName } from '../utils/taskFields';
-import { buildAssigneeOptionList } from '../utils/assigneeHelpers';
+import { getTaskDescription, isSameTask, UI_ONLY_TASK_FIELDS, enrichTaskForUI, applyTaskFieldUpdate, enrichTaskProjectIds } from '../utils/taskFields';
+import { buildAssigneeOptionList, buildAssigneeStatusChartData } from '../utils/assigneeHelpers';
 import AssigneeDisplay from '../components/AssigneeDisplay';
 import AssigneeMultiSelect from '../components/AssigneeMultiSelect';
 import TaskMobileCard from '../components/TaskMobileCard';
+import TaskAttachmentsPanel from '../components/TaskAttachmentsPanel';
+import { parseTaskAttachments } from '../utils/taskAttachments';
 import { compareDateStrings, normalizeToDMY } from '../utils/timelineDates';
 import { useAuth } from '../context/AuthContext';
 import { canEditTask, canEditTaskField, canCreateTask, canDeleteTask, canViewTaskDetail, canToggleTaskComplete, hasFullTaskEditRights, canViewOfficeTasks, filterTasksForUser } from '../utils/permissions';
@@ -179,6 +181,7 @@ export default function TaskList() {
 
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [draftTask, setDraftTask] = useState(null);
+  const [taskDetailTab, setTaskDetailTab] = useState('details');
   const [draftProjectPicker, setDraftProjectPicker] = useState('');
   const [draftCustomProject, setDraftCustomProject] = useState('');
   const [draftDirty, setDraftDirty] = useState(false);
@@ -350,6 +353,7 @@ export default function TaskList() {
     if (modalClosingRef.current || !canViewTaskDetail(user, task, taskContext)) return;
     const enriched = enrichTaskForUI(task);
     setDraftTask(enriched);
+    setTaskDetailTab('details');
     taskMatchRef.current = { ...enriched };
     const { picker, custom } = initDraftProjectPickerState(enriched, projects);
     setDraftProjectPicker(picker);
@@ -358,6 +362,32 @@ export default function TaskList() {
     setTaskSaveError(null);
     setIsTaskMenuOpen(false);
   }, [user, taskContext, projects]);
+
+  const draftAttachments = useMemo(
+    () => parseTaskAttachments(draftTask?.TỆP_ĐÍNH_KÈM),
+    [draftTask?.TỆP_ĐÍNH_KÈM],
+  );
+
+  const handleAttachmentsUpdated = useCallback((nextAttachments, tasksFromServer) => {
+    if (Array.isArray(tasksFromServer)) {
+      setTasks(tasksFromServer);
+    }
+    setDraftTask((prev) => {
+      if (!prev) return prev;
+      const synced = Array.isArray(tasksFromServer)
+        ? tasksFromServer.find((t) => isSameTask(t, prev))
+        : null;
+      const base = synced ? { ...synced } : { ...prev, TỆP_ĐÍNH_KÈM: JSON.stringify(nextAttachments) };
+      const enriched = enrichTaskForUI(base);
+      if (synced) {
+        taskMatchRef.current = { ...synced };
+        const { picker, custom } = initDraftProjectPickerState(synced, projects);
+        setDraftProjectPicker(picker);
+        setDraftCustomProject(custom);
+      }
+      return enriched;
+    });
+  }, [projects]);
 
   const persistTaskUpdate = useCallback(async (originalTask, updatedTask) => {
     try {
@@ -1153,34 +1183,7 @@ export default function TaskList() {
                 };
               });
 
-              const memberMap = new Map();
-              processedTasks.forEach((task) => {
-                const people = parseAssignees(task.NHÂN_SỰ);
-                const list = people.length ? people : ['Chưa chỉ định'];
-                list.forEach((person) => {
-                  const key = person === 'Chưa chỉ định'
-                    ? '__unassigned__'
-                    : (normalizePersonName(person) || person.toLowerCase());
-                  if (!memberMap.has(key)) {
-                    memberMap.set(key, {
-                      name: person === 'Chưa chỉ định' ? person : getAssigneeGivenName(person),
-                      fullName: person,
-                      'Chưa bắt đầu': 0,
-                      'Đang diễn ra': 0,
-                      'Trễ': 0,
-                      'Đã hoàn thành': 0,
-                    });
-                  }
-                  const entry = memberMap.get(key);
-                  const status = task.computedStatus;
-                  if (Object.prototype.hasOwnProperty.call(entry, status)) {
-                    entry[status] += 1;
-                  }
-                });
-              });
-              const assigneeData = [...memberMap.values()].sort((a, b) =>
-                a.name.localeCompare(b.name, 'vi')
-              );
+              const assigneeData = buildAssigneeStatusChartData(processedTasks);
 
               return (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full overflow-y-auto pb-4 pr-2">
@@ -1611,14 +1614,48 @@ export default function TaskList() {
               </div>
 
               <div className="flex items-center gap-3 mb-8 ml-9">
-                <button type="button" className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-4 py-2 rounded shadow-md transition-colors flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTaskDetailTab('details')}
+                  className={`text-xs font-medium px-4 py-2 rounded shadow-sm transition-colors flex items-center gap-2 ${
+                    taskDetailTab === 'details'
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300'
+                  }`}
+                >
                   <LayoutGrid className="w-4 h-4" /> Chi tiết tác vụ
                 </button>
-                <button type="button" className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-medium px-4 py-2 rounded shadow-sm transition-colors flex items-center gap-2">
-                  <Download className="w-4 h-4" /> Tệp đính kèm
+                <button
+                  type="button"
+                  onClick={() => setTaskDetailTab('attachments')}
+                  className={`text-xs font-medium px-4 py-2 rounded shadow-sm transition-colors flex items-center gap-2 ${
+                    taskDetailTab === 'attachments'
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-md'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border border-slate-300'
+                  }`}
+                >
+                  <Paperclip className="w-4 h-4" /> Tệp đính kèm
+                  {draftAttachments.length > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                      taskDetailTab === 'attachments' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-700'
+                    }`}>
+                      {draftAttachments.length}
+                    </span>
+                  )}
                 </button>
               </div>
 
+              {taskDetailTab === 'attachments' ? (
+                <div className="ml-9 mb-8">
+                  <TaskAttachmentsPanel
+                    task={draftTask}
+                    originalTask={taskMatchRef.current}
+                    canUpload={canEditTaskRow(getActiveTask())}
+                    onAttachmentsUpdated={handleAttachmentsUpdated}
+                  />
+                </div>
+              ) : (
+              <>
               <div className="ml-9 grid grid-cols-2 gap-x-6 gap-y-4 mb-8">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 mb-1.5">Trạng thái</label>
@@ -1717,11 +1754,17 @@ export default function TaskList() {
                 />
                 <p className="text-[10px] text-slate-400 mt-1">Bấm <strong>Lưu thay đổi</strong> để áp dụng. Thoát không lưu sẽ hỏi xác nhận.</p>
               </div>
+              </>
+              )}
             </div>
 
             <div className="shrink-0 px-8 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3">
               <span className="text-xs text-slate-500">
-                {draftDirty ? 'Có thay đổi chưa lưu' : 'Đã đồng bộ với server'}
+                {taskDetailTab === 'attachments'
+                  ? (draftAttachments.length > 0
+                    ? 'Tệp đã lưu trên Google Drive — đóng cửa sổ khi xong'
+                    : 'Upload tự lưu ngay — không cần bấm Lưu thay đổi')
+                  : (draftDirty ? 'Có thay đổi chưa lưu' : 'Đã đồng bộ với server')}
               </span>
               <div className="flex items-center gap-2">
                 <button
@@ -1729,17 +1772,20 @@ export default function TaskList() {
                   onClick={requestCloseTaskDetail}
                   className="px-4 py-2 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
                 >
-                  Hủy
+                  {taskDetailTab === 'attachments' && !draftDirty ? 'Đóng' : 'Hủy'}
                 </button>
+                {!(taskDetailTab === 'attachments' && !draftDirty) && (
                 <button
                   type="button"
                   onClick={saveDraftTask}
                   disabled={isSavingDraft || !draftDirty}
                   className="px-5 py-2 rounded-lg text-sm font-semibold bg-[#5252ff] text-white hover:bg-[#4141d6] disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  title={!draftDirty ? 'Chưa có thay đổi nào cần lưu' : undefined}
                 >
                   {isSavingDraft && <Loader2 className="w-4 h-4 animate-spin" />}
                   Lưu thay đổi
                 </button>
+                )}
               </div>
             </div>
           </div>

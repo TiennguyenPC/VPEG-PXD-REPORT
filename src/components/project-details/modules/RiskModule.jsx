@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2 } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, Plus, Loader2, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api } from '../../../services/api';
 import DateInputDMY from '../../DateInputDMY';
@@ -115,6 +115,33 @@ export default function RiskModule({ project, initialData }) {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(flushSaves, 450);
   }, [canEdit, flushSaves]);
+
+  const handleDeleteRisk = useCallback(async (risk) => {
+    if (!canEdit) return;
+    const rowId = risk._rowIndex || risk.id;
+    const label = risk.NỘI_DUNG || 'Rủi ro này';
+    if (!window.confirm(`Xóa "${label}"?\nThao tác sẽ đồng bộ lên Google Sheet.`)) return;
+
+    pendingSaveRef.current.delete(String(rowId));
+    try {
+      setSaveHint('saving');
+      const response = await api.deleteRisk({
+        ...risk,
+        PROJECT_ID: risk.PROJECT_ID || project?.PROJECT_ID || project?.id,
+      });
+      if (response?.data) {
+        setRisks(response.data);
+      } else {
+        setRisks((prev) => prev.filter((r) => String(r._rowIndex || r.id) !== String(rowId)));
+      }
+      setSaveHint('saved');
+      setTimeout(() => setSaveHint(''), 1800);
+    } catch (error) {
+      console.error('Delete risk error:', error);
+      setSaveHint('error');
+      setTimeout(() => setSaveHint(''), 3000);
+    }
+  }, [canEdit, project?.PROJECT_ID, project?.id]);
 
   useEffect(() => {
     api.getEmployees()
@@ -291,7 +318,8 @@ export default function RiskModule({ project, initialData }) {
                         <th className={`${TH} w-[11%]`}>Trạng thái</th>
                         <th className={`${TH} w-[13%]`}>Phụ trách</th>
                         <th className={`${TH} w-[10%]`}>Ngày</th>
-                        <th className={`${TH} w-[10%]`}>Ngày HT</th>
+                        <th className={`${TH} w-[9%]`}>Ngày HT</th>
+                        {canEdit && <th className={`${TH} w-[5%]`}>Xóa</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--border-main)]">
@@ -411,6 +439,18 @@ export default function RiskModule({ project, initialData }) {
                                 onChange={(val) => scheduleSave(rowId, 'NGÀY_HOÀN_THÀNH', val)}
                               />
                             </td>
+                            {canEdit && (
+                              <td className={`${TD} text-center`}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRisk(r)}
+                                  className="inline-flex items-center justify-center p-1.5 rounded-md text-red-500 hover:bg-red-500/10 transition-colors"
+                                  title="Xóa rủi ro"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}

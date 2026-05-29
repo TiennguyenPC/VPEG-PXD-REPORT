@@ -34,7 +34,7 @@ import {
   getTodayDMY,
   normalizeToDMY,
 } from "../utils/timelineDates";
-import { getPhotoUrlsFromLog } from "../utils/sitePhotoCache";
+import { getPhotoUrlsFromLog, getLogNoteText, pickMergedDailyNote } from "../utils/sitePhotoCache";
 import { serializeContractTracking, buildSyncFieldsFromTracking } from "../utils/contractTracking";
 
 const getTodayStr = getTodayDMY;
@@ -131,6 +131,7 @@ export default function ProjectDetailPage() {
   const saveTimeoutRef = useRef(null);
   const isSavingRef = useRef(false);
   const pendingSaveRef = useRef(null);
+  const saveSerialRef = useRef(0);
   const logsRef = useRef(logs);
 
   useEffect(() => {
@@ -340,7 +341,6 @@ export default function ProjectDetailPage() {
 
   const enrichedProject = project ? {
     ...project,
-    cod: project.cod || '29/06/2026',
     actualProgress: baseActual,
     planProgress: basePlan,
     delay: baseActual - basePlan
@@ -450,7 +450,7 @@ export default function ProjectDetailPage() {
     const existingPhotos = existingInLogs ? getPhotoUrlsFromLog(existingInLogs).join('\n') : '';
     const sitePhotos = toSave.SITE_PHOTOS !== undefined ? toSave.SITE_PHOTOS : existingPhotos;
 
-    return {
+    const payload = {
       PROJECT_ID: String(id),
       LOG_DATE: logDate,
       NGÀY: logDate,
@@ -466,9 +466,6 @@ export default function ProjectDetailPage() {
       GHI_CHÚ_HIỆN_TRƯỜNG: dailyNote,
       SITE_PHOTOS: sitePhotos,
       ẢNH_HIỆN_TRƯỜNG: sitePhotos,
-      WEEKLY_ASSESSMENT: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
-      ĐÁNH_GIÁ_TUẦN: toSave.WEEKLY_ASSESSMENT !== undefined ? toSave.WEEKLY_ASSESSMENT : (toSave.ĐÁNH_GIÁ_TUẦN || ''),
-      MONTHLY_REPORT: toSave.MONTHLY_REPORT !== undefined ? toSave.MONTHLY_REPORT : '',
       STATUS: 'Saved',
       UPDATED_BY: 'NV - GIÁM SÁT',
       UPDATED_AT: new Date().toISOString(),
@@ -477,6 +474,19 @@ export default function ProjectDetailPage() {
         && normalizeToDMY(existingInLogs.LOG_DATE || existingInLogs.NGÀY) === logDate
       ) ? existingInLogs._rowIndex : undefined,
     };
+
+    const weeklyAssessment = toSave.WEEKLY_ASSESSMENT !== undefined
+      ? toSave.WEEKLY_ASSESSMENT
+      : toSave.ĐÁNH_GIÁ_TUẦN;
+    if (weeklyAssessment !== undefined && weeklyAssessment !== null) {
+      payload.WEEKLY_ASSESSMENT = weeklyAssessment;
+      payload.ĐÁNH_GIÁ_TUẦN = weeklyAssessment;
+    }
+    if (toSave.MONTHLY_REPORT !== undefined && toSave.MONTHLY_REPORT !== null) {
+      payload.MONTHLY_REPORT = toSave.MONTHLY_REPORT;
+    }
+
+    return payload;
   };
 
   const mergeLogsByDate = (prev, incoming) => {
@@ -488,20 +498,31 @@ export default function ProjectDetailPage() {
     });
     incoming.forEach((log) => {
       const key = normalizeToDMY(log.LOG_DATE || log.NGÀY);
-      if (key) map.set(key, { ...(map.get(key) || {}), ...log });
+      if (!key) return;
+      const existing = map.get(key) || {};
+      const existingNote = getLogNoteText(existing);
+      const incomingNote = getLogNoteText(log);
+      const mergedNote = pickMergedDailyNote(existingNote, incomingNote);
+      map.set(key, {
+        ...existing,
+        ...log,
+        DAILY_NOTE: mergedNote,
+        GHI_CHÚ_HIỆN_TRƯỜNG: mergedNote,
+      });
     });
     return Array.from(map.values());
   };
 
   const applySiteLogApiResponse = (res, dailyRes, weeklyRes, monthlyRes) => {
     if (res && res.dailyLogs) {
-      setLogs((prev) => mergeLogsByDate(prev, res.dailyLogs));
+      const mergedDaily = mergeLogsByDate(logsRef.current, res.dailyLogs);
+      setLogs(mergedDaily);
       if (res.weeklyLogs) setWeeklyLogs(res.weeklyLogs);
       if (res.monthlyLogs) setMonthlyLogs(res.monthlyLogs);
       setBundleData((prev) => {
         const next = {
           ...(prev || {}),
-          siteLogs: res.dailyLogs,
+          siteLogs: mergedDaily,
           weeklyLogs: res.weeklyLogs || prev?.weeklyLogs,
           monthlyLogs: res.monthlyLogs || prev?.monthlyLogs,
           constructions: res.constructions || prev?.constructions,
@@ -511,19 +532,22 @@ export default function ProjectDetailPage() {
       });
       return;
     }
-    if (dailyRes) setLogs(dailyRes);
+    if (dailyRes) {
+      const mergedDaily = mergeLogsByDate(logsRef.current, dailyRes);
+      setLogs(mergedDaily);
+      setBundleData((prev) => {
+        const next = {
+          ...(prev || {}),
+          siteLogs: mergedDaily,
+          weeklyLogs: weeklyRes || prev?.weeklyLogs,
+          monthlyLogs: monthlyRes || prev?.monthlyLogs,
+        };
+        writeBundleCache(id, next);
+        return next;
+      });
+    }
     if (weeklyRes) setWeeklyLogs(weeklyRes);
     if (monthlyRes) setMonthlyLogs(monthlyRes);
-    setBundleData((prev) => {
-      const next = {
-        ...(prev || {}),
-        siteLogs: dailyRes || prev?.siteLogs,
-        weeklyLogs: weeklyRes || prev?.weeklyLogs,
-        monthlyLogs: monthlyRes || prev?.monthlyLogs,
-      };
-      writeBundleCache(id, next);
-      return next;
-    });
   };
 
   const handleProjectUpdate = useCallback(async (fields) => {
@@ -640,16 +664,74 @@ export default function ProjectDetailPage() {
     applySiteLogApiResponse(res);
   }, [id, user, updateSaveStatus]);
 
-  const saveSiteLogImmediate = useCallback(async (noteUpdates) => {
-    if (!canEditProject(user, id, project)) {
-      throw new Error('Không có quyền lưu nhật ký');
-    }
+  const executeSiteLogSave = useCallback(async (updatedLog) => {
+    const serial = ++saveSerialRef.current;
 
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = null;
     }
     pendingSaveRef.current = null;
+
+    let waited = 0;
+    while (isSavingRef.current && waited < 8000) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      waited += 50;
+    }
+    if (serial !== saveSerialRef.current) return null;
+
+    const logDate = normalizeToDMY(updatedLog.LOG_DATE || updatedLog.NGÀY || selectedDate);
+    const dailyNote = updatedLog.DAILY_NOTE ?? updatedLog.GHI_CHÚ_HIỆN_TRƯỜNG ?? '';
+    const normalizedLog = {
+      ...updatedLog,
+      DAILY_NOTE: dailyNote,
+      GHI_CHÚ_HIỆN_TRƯỜNG: dailyNote,
+      LOG_DATE: logDate,
+      NGÀY: logDate,
+      UPDATED_BY: updatedLog.UPDATED_BY || 'NV - GIÁM SÁT',
+      UPDATED_AT: updatedLog.UPDATED_AT || new Date().toISOString(),
+    };
+
+    setLogs((prev) => {
+      const idx = prev.findIndex((l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === logDate);
+      if (idx !== -1) return prev.map((l, i) => (i === idx ? { ...l, ...normalizedLog } : l));
+      return [...prev, normalizedLog];
+    });
+
+    isSavingRef.current = true;
+    updateSaveStatus('Saving...');
+    const payload = buildSiteLogSavePayload(normalizedLog);
+
+    try {
+      const res = await api.updateSiteLog(payload);
+      if (serial !== saveSerialRef.current) return res;
+
+      updateSaveStatus('Saved');
+      if (res && res.dailyLogs) {
+        applySiteLogApiResponse(res);
+      } else {
+        const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
+          api.getSiteLogs(id),
+          api.getWeeklyLogs(id),
+          api.getMonthlyLogs(id),
+        ]);
+        if (serial === saveSerialRef.current) {
+          applySiteLogApiResponse(null, dailyRes, weeklyRes, monthlyRes);
+        }
+      }
+      return res;
+    } catch (error) {
+      if (serial === saveSerialRef.current) updateSaveStatus('Error');
+      throw error;
+    } finally {
+      if (serial === saveSerialRef.current) isSavingRef.current = false;
+    }
+  }, [id, selectedDate, updateSaveStatus]);
+
+  const saveSiteLogImmediate = useCallback(async (noteUpdates) => {
+    if (!canEditProject(user, id, project)) {
+      throw new Error('Không có quyền lưu nhật ký');
+    }
 
     const logDate = normalizeToDMY(selectedDate);
     const existingLog = logsRef.current.find(
@@ -676,37 +758,10 @@ export default function ProjectDetailPage() {
       GHI_CHÚ_HIỆN_TRƯỜNG: dailyNote,
       LOG_DATE: logDate,
       NGÀY: logDate,
-      UPDATED_BY: 'NV - GIÁM SÁT',
-      UPDATED_AT: new Date().toISOString(),
     };
 
-    setLogs((prev) => {
-      const idx = prev.findIndex((l) => normalizeToDMY(l.LOG_DATE || l.NGÀY) === logDate);
-      if (idx !== -1) return prev.map((l, i) => (i === idx ? { ...l, ...updatedLog } : l));
-      return [...prev, updatedLog];
-    });
-
-    updateSaveStatus('Saving...');
-    const payload = buildSiteLogSavePayload(updatedLog);
-    try {
-      const res = await api.updateSiteLog(payload);
-      updateSaveStatus('Saved');
-
-      if (res && res.dailyLogs) {
-        applySiteLogApiResponse(res);
-      } else {
-        const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
-          api.getSiteLogs(id),
-          api.getWeeklyLogs(id),
-          api.getMonthlyLogs(id),
-        ]);
-        applySiteLogApiResponse(null, dailyRes, weeklyRes, monthlyRes);
-      }
-    } catch (error) {
-      updateSaveStatus('Error');
-      throw error;
-    }
-  }, [id, user, selectedDate, updateSaveStatus, project]);
+    return executeSiteLogSave(updatedLog);
+  }, [id, user, project, selectedDate, executeSiteLogSave]);
 
   const handleUpdateLog = (field, value) => {
     if (!canEditProject(user, id, project)) return;
@@ -836,34 +891,15 @@ export default function ProjectDetailPage() {
       return;
     }
 
-    isSavingRef.current = true;
-    updateSaveStatus('Saving...');
     pendingSaveRef.current = null;
 
     try {
-      const payload = buildSiteLogSavePayload(toSave);
-
-      const res = await api.updateSiteLog(payload);
-      updateSaveStatus('Saved');
-
-      if (res && res.dailyLogs) {
-        applySiteLogApiResponse(res);
-      } else {
-        const [dailyRes, weeklyRes, monthlyRes] = await Promise.all([
-          api.getSiteLogs(id),
-          api.getWeeklyLogs(id),
-          api.getMonthlyLogs(id)
-        ]);
-        applySiteLogApiResponse(null, dailyRes, weeklyRes, monthlyRes);
-      }
-
+      await executeSiteLogSave(toSave);
     } catch (error) {
-      console.error("Autosave error:", error);
-      updateSaveStatus('Error');
+      console.error('Autosave error:', error);
       pendingSaveRef.current = toSave;
     } finally {
-      isSavingRef.current = false;
-      if (pendingSaveRef.current && pendingSaveRef.current !== toSave) {
+      if (pendingSaveRef.current) {
         performSave();
       }
     }
@@ -934,6 +970,7 @@ export default function ProjectDetailPage() {
               moduleBundles={{
                 procurements: bundleData?.procurements,
                 handovers: bundleData?.handovers,
+                constructions: bundleData?.constructions,
               }}
               onContractTrackingSave={
                 canEditContractTracking(user, id, project) ? handleContractTrackingSave : undefined

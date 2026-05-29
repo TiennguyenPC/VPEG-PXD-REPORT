@@ -468,8 +468,8 @@ export default function App() {
           }
           return 9999;
         };
-        valA = getCodDays(a.cod || '29/06/2026');
-        valB = getCodDays(b.cod || '29/06/2026');
+        valA = getCodDays(a.cod && a.cod !== '-' ? a.cod : null);
+        valB = getCodDays(b.cod && b.cod !== '-' ? b.cod : null);
       }
       if (sortField === "name") { valA = a.name; valB = b.name; }
       if (sortField === "client") { valA = a.client; valB = b.client; }
@@ -1081,7 +1081,10 @@ export default function App() {
                                   return <span className="font-semibold text-[#10b981]">Hoàn thành</span>;
                                 }
                                 
-                                const finalCod = p.cod || '29/06/2026';
+                                const finalCod = p.cod && p.cod !== '-' ? p.cod : null;
+                                if (!finalCod) {
+                                  return <span className="text-[10px] text-[var(--text-muted)]">Chưa nhập</span>;
+                                }
                                 const parseDate = (dateStr) => {
                                   if (!dateStr) return null;
                                   const parts = dateStr.split('/');

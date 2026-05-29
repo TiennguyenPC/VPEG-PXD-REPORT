@@ -97,27 +97,45 @@ export function getRiskLateStyle() {
   return 'text-red-700 bg-red-50 border-red-300 dark:text-red-400 dark:bg-red-500/15 dark:border-red-500/40';
 }
 
+export function isProjectActiveForOverview(project) {
+  if (!project) return false;
+  const s = String(project.status || project.TRẠNG_THÁI || '')
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return s !== 'DA HOAN THANH' && s !== 'HOAN THANH' && s !== 'COMPLETED';
+}
+
+function getProjectDisplayName(project) {
+  return project?.name || project?.TÊN_DỰ_ÁN || project?.PROJECT_NAME || '';
+}
+
 export function buildOverviewRiskRows(allRisks, projects = []) {
   const projectById = new Map();
   (projects || []).forEach((p) => {
-    const id = String(p.id || p.PROJECT_ID || '');
+    const id = String(p.id || p.PROJECT_ID || '').trim();
     if (id) projectById.set(id, p);
   });
+
+  const activeProjects = (projects || []).filter(isProjectActiveForOverview);
 
   const fromRiskSheet = (allRisks || [])
     .filter((r) => isRiskSeverityMediumOrHigher(r.MỨC_ĐỘ) && isRiskActive(r.TRẠNG_THÁI))
     .map((r) => {
-      const pId = String(r.PROJECT_ID || r.projectId || '');
-      const proj = projectById.get(pId);
+      const pId = String(r.PROJECT_ID || r.projectId || '').trim();
+      const proj = pId ? projectById.get(pId) : null;
+      if (!pId || !proj || !isProjectActiveForOverview(proj)) return null;
       return {
-        project: proj?.name || r.TÊN_DỰ_ÁN || 'Dự án',
+        project: getProjectDisplayName(proj) || pId,
         id: pId,
         issue: r.NỘI_DUNG || r.ẢNH_HƯỞNG || 'Chưa cập nhật chi tiết',
         assignee: r.PHỤ_TRÁCH || proj?.pm || 'Chưa rõ',
         level: normalizeRiskSeverity(r.MỨC_ĐỘ) || r.MỨC_ĐỘ,
         status: isRiskOverdue(r) ? 'Trễ' : r.TRẠNG_THÁI,
       };
-    });
+    })
+    .filter(Boolean);
 
   if (fromRiskSheet.length > 0) {
     return fromRiskSheet.sort((a, b) => {
@@ -127,16 +145,20 @@ export function buildOverviewRiskRows(allRisks, projects = []) {
   }
 
   // Fallback: cột RISK_LEVEL trên bảng dự án (khi API risks chưa có)
-  return (projects || [])
+  return activeProjects
     .filter((p) => isRiskSeverityMediumOrHigher(p.risk))
-    .map((p) => ({
-      project: p.name,
-      id: p.id || p.PROJECT_ID,
-      issue: p.issue && p.issue !== 'Không có' ? p.issue : 'Chưa cập nhật chi tiết',
-      assignee: p.pm || 'Chưa rõ',
-      level: normalizeRiskSeverity(p.risk) || p.risk,
-      status: 'Open',
-    }))
+    .map((p) => {
+      const pId = String(p.id || p.PROJECT_ID || '').trim();
+      return {
+        project: getProjectDisplayName(p) || pId,
+        id: pId,
+        issue: p.issue && p.issue !== 'Không có' ? p.issue : 'Chưa cập nhật chi tiết',
+        assignee: p.pm || 'Chưa rõ',
+        level: normalizeRiskSeverity(p.risk) || p.risk,
+        status: 'Open',
+      };
+    })
+    .filter((row) => row.id)
     .sort((a, b) => {
       const weight = { Cao: 2, 'Trung bình': 1 };
       return (weight[b.level] || 0) - (weight[a.level] || 0);

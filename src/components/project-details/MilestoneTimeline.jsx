@@ -12,7 +12,7 @@ import { useI18n } from '../../context/I18nContext';
 import { displayMilestoneTitle } from '../../i18n/messages';
 import { useAuth } from '../../context/AuthContext';
 import { canViewContractTracking, canEditContractTracking } from '../../utils/permissions';
-import { getContractMilestoneDates, getModuleScheduleDate } from '../../utils/contractTracking';
+import { getContractMilestoneDates, getContractKickoffDate, getModuleScheduleDate, resolveExplicitCodDate } from '../../utils/contractTracking';
 import ContractTrackingPanel from './ContractTrackingPanel';
 
 class MilestoneErrorBoundary extends React.Component {
@@ -76,13 +76,7 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
           endDate = parseDateStr(moduleEnd);
         }
 
-        const milestoneRow = milestonesData.find(m => String(m.MILESTONE).toUpperCase() === String(title).toUpperCase() || String(m.MILESTONE).toUpperCase().includes(String(title).toUpperCase()));
-        if (date === '-' && milestoneRow?.NGÀY_KẾ_HOẠCH) {
-          date = milestoneRow.NGÀY_KẾ_HOẠCH;
-          endDate = parseDateStr(date);
-          if (endDate) date = formatDateDMY(endDate);
-        }
-
+        // Chỉ dùng ngày module header / localStorage — không fallback sheet milestone (tránh ngày ảo)
         if (date === '-') {
           try {
             const data = localStorage.getItem(`dates_${moduleKey}_${projectId}`);
@@ -120,27 +114,15 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
 
       const contractDates = getContractMilestoneDates(project);
 
-      const kickoffSheetData = milestonesData.find(m => String(m.MILESTONE).toUpperCase() === 'KICKOFF');
-      let kickoffDate =
-        contractDates.kickoff ||
-        kickoffSheetData?.NGÀY_KẾ_HOẠCH ||
-        project?.kickoffDate ||
-        project?.KICKOFF_DATE ||
-        '-';
-      if (!kickoffDate || kickoffDate === '') kickoffDate = '-';
-      const kD = parseDateStr(kickoffDate);
+      // Kickoff: chỉ hiện khi đã nhập trong Theo dõi HĐ
+      const kickoffRaw = getContractKickoffDate(project);
+      let kickoffDate = kickoffRaw || '-';
+      const kD = parseDateStr(kickoffDate === '-' ? '' : kickoffDate);
       if (kD) kickoffDate = formatDateDMY(kD);
 
-      const codSheetData = milestonesData.find(m => String(m.MILESTONE).toUpperCase() === 'COD' || String(m.MILESTONE).toUpperCase() === 'BÀN GIAO & ĐÓNG ĐIỆN (COD)');
-      let codDateStr =
-        contractDates.cod ||
-        codSheetData?.NGÀY_KẾ_HOẠCH ||
-        project?.cod ||
-        project?.codDate ||
-        project?.COD ||
-        '-';
-      if (!codDateStr || codDateStr === '') codDateStr = '-';
-      const codD = parseDateStr(codDateStr);
+      // COD: chỉ hiện khi đã nhập (Theo dõi HĐ hoặc cột KẾ_HOẠCH_COD) — không lấy từ sheet milestone ảo
+      let codDateStr = resolveExplicitCodDate(project, contractDates) || '-';
+      const codD = parseDateStr(codDateStr === '-' ? '' : codDateStr);
       if (codD) codDateStr = formatDateDMY(codD);
       const handoverData = getModuleData('handover', 'BÀN GIAO HỒ SƠ');
       let handoverDate = handoverData.date;
@@ -150,13 +132,7 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
 
       let kickoffStatus = 'pending';
       let kickoffProgress = 0;
-      const projectKickoffRaw = project?.kickoffDate || project?.KICKOFF_DATE;
-      const projectKickoff = parseDateStr(projectKickoffRaw);
-      if (!kD && projectKickoff) {
-        kickoffDate = formatDateDMY(projectKickoff);
-      }
-
-      const effectiveKickoff = kD || projectKickoff;
+      const effectiveKickoff = kD;
       const anyModuleStarted = Object.values(moduleProgress).some((p) => Number(p) > 0);
 
       if (effectiveKickoff) {
@@ -168,9 +144,9 @@ function MilestoneTimelineInner({ project, moduleProgress = {}, milestonesData =
           kickoffProgress = 100;
         }
       } else if (anyModuleStarted) {
-        kickoffStatus = 'completed';
-        kickoffProgress = 100;
-        if (kickoffDate === '-') kickoffDate = formatDateDMY(today);
+        // Có tiến độ module nhưng chưa nhập ngày Kickoff — không tự bịa ngày
+        kickoffStatus = 'in-progress';
+        kickoffProgress = 0;
       }
 
       let codStatus = 'pending';

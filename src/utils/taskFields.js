@@ -136,6 +136,7 @@ export function buildTaskPayload(task, originalTask = null) {
     ƯU_TIÊN: task.ƯU_TIÊN,
     GHI_CHÚ: description,
     NGƯỜI_TẠO: task.NGƯỜI_TẠO,
+    TỆP_ĐÍNH_KÈM: task.TỆP_ĐÍNH_KÈM,
   };
 }
 

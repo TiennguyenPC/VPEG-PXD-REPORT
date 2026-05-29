@@ -19,8 +19,25 @@ export function getLogNoteText(log) {
   if (daily.includes('### HÌNH ẢNH') && !fieldNote.includes('### HÌNH ẢNH')) return daily;
   if (hasDailySections(daily) && !hasDailySections(fieldNote)) return daily;
   if (hasDailySections(fieldNote) && !hasDailySections(daily)) return fieldNote;
+  if (hasDailySections(daily) && hasDailySections(fieldNote)) return daily;
   if (daily && fieldNote) return daily.length >= fieldNote.length ? daily : fieldNote;
   return daily || fieldNote;
+}
+
+/** Nhật ký ngày đầy đủ (sau Lưu ngay / Xóa) — dùng để tin response Sheet */
+export function isCompleteDailyNote(text) {
+  return /###\s*GHI CHÚ HIỆN TRƯỜNG/i.test(String(text || ''));
+}
+
+/** Gộp note: bản đầy đủ từ server luôn thắng (xóa/sửa); chỉ giữ bản cũ khi incoming là stub autosave */
+export function pickMergedDailyNote(existingNote, incomingNote) {
+  const existing = String(existingNote || '').trim();
+  const incoming = String(incomingNote || '').trim();
+  if (!incoming) return existing;
+  if (!existing) return incoming;
+  if (isCompleteDailyNote(incoming)) return incoming;
+  if (isCompleteDailyNote(existing) && existing.length > incoming.length) return existing;
+  return incoming.length >= existing.length ? incoming : existing;
 }
 
 /** URL gốc Drive — không lưu proxy GAS vào Sheet */

@@ -7,6 +7,7 @@ import {
   deadlineStatus,
   enrichContractTrackingWithModuleDates,
   formatDeadlineLabel,
+  isAutoContractTrackingField,
   parseContractTracking,
   serializeContractTracking,
 } from '../../utils/contractTracking';
@@ -18,10 +19,15 @@ export default function ContractTrackingPanel({ project, canEdit, onSave, module
   const [view, setView] = useState('flow');
   const [datesVersion, setDatesVersion] = useState(0);
   const [draft, setDraft] = useState(() => parseContractTracking(project?.THEO_DÕI_HĐ || project?.contractTracking, project));
+  const [constructionsLive, setConstructionsLive] = useState(() => moduleBundles?.constructions || []);
 
   useEffect(() => {
     setDraft(parseContractTracking(project?.THEO_DÕI_HĐ || project?.contractTracking, project));
   }, [project]);
+
+  useEffect(() => {
+    setConstructionsLive(moduleBundles?.constructions || []);
+  }, [moduleBundles?.constructions]);
 
   useEffect(() => {
     if (!projectId) return undefined;
@@ -34,16 +40,29 @@ export default function ContractTrackingPanel({ project, canEdit, onSave, module
     return () => window.removeEventListener('module-dates-updated', handler);
   }, [projectId]);
 
-  const merged = useMemo(
-    () => enrichContractTrackingWithModuleDates(draft, projectId),
-    [draft, projectId, datesVersion]
-  );
+  useEffect(() => {
+    if (!projectId) return undefined;
+    const handler = (e) => {
+      if (String(e.detail?.projectId) === String(projectId) && Array.isArray(e.detail?.data)) {
+        setConstructionsLive(e.detail.data);
+        setDatesVersion((v) => v + 1);
+      }
+    };
+    window.addEventListener('construction-data-updated', handler);
+    return () => window.removeEventListener('construction-data-updated', handler);
+  }, [projectId]);
 
   const moduleContext = useMemo(() => ({
     projectId,
     procurements: moduleBundles?.procurements,
     handovers: moduleBundles?.handovers,
-  }), [projectId, moduleBundles?.procurements, moduleBundles?.handovers]);
+    constructions: constructionsLive,
+  }), [projectId, moduleBundles?.procurements, moduleBundles?.handovers, constructionsLive]);
+
+  const merged = useMemo(
+    () => enrichContractTrackingWithModuleDates(draft, projectId, moduleContext),
+    [draft, projectId, datesVersion, moduleContext]
+  );
 
   const deadlines = useMemo(
     () => calcContractDeadlines(merged, moduleContext),
@@ -124,7 +143,7 @@ export default function ContractTrackingPanel({ project, canEdit, onSave, module
                     {field.hint && (
                       <p className="text-[9px] text-slate-600 mb-1">{field.hint}</p>
                     )}
-                    {field.linkedModule ? (
+                    {isAutoContractTrackingField(field) ? (
                       <div className="rounded-md border border-emerald-500/30 bg-emerald-500/5 px-2.5 py-2">
                         <p className="text-xs font-semibold tabular-nums text-white">
                           {merged[field.key] || '—'}

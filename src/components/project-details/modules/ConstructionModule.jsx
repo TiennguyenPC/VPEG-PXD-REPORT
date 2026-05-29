@@ -262,6 +262,12 @@ export default function ConstructionModule({ project, initialData, onProgressCha
           })
         })));
         setRawData(response.data);
+        const pid = project?.PROJECT_ID || project?.id;
+        if (pid && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('construction-data-updated', {
+            detail: { projectId: pid, data: response.data },
+          }));
+        }
       }
       setSyncStatus('success');
     } catch (error) {

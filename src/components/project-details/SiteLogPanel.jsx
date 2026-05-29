@@ -11,8 +11,10 @@ import {
 import {
   buildConstructionOptions,
   formatEntriesAsSummaryLines,
+  formatMainTaskLabel,
   getRemainingPercentForTask,
   parseProgressEntries,
+  resolveMainTaskEntries,
   serializeProgressEntries,
   sumProgressDeltasFromLogs,
   taskProgressKey,
@@ -251,7 +253,7 @@ export default function SiteLogPanel({
     const noteText = getLogNoteText(activeLog);
     const parsedNote = parseDailyNote(noteText);
     const parsedW = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
-    const progressEntries = parseProgressEntries(noteText);
+    const progressEntries = resolveMainTaskEntries(noteText);
     const projectId = project?.PROJECT_ID || project?.id;
     const bundles = {
       permits: moduleBundles.permits,
@@ -303,7 +305,12 @@ export default function SiteLogPanel({
       dayStatus: parsedNote.dayStatus,
       dayStatusSubtext: parsedNote.dayStatusSubtext,
       progressEntries: progressEntries.length
-        ? progressEntries
+        ? progressEntries.map((entry) => ({
+          taskCode: entry.taskCode,
+          taskName: entry.taskName,
+          deltaPercent: entry.deltaPercent ?? '',
+          note: entry.note || '',
+        }))
         : [{ taskCode: '', taskName: '', deltaPercent: '', note: '' }],
     });
     setProgressSaveError('');
@@ -366,6 +373,67 @@ export default function SiteLogPanel({
     }));
   };
 
+  const buildLogPayloadFromProgress = (normalizedEntries, sourceLog = activeLog, fields = {}) => {
+    const noteText = getLogNoteText(sourceLog);
+    const parsedNote = parseDailyNote(noteText);
+    const dismissedTomorrow = fields.dismissedTomorrow ?? parseDismissedTomorrowKeys(noteText);
+    const activeEntries = (normalizedEntries || []).filter((entry) => Number(entry.deltaPercent) > 0);
+    const serializedProgress = serializeProgressEntries(activeEntries);
+    const autoCongViecChinh = formatEntriesAsSummaryLines(activeEntries);
+    const parsedW = parseWeather(sourceLog?.WEATHER || sourceLog?.THỜI_TIẾT || '');
+
+    const serializedNote = serializeDailyNote({
+      ghiChu: fields.ghiChu ?? parsedNote.ghiChu,
+      congViecChinh: autoCongViecChinh || fields.congViecChinh || '',
+      congViecNgayMai: fields.congViecNgayMai ?? parsedNote.congViecNgayMai,
+      vanDeRuiRo: fields.vanDeRuiRo ?? parsedNote.vanDeRuiRo,
+      progressActual: '',
+      progressPlanned: '',
+      progressEntries: serializedProgress,
+      dayStatus: fields.dayStatus ?? parsedNote.dayStatus,
+      dayStatusSubtext: fields.dayStatusSubtext ?? parsedNote.dayStatusSubtext,
+      boQuaNgayMai: serializeDismissedTomorrowKeys(dismissedTomorrow),
+    });
+
+    const weatherCondition = fields.weatherCondition ?? parsedW.condition;
+    const weatherDetail = fields.weatherDetail ?? parsedW.detail;
+    const serializedW = serializeWeather({
+      condition: weatherCondition,
+      tempHumid: parsedW.tempHumid || '-',
+      detail: weatherDetail,
+    });
+
+    return {
+      MANPOWER: fields.manpower ?? (sourceLog?.MANPOWER !== undefined ? sourceLog.MANPOWER : (sourceLog?.NHÂN_LỰC_SITE || 0)),
+      NHÂN_LỰC_SITE: fields.manpower ?? (sourceLog?.MANPOWER !== undefined ? sourceLog.MANPOWER : (sourceLog?.NHÂN_LỰC_SITE || 0)),
+      ENGINEERS: fields.engineers ?? (sourceLog?.ENGINEERS !== undefined ? sourceLog.ENGINEERS : (sourceLog?.KỸ_SƯ_GS || 0)),
+      KỸ_SƯ_GS: fields.engineers ?? (sourceLog?.ENGINEERS !== undefined ? sourceLog.ENGINEERS : (sourceLog?.KỸ_SƯ_GS || 0)),
+      INCIDENT_COUNT: fields.incidentCount ?? (sourceLog?.INCIDENT_COUNT !== undefined ? sourceLog.INCIDENT_COUNT : (parseInt(sourceLog?.SỰ_CỐ) || 0)),
+      SỰ_CỐ: fields.incidentCount ?? (sourceLog?.INCIDENT_COUNT !== undefined ? sourceLog.INCIDENT_COUNT : (parseInt(sourceLog?.SỰ_CỐ) || 0)),
+      WEATHER: serializedW,
+      THỜI_TIẾT: serializedW,
+      GHI_CHÚ_HIỆN_TRƯỜNG: serializedNote,
+      DAILY_NOTE: serializedNote,
+    };
+  };
+
+  const handleDeleteMainTaskEntry = async (entry) => {
+    if (!canEdit || !onSaveLogImmediate) return;
+    const key = taskProgressKey(entry);
+    const current = resolveMainTaskEntries(getLogNoteText(activeLog));
+    const next = current.filter((item) => taskProgressKey(item) !== key);
+    if (next.length === current.length) return;
+    const label = formatMainTaskLabel(entry);
+    if (!window.confirm(`Xóa "${label}" khỏi nhật ký ngày ${selectedDate}?\nTiến độ bảng Thi công sẽ được tính lại.`)) return;
+
+    const payload = buildLogPayloadFromProgress(next);
+    try {
+      await onSaveLogImmediate(payload);
+    } catch (err) {
+      window.alert(err?.message || 'Không xóa được công việc chính.');
+    }
+  };
+
   const handleProgressTaskPick = (index, optionValue) => {
     const option = constructionOptions.find((item) => taskProgressKey(item) === optionValue);
     if (!option) {
@@ -400,44 +468,29 @@ export default function SiteLogPanel({
     }
 
     const activeEntries = normalizedEntries.filter((entry) => entry.deltaPercent > 0);
-    const serializedProgress = serializeProgressEntries(activeEntries);
-    const autoCongViecChinh = formatEntriesAsSummaryLines(activeEntries);
+    const hasSelectedTasks = (editData.progressEntries || []).some(
+      (entry) => String(entry.taskCode || '').trim() && String(entry.taskName || '').trim()
+    );
+    if (hasSelectedTasks && activeEntries.length === 0) {
+      setProgressSaveError('Vui lòng nhập % tiến độ cho hạng mục thi công (vd: 90).');
+      return;
+    }
 
-    const serializedNote = serializeDailyNote({
+    const payload = buildLogPayloadFromProgress(activeEntries, activeLog, {
       ghiChu: editData.ghiChu,
-      congViecChinh: autoCongViecChinh || editData.congViecChinh,
       congViecNgayMai: editData.congViecNgayMai,
       vanDeRuiRo: editData.vanDeRuiRo,
-      progressActual: '',
-      progressPlanned: '',
-      progressEntries: serializedProgress,
       dayStatus: editData.dayStatus,
       dayStatusSubtext: editData.dayStatusSubtext,
-      boQuaNgayMai: serializeDismissedTomorrowKeys(editData.dismissedTomorrow),
+      dismissedTomorrow: editData.dismissedTomorrow,
+      manpower: editData.manpower,
+      engineers: editData.engineers,
+      incidentCount: editData.incidentCount,
+      weatherCondition: editData.weatherCondition,
+      weatherDetail: editData.weatherDetail,
     });
-
-    const existingWeather = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
-    const serializedW = serializeWeather({
-      condition: editData.weatherCondition,
-      tempHumid: existingWeather.tempHumid || '-',
-      detail: editData.weatherDetail,
-    });
-
-    const payload = {
-      MANPOWER: editData.manpower,
-      NHÂN_LỰC_SITE: editData.manpower,
-      ENGINEERS: editData.engineers,
-      KỸ_SƯ_GS: editData.engineers,
-      INCIDENT_COUNT: editData.incidentCount,
-      SỰ_CỐ: editData.incidentCount,
-      WEATHER: serializedW,
-      THỜI_TIẾT: serializedW,
-      GHI_CHÚ_HIỆN_TRƯỜNG: serializedNote,
-      DAILY_NOTE: serializedNote,
-    };
 
     setProgressSaveError('');
-    setIsEditing(false);
 
     try {
       if (onSaveLogImmediate) {
@@ -445,9 +498,9 @@ export default function SiteLogPanel({
       } else {
         onUpdateLog(payload);
       }
+      setIsEditing(false);
     } catch (err) {
       setProgressSaveError(err?.message || 'Không lưu được nhật ký. Thử lại.');
-      setIsEditing(true);
     }
   };
 
@@ -722,21 +775,16 @@ export default function SiteLogPanel({
           {(() => {
             const parsedNote = parseDailyNote(getLogNoteText(activeLog));
             const parsedW = parseWeather(activeLog?.WEATHER || activeLog?.THỜI_TIẾT || '');
-            const progressEntries = parseProgressEntries(getLogNoteText(activeLog));
-            
+            const progressEntries = resolveMainTaskEntries(getLogNoteText(activeLog));
+            const mainTaskEntries = progressEntries;
+
             const manpower = activeLog?.MANPOWER !== undefined ? activeLog?.MANPOWER : (activeLog?.NHÂN_LỰC_SITE || 0);
             const engineers = activeLog?.ENGINEERS !== undefined ? activeLog?.ENGINEERS : (activeLog?.KỸ_SƯ_GS || 0);
-            
+
             const weatherCond = ts(parsedW.condition || liveWeather?.condition || 'Nắng đẹp');
             const weatherDetail = ts(parsedW.detail || liveWeather?.detail || 'Chưa có thông tin');
-            
-            const incidents = activeLog?.INCIDENT_COUNT !== undefined ? activeLog?.INCIDENT_COUNT : (parseInt(activeLog?.SỰ_CỐ) || 0);
 
-            const listChinh = progressEntries.length
-              ? progressEntries
-                  .filter((entry) => Number(entry.deltaPercent) > 0)
-                  .map((entry) => `[${entry.taskCode}] ${entry.taskName}: +${Number(entry.deltaPercent)}%`)
-              : parsedNote.congViecChinh.split('\n').map(line => line.replace(/^-\s*/, '').trim()).filter(Boolean);
+            const incidents = activeLog?.INCIDENT_COUNT !== undefined ? activeLog?.INCIDENT_COUNT : (parseInt(activeLog?.SỰ_CỐ) || 0);
             const listGhiChu = parsedNote.ghiChu.split('\n').map(line => line.replace(/^-\s*/, '').trim()).filter(Boolean);
 
             const projectId = project?.PROJECT_ID || project?.id;
@@ -1111,21 +1159,42 @@ export default function SiteLogPanel({
                   </div>
 
                   {/* CÔNG VIỆC CHÍNH */}
-                  <div className="bg-[#0b1221] border border-[#22304a] border-l-emerald-400/80 border-l-2 rounded-lg p-3.5 flex items-center gap-3.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] hover:border-[#33466d] transition-colors">
+                  <div className="bg-[#0b1221] border border-[#22304a] border-l-emerald-400/80 border-l-2 rounded-lg p-3.5 flex items-start gap-3.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] hover:border-[#33466d] transition-colors">
                     <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0">
                       <Wrench className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">{t('siteLog.mainTasks')}</p>
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{t('siteLog.mainTasks')}</p>
+                        {canEdit && mainTaskEntries.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={handleStartEdit}
+                            className="text-[9px] font-bold text-emerald-400 hover:text-emerald-300"
+                          >
+                            {t('siteLog.editMainTask')}
+                          </button>
+                        )}
+                      </div>
                       <div className="flex items-baseline gap-1">
-                        <span className="text-xl font-bold text-white">{listChinh.length}</span>
+                        <span className="text-xl font-bold text-white">{mainTaskEntries.length}</span>
                         <span className="text-[10px] text-slate-500">{t('siteLog.items')}</span>
                       </div>
-                      <ul className="text-[9px] text-slate-400 mt-1 space-y-0.5 list-disc pl-3">
-                        {listChinh.slice(0, 3).map((item, idx) => (
-                          <li key={idx} className="truncate" title={item}>{ts(item)}</li>
+                      <ul className="text-[9px] text-slate-400 mt-1 space-y-1">
+                        {mainTaskEntries.slice(0, 4).map((entry) => (
+                          <li key={taskProgressKey(entry)} className="flex items-start justify-between gap-2">
+                            <span className="min-w-0 truncate" title={formatMainTaskLabel(entry)}>{ts(formatMainTaskLabel(entry))}</span>
+                            {canEdit && onSaveLogImmediate && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteMainTaskEntry(entry)}
+                                className="shrink-0 text-[8px] font-bold text-red-400 hover:text-red-300 px-1"
+                              >
+                                {t('siteLog.deleteMainTask')}
+                              </button>
+                            )}
+                          </li>
                         ))}
-                        {listChinh.length === 0 && <li className="italic text-slate-500">{t('siteLog.noRecord')}</li>}
                       </ul>
                     </div>
                   </div>
@@ -1161,7 +1230,6 @@ export default function SiteLogPanel({
                     {listGhiChu.map((item, idx) => (
                       <li key={idx}>{ts(item)}</li>
                     ))}
-                    {listGhiChu.length === 0 && <li className="italic text-slate-400 list-none pl-0">{t('siteLog.noNotes')}</li>}
                   </ul>
                 </div>
 
@@ -1224,16 +1292,13 @@ export default function SiteLogPanel({
 
                   {/* CÔNG VIỆC NGÀY MAI */}
                   <div className="bg-[#0b1221] border border-[#22304a] rounded-lg p-4 shadow-[0_10px_28px_rgba(0,0,0,0.16)]">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="mb-3">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                         <CalendarClock className="w-3.5 h-3.5 text-indigo-400" /> {t('siteLog.tomorrowTasks')}
                         {tomorrowDateLabel ? (
                           <span className="normal-case font-medium text-slate-500">· {tomorrowDateLabel}</span>
                         ) : null}
                       </p>
-                      <span className="text-[8px] font-bold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded">
-                        {t('siteLog.highPriority')}
-                      </span>
                     </div>
                     
                     <ul className="text-xs text-slate-300 space-y-2 min-h-[58px]">

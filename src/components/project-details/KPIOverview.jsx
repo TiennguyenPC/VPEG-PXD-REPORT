@@ -19,7 +19,7 @@ export default function KPIOverview({ project }) {
     return new Date(dateStr);
   };
   
-  const parsedCodDate = project.cod ? parseDate(project.cod) : null;
+  const parsedCodDate = project.cod && project.cod !== '-' ? parseDate(project.cod) : null;
   const today = new Date();
   today.setHours(0, 0, 0, 0); // reset time to start of day
   const codDays = parsedCodDate ? Math.ceil((parsedCodDate - today) / (1000 * 60 * 60 * 24)) : 0;
@@ -83,7 +83,14 @@ export default function KPIOverview({ project }) {
           <div>
             <p className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-wider">{t('kpi.timeLeft')}</p>
             <p className="text-xl font-bold text-[var(--text-strong)] tracking-tight">
-              <span className="text-[#7373ff]">{codDays > 0 ? codDays : 0}</span> <span className="text-sm font-medium text-[var(--text-muted)]">{t('kpi.days')}</span>
+              {parsedCodDate ? (
+                <>
+                  <span className="text-[#7373ff]">{codDays > 0 ? codDays : 0}</span>{' '}
+                  <span className="text-sm font-medium text-[var(--text-muted)]">{t('kpi.days')}</span>
+                </>
+              ) : (
+                <span className="text-sm font-medium text-[var(--text-muted)]">—</span>
+              )}
             </p>
           </div>
         </div>

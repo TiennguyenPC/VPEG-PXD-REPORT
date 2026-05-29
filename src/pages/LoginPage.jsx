@@ -3,6 +3,13 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { LogIn, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import VuPhongLogo from '../components/VuPhongLogo';
+import {
+  readRememberedLogin,
+  saveRememberedLogin,
+  clearRememberedLogin,
+} from '../utils/loginCredentials';
+
+const savedLogin = readRememberedLogin();
 
 export default function LoginPage() {
   const { user, login, loading: authLoading } = useAuth();
@@ -10,8 +17,9 @@ export default function LoginPage() {
   const location = useLocation();
   const from = location.state?.from || '/';
 
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  const [username, setUsername] = useState(savedLogin?.username ?? '');
+  const [password, setPassword] = useState(savedLogin?.password ?? '');
+  const [rememberMe, setRememberMe] = useState(Boolean(savedLogin));
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -33,7 +41,13 @@ export default function LoginPage() {
     setError('');
     setSubmitting(true);
     try {
-      await login(username.trim(), password);
+      const trimmedUsername = username.trim();
+      await login(trimmedUsername, password);
+      if (rememberMe) {
+        saveRememberedLogin(trimmedUsername, password);
+      } else {
+        clearRememberedLogin();
+      }
       navigate(from, { replace: true });
     } catch (err) {
       setError(err.message || 'Đăng nhập thất bại');
@@ -104,6 +118,16 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="rounded border-[var(--border-main)] accent-[#5252ff]"
+            />
+            <span className="text-xs text-[var(--text-muted)]">Ghi nhớ đăng nhập</span>
+          </label>
 
           <button
             type="submit"

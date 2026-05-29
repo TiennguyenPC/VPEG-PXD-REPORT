@@ -136,6 +136,13 @@ function doGet(e) {
         var commitResult = commitSiteImageUpload_(commitSid);
         data = commitResult;
         break;
+      case 'upload-task-file-commit':
+        var taskCommitSid = e.parameter.sessionId;
+        if (!taskCommitSid) {
+          return createResponse({ status: 'error', message: 'Thiếu sessionId' }, 400);
+        }
+        data = commitTaskFileUpload_(taskCommitSid);
+        break;
       case 'serve-site-image':
         return serveSiteImage_(e.parameter.id);
       case 'test-drive':
@@ -376,6 +383,9 @@ function doPost(e) {
       case 'delete-task':
         sheetName = 'PROJECT_TASKS';
         break;
+      case 'delete-risk':
+        sheetName = 'PROJECT_RISK';
+        break;
       case 'delete-project':
         sheetName = 'PROJECT_MASTER';
         break;
@@ -405,6 +415,27 @@ function doPost(e) {
       case 'upload-image-chunk':
         storeSiteImageChunk_(payload);
         return createResponse({ status: 'success', data: { ok: true } });
+      case 'upload-task-file':
+        ensureTaskSheetColumns_(ss);
+        var taskUploadResult = uploadTaskFile_(ss, payload);
+        auditMutation_('upload-task-file', payload);
+        return createResponse({
+          status: 'success',
+          data: taskUploadResult,
+          tasks: taskUploadResult.tasks
+        });
+      case 'upload-task-file-chunk':
+        storeTaskFileChunk_(payload);
+        return createResponse({ status: 'success', data: { ok: true } });
+      case 'remove-task-attachment':
+        ensureTaskSheetColumns_(ss);
+        var removeAttachResult = removeTaskAttachment_(ss, payload);
+        auditMutation_('remove-task-attachment', payload);
+        return createResponse({
+          status: 'success',
+          data: removeAttachResult,
+          tasks: removeAttachResult.tasks
+        });
       default:
         return createResponse({ error: 'Invalid API endpoint for POST' }, 400);
     }
@@ -825,6 +856,11 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     appendRow(ss, sheetName, updatedData);
     return;
   }
+
+  if (sheetName === 'DAILY_SITE_LOG') {
+    ensureDailySiteLogNoteColumns_(sheet);
+    headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  }
   
   // Alias map: frontend English keys → possible Vietnamese column header names in the sheet
   const FIELD_ALIASES = {
@@ -835,7 +871,7 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     'INCIDENT_COUNT':  ['INCIDENT_COUNT', 'SỰ_CỐ'],
     'DAILY_NOTE':      ['DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
     'WEEKLY_ASSESSMENT': ['WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN'],
-    'MONTHLY_REPORT':  ['MONTHLY_REPORT', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'MONTHLY_REPORT':  ['MONTHLY_REPORT'],
     'TÊN_DỰ_ÁN':       ['TÊN_DỰ_ÁN', 'PROJECT_NAME'],
     'KHÁCH_HÀNG':      ['KHÁCH_HÀNG', 'CLIENT'],
     'CÔNG_SUẤT_KWP':   ['CÔNG_SUẤT_KWP', 'CAPACITY_KWP'],
@@ -852,8 +888,8 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
     'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
     'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
     'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
-    'SITE_PHOTOS':           ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
-    'ẢNH_HIỆN_TRƯỜNG':     ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
+    'SITE_PHOTOS':           ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG', 'TS_PHOTOS'],
+    'ẢNH_HIỆN_TRƯỜNG':     ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG', 'TS_PHOTOS'],
     'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT'],
     'GHI_CHÚ':               ['GHI_CHÚ', 'GHI_CHU', 'ghichu', 'NOTES']
   };
@@ -861,6 +897,7 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
   // Update the row — try key directly first, then aliases
   for (const key in updatedData) {
     if (key === 'id' || key === 'projectId' || key === 'PROJECT_ID' || key === '_rowIndex') continue;
+    if (sheetName === 'DAILY_SITE_LOG' && key === 'MONTHLY_REPORT') continue;
     
     // Find matching column: try exact match first, then aliases
     let colIndex = findColumnIndex(headers, key);
@@ -887,6 +924,50 @@ function updateRowById(ss, sheetName, recordId, updatedData) {
       sheet.getRange(targetRowIndex, colIndex + 1).setValue(val);
     }
   }
+
+  if (sheetName === 'DAILY_SITE_LOG' && targetRowIndex !== -1) {
+    syncDailyLogNoteColumns_(sheet, targetRowIndex, headers, updatedData);
+  }
+}
+
+function ensureDailySiteLogNoteColumns_(ss) {
+  var sheet = ss.getSheetByName('DAILY_SITE_LOG');
+  if (!sheet) return;
+  var headers = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+  var needFlush = false;
+  if (findColumnIndex(headers, ['GHI_CHÚ_HIỆN_TRƯỜNG']) === -1) {
+    var col = sheet.getLastColumn() + 1;
+    sheet.getRange(1, col).setValue('GHI_CHÚ_HIỆN_TRƯỜNG');
+    needFlush = true;
+  }
+  if (findColumnIndex(headers, ['DAILY_NOTE']) === -1) {
+    var col2 = sheet.getLastColumn() + 1;
+    sheet.getRange(1, col2).setValue('DAILY_NOTE');
+    needFlush = true;
+  }
+  if (findColumnIndex(headers, ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'TS_PHOTOS']) === -1) {
+    var col3 = sheet.getLastColumn() + 1;
+    sheet.getRange(1, col3).setValue('SITE_PHOTOS');
+    needFlush = true;
+  }
+  if (needFlush) SpreadsheetApp.flush();
+}
+
+/** Ghi cùng một nội dung vào DAILY_NOTE + GHI_CHÚ_HIỆN_TRƯỜNG — tránh cột cũ còn tiến độ đã xóa */
+function syncDailyLogNoteColumns_(sheet, targetRowIndex, headers, updatedData) {
+  if (!updatedData) return;
+  var note = String(
+    updatedData.DAILY_NOTE !== undefined && updatedData.DAILY_NOTE !== null
+      ? updatedData.DAILY_NOTE
+      : (updatedData.GHI_CHÚ_HIỆN_TRƯỜNG !== undefined ? updatedData.GHI_CHÚ_HIỆN_TRƯỜNG : '')
+  );
+  if (updatedData.DAILY_NOTE === undefined && updatedData.GHI_CHÚ_HIỆN_TRƯỜNG === undefined) return;
+
+  var dailyCol = findColumnIndex(headers, ['DAILY_NOTE']);
+  var fieldCol = findColumnIndex(headers, ['GHI_CHÚ_HIỆN_TRƯỜNG']);
+  if (dailyCol !== -1) sheet.getRange(targetRowIndex, dailyCol + 1).setValue(note);
+  if (fieldCol !== -1) sheet.getRange(targetRowIndex, fieldCol + 1).setValue(note);
+  SpreadsheetApp.flush();
 }
 
 function deleteRowById(ss, sheetName, rowIndex) {
@@ -1347,6 +1428,9 @@ function appendRow(ss, sheetName, payload) {
   }
   
   initializeSheetIfEmpty(sheet, sheetName);
+  if (sheetName === 'DAILY_SITE_LOG') {
+    ensureDailySiteLogNoteColumns_(ss);
+  }
   
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   const newRow = new Array(headers.length).fill("");
@@ -1360,7 +1444,7 @@ function appendRow(ss, sheetName, payload) {
     'INCIDENT_COUNT':    ['INCIDENT_COUNT', 'SỰ_CỐ'],
     'DAILY_NOTE':        ['DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
     'WEEKLY_ASSESSMENT': ['WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN'],
-    'MONTHLY_REPORT':    ['MONTHLY_REPORT', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'MONTHLY_REPORT':    ['MONTHLY_REPORT'],
     'TÊN_DỰ_ÁN':         ['TÊN_DỰ_ÁN', 'PROJECT_NAME'],
     'KHÁCH_HÀNG':        ['KHÁCH_HÀNG', 'CLIENT'],
     'CÔNG_SUẤT_KWP':     ['CÔNG_SUẤT_KWP', 'CAPACITY_KWP'],
@@ -1374,13 +1458,14 @@ function appendRow(ss, sheetName, payload) {
     'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
     'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
     'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
-    'SITE_PHOTOS':           ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
-    'ẢNH_HIỆN_TRƯỜNG':     ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
+    'SITE_PHOTOS':           ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG', 'TS_PHOTOS'],
+    'ẢNH_HIỆN_TRƯỜNG':     ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG', 'TS_PHOTOS'],
     'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT']
   };
   
   for (const key in payload) {
     if (key === '_rowIndex') continue;
+    if (sheetName === 'DAILY_SITE_LOG' && key === 'MONTHLY_REPORT') continue;
     let colIndex = findColumnIndex(headers, key);
     if (colIndex === -1 && FIELD_ALIASES[key]) {
       colIndex = findColumnIndex(headers, FIELD_ALIASES[key]);
@@ -1399,6 +1484,10 @@ function appendRow(ss, sheetName, payload) {
   }
   
   sheet.appendRow(newRow);
+
+  if (sheetName === 'DAILY_SITE_LOG') {
+    syncDailyLogNoteColumns_(sheet, sheet.getLastRow(), headers, payload);
+  }
 }
 
 function initializeSheetIfEmpty(sheet, sheetName) {
@@ -1446,7 +1535,7 @@ function getDefaultHeaders(sheetName) {
     case 'DAILY_SITE_LOG':
       return ['PROJECT_ID', 'LOG_DATE', 'NGÀY', 'MANPOWER', 'NHÂN_LỰC_SITE', 'ENGINEERS', 'KỸ_SƯ_GS', 'WEATHER', 'THỜI_TIẾT', 'INCIDENT_COUNT', 'SỰ_CỐ', 'DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG', 'SITE_PHOTOS', 'WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN', 'MONTHLY_REPORT', 'STATUS', 'UPDATED_BY', 'UPDATED_AT'];
     case 'PROJECT_TASKS':
-      return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'TÁC_VỤ', 'NHÂN_SỰ', 'NGÀY_BẮT_ĐẦU', 'NGÀY_KẾT_THÚC', 'BỘ_CHỨA', 'TRẠNG_THÁI', 'ƯU_TIÊN', 'GHI_CHÚ', 'NGƯỜI_TẠO'];
+      return ['PROJECT_ID', 'TÊN_DỰ_ÁN', 'TÁC_VỤ', 'NHÂN_SỰ', 'NGÀY_BẮT_ĐẦU', 'NGÀY_KẾT_THÚC', 'BỘ_CHỨA', 'TRẠNG_THÁI', 'ƯU_TIÊN', 'GHI_CHÚ', 'NGƯỜI_TẠO', 'TỆP_ĐÍNH_KÈM'];
     case 'USERS':
       return ['USER_ID', 'USERNAME', 'PASSWORD_HASH', 'SALT', 'EMAIL', 'EMPLOYEE_ID', 'DISPLAY_NAME', 'ROLE', 'ASSIGNED_PROJECTS', 'ACTIVE', 'FAILED_LOGIN_COUNT', 'LOCKED', 'LAST_LOGIN', 'CREATED_AT'];
     case 'AUDIT_LOG':
@@ -1469,13 +1558,28 @@ function extractDailyNoteSection_(text, heading) {
 
 function parseSiteLogProgressEntries_(noteText) {
   var section = extractDailyNoteSection_(noteText, 'TIẾN ĐỘ HẠNG MỤC');
-  if (!section) return [];
-  try {
-    var parsed = JSON.parse(section);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (e) {
-    return [];
+  if (section) {
+    try {
+      var parsed = JSON.parse(section);
+      if (Array.isArray(parsed) && parsed.length) return parsed;
+    } catch (e) {}
   }
+  var summary = extractDailyNoteSection_(noteText, 'CÔNG VIỆC CHÍNH');
+  if (!summary) return [];
+  return String(summary).split('\n').map(function(line) {
+    line = String(line || '').replace(/^-\s*/, '').trim();
+    if (!line) return null;
+    var match = line.match(/^\[([^\]]*)\]\s*(.+?):\s*\+?\s*([\d.]+)\s*%?\s*$/);
+    if (!match) return null;
+    var delta = Number(match[3]);
+    if (!delta || delta <= 0) return null;
+    return {
+      taskCode: String(match[1] || '').trim(),
+      taskName: String(match[2] || '').trim(),
+      deltaPercent: delta,
+      note: ''
+    };
+  }).filter(Boolean);
 }
 
 function taskProgressKey_(entry) {
@@ -1733,15 +1837,15 @@ function batchAppendRows(ss, sheetName, rowsData) {
     'INCIDENT_COUNT':    ['INCIDENT_COUNT', 'SỰ_CỐ'],
     'DAILY_NOTE':        ['DAILY_NOTE', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
     'WEEKLY_ASSESSMENT': ['WEEKLY_ASSESSMENT', 'ĐÁNH_GIÁ_TUẦN'],
-    'MONTHLY_REPORT':    ['MONTHLY_REPORT', 'GHI_CHÚ_HIỆN_TRƯỜNG'],
+    'MONTHLY_REPORT':    ['MONTHLY_REPORT'],
     'NGÀY':                   ['NGÀY', 'LOG_DATE'],
     'NHÂN_LỰC_SITE':          ['NHÂN_LỰC_SITE', 'MANPOWER'],
     'KỸ_SƯ_GS':              ['KỸ_SƯ_GS', 'ENGINEERS'],
     'THỜI_TIẾT':              ['THỜI_TIẾT', 'WEATHER'],
     'SỰ_CỐ':                 ['SỰ_CỐ', 'INCIDENT_COUNT'],
     'GHI_CHÚ_HIỆN_TRƯỜNG':   ['GHI_CHÚ_HIỆN_TRƯỜNG', 'DAILY_NOTE'],
-    'SITE_PHOTOS':           ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
-    'ẢNH_HIỆN_TRƯỜNG':     ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG'],
+    'SITE_PHOTOS':           ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG', 'TS_PHOTOS'],
+    'ẢNH_HIỆN_TRƯỜNG':     ['SITE_PHOTOS', 'ẢNH_HIỆN_TRƯỜNG', 'ANH_HIEN_TRUONG', 'TS_PHOTOS'],
     'ĐÁNH_GIÁ_TUẦN':         ['ĐÁNH_GIÁ_TUẦN', 'WEEKLY_ASSESSMENT']
   };
 
@@ -2089,7 +2193,9 @@ function cleanupOrphanedProjects(ss) {
 
 var SITE_IMAGE_FOLDER_ID_PREF = '1iUk7SQ8iqsjTkjGwtI0fVJuaoxQeLRo_';
 var SITE_IMAGE_FOLDER_NAME = 'VPEG-PXD-BAO-CAO-HINH-ANH';
+var TASK_ATTACHMENT_FOLDER_NAME = 'VPEG-Task-Attachments';
 var SITE_IMAGE_CHUNK_TTL = 600;
+var TASK_FILE_CHUNK_TTL = 600;
 
 function ensureDailySiteLogPhotoColumn_(ss) {
   var sheet = ss.getSheetByName('DAILY_SITE_LOG');
@@ -2485,6 +2591,252 @@ function uploadSiteImageToDrive_(payload) {
   var blob = Utilities.newBlob(bytes, 'image/jpeg', fileName);
   var folder = getWritableSiteImageFolder_();
   return saveSiteImageBlobToFolder_(folder, blob, folder.getId());
+}
+
+function buildDriveDownloadUrl_(fileId) {
+  return 'https://drive.google.com/uc?export=download&id=' + fileId;
+}
+
+function sanitizeTaskFileName_(name) {
+  var cleaned = String(name || 'file')
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '_')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return cleaned.slice(0, 180) || ('file-' + Date.now());
+}
+
+function parseTaskAttachments_(raw) {
+  if (!raw) return [];
+  if (Object.prototype.toString.call(raw) === '[object Array]') return raw;
+  try {
+    var parsed = JSON.parse(String(raw));
+    return Object.prototype.toString.call(parsed) === '[object Array]' ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function getTaskAttachmentColumnIndex_(headers) {
+  return findColumnIndex(headers, ['TỆP_ĐÍNH_KÈM', 'TEP_DINH_KEM', 'ATTACHMENTS']);
+}
+
+function getTaskAttachmentsFromRow_(sheet, rowIndex) {
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var col = getTaskAttachmentColumnIndex_(headers);
+  if (col === -1) return [];
+  var raw = sheet.getRange(rowIndex, col + 1).getValue();
+  return parseTaskAttachments_(raw);
+}
+
+function saveTaskAttachmentsOnRow_(sheet, rowIndex, attachments) {
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var col = getTaskAttachmentColumnIndex_(headers);
+  if (col === -1) return;
+  sheet.getRange(rowIndex, col + 1).setValue(JSON.stringify(attachments || []));
+  SpreadsheetApp.flush();
+}
+
+function mergeTaskAttachment_(ss, payload, attachment) {
+  ensureTaskSheetColumns_(ss);
+  var sheet = ss.getSheetByName('PROJECT_TASKS');
+  if (!sheet) throw new Error('PROJECT_TASKS sheet not found');
+  var rowIndex = findTaskRowIndex_(sheet, payload);
+  if (rowIndex === -1) throw new Error('Không tìm thấy tác vụ để gắn tệp đính kèm');
+  var list = getTaskAttachmentsFromRow_(sheet, rowIndex);
+  list.push(attachment);
+  saveTaskAttachmentsOnRow_(sheet, rowIndex, list);
+  return list;
+}
+
+function getWritableTaskAttachmentFolder_() {
+  var candidates = [];
+  try {
+    var ssFile = DriveApp.getFileById(SPREADSHEET_ID);
+    var parents = ssFile.getParents();
+    if (parents.hasNext()) {
+      var parent = parents.next();
+      var subs = parent.getFoldersByName(TASK_ATTACHMENT_FOLDER_NAME);
+      if (subs.hasNext()) {
+        candidates.push(subs.next());
+      } else {
+        return parent.createFolder(TASK_ATTACHMENT_FOLDER_NAME);
+      }
+    }
+  } catch (e) {}
+
+  var roots = DriveApp.getFoldersByName(TASK_ATTACHMENT_FOLDER_NAME);
+  while (roots.hasNext()) {
+    candidates.push(roots.next());
+  }
+
+  for (var i = 0; i < candidates.length; i++) {
+    if (folderIsWritable_(candidates[i])) return candidates[i];
+  }
+
+  return DriveApp.createFolder(TASK_ATTACHMENT_FOLDER_NAME);
+}
+
+function uploadTaskFileBlobToDrive_(blob, fileName) {
+  var folder = getWritableTaskAttachmentFolder_();
+  var url = saveSiteImageBlobToFolder_(folder, blob, folder.getId());
+  var fileId = extractDriveFileId_(url);
+  return {
+    fileId: fileId,
+    name: fileName,
+    url: buildDriveDownloadUrl_(fileId),
+    viewUrl: buildDriveImageViewUrl_(fileId),
+    mime: blob.getContentType() || 'application/octet-stream',
+    size: blob.getBytes().length
+  };
+}
+
+function buildTaskAttachmentMeta_(payload, blobMeta) {
+  var actor = getActorFromPayload_(payload);
+  return {
+    fileId: blobMeta.fileId,
+    name: blobMeta.name,
+    url: blobMeta.url,
+    viewUrl: blobMeta.viewUrl,
+    mime: blobMeta.mime,
+    size: blobMeta.size,
+    uploadedAt: new Date().toISOString(),
+    uploadedBy: String((actor && actor.displayName) || payload.uploadedBy || '').trim()
+  };
+}
+
+function uploadTaskFileToDrive_(payload) {
+  payload = payload || {};
+  var base64 = String(payload.base64 || '');
+  if (!base64) throw new Error('Thiếu dữ liệu tệp (base64)');
+  if (base64.indexOf('base64,') >= 0) {
+    base64 = base64.split('base64,')[1];
+  }
+  var fileName = sanitizeTaskFileName_(payload.fileName || ('task-' + Date.now()));
+  var mime = String(payload.mimeType || payload.mime || 'application/octet-stream');
+  var bytes = Utilities.base64Decode(base64);
+  var blob = Utilities.newBlob(bytes, mime, fileName);
+  var blobMeta = uploadTaskFileBlobToDrive_(blob, fileName);
+  return buildTaskAttachmentMeta_(payload, blobMeta);
+}
+
+function uploadTaskFile_(ss, payload) {
+  var attachment = uploadTaskFileToDrive_(payload);
+  var attachments = mergeTaskAttachment_(ss, payload, attachment);
+  return {
+    attachment: attachment,
+    attachments: attachments,
+    tasks: getSheetDataAsObjects(ss, 'PROJECT_TASKS')
+  };
+}
+
+function storeTaskFileChunk_(payload) {
+  payload = payload || {};
+  var sid = String(payload.sessionId || '');
+  var idx = Number(payload.index);
+  var total = Number(payload.total);
+  var chunk = String(payload.chunk || '');
+  if (!sid || !chunk || !Number.isFinite(idx) || !Number.isFinite(total)) {
+    throw new Error('Thiếu dữ liệu chunk upload tệp');
+  }
+  if (chunk.length > 100000) {
+    throw new Error('Chunk tệp quá lớn (tối đa 100KB). Tải lại trang và thử lại.');
+  }
+  var cache = CacheService.getScriptCache();
+  cache.put('taskf_' + sid + '_' + idx, chunk, TASK_FILE_CHUNK_TTL);
+  cache.put('taskf_' + sid + '_meta', JSON.stringify({
+    total: total,
+    fileName: sanitizeTaskFileName_(payload.fileName),
+    mimeType: String(payload.mimeType || payload.mime || 'application/octet-stream'),
+    taskMatch: {
+      _rowIndex: payload._rowIndex || null,
+      _matchTask: payload._matchTask || payload.TÁC_VỤ || '',
+      _matchProjectId: payload._matchProjectId || payload.PROJECT_ID || '',
+      _matchStart: payload._matchStart || payload.NGÀY_BẮT_ĐẦU || '',
+      _matchEnd: payload._matchEnd || payload.NGÀY_KẾT_THÚC || '',
+      _matchAssignee: payload._matchAssignee || payload.NHÂN_SỰ || ''
+    },
+    uploadedBy: String(payload.uploadedBy || '').trim(),
+    token: String(payload._token || payload.token || '').trim()
+  }), TASK_FILE_CHUNK_TTL);
+}
+
+function commitTaskFileUpload_(sessionId) {
+  var cache = CacheService.getScriptCache();
+  var metaRaw = cache.get('taskf_' + sessionId + '_meta');
+  if (!metaRaw) {
+    throw new Error('Phiên upload hết hạn. Chọn tệp và thử lại.');
+  }
+  var meta = JSON.parse(metaRaw);
+  var parts = [];
+  for (var i = 0; i < meta.total; i++) {
+    var part = cache.get('taskf_' + sessionId + '_' + i);
+    if (!part) throw new Error('Thiếu dữ liệu chunk ' + i);
+    parts.push(part);
+  }
+
+  var base64 = parts.join('');
+  if (base64.indexOf('base64,') >= 0) {
+    base64 = base64.split('base64,')[1];
+  }
+
+  var fileName = sanitizeTaskFileName_(meta.fileName || ('task-' + Date.now()));
+  var mime = String(meta.mimeType || 'application/octet-stream');
+  var bytes = Utilities.base64Decode(base64);
+  var blob = Utilities.newBlob(bytes, mime, fileName);
+  var blobMeta = uploadTaskFileBlobToDrive_(blob, fileName);
+  var payload = meta.taskMatch || {};
+  if (meta.token) {
+    payload.token = meta.token;
+    payload._token = meta.token;
+  }
+  if (meta.uploadedBy) payload.uploadedBy = meta.uploadedBy;
+  var attachment = buildTaskAttachmentMeta_(payload, blobMeta);
+
+  var ss = getSpreadsheet();
+  ensureTaskSheetColumns_(ss);
+  var attachments = mergeTaskAttachment_(ss, payload, attachment);
+
+  for (var j = 0; j < meta.total; j++) {
+    cache.remove('taskf_' + sessionId + '_' + j);
+  }
+  cache.remove('taskf_' + sessionId + '_meta');
+
+  return {
+    attachment: attachment,
+    attachments: attachments,
+    tasks: getSheetDataAsObjects(ss, 'PROJECT_TASKS')
+  };
+}
+
+function removeTaskAttachment_(ss, payload) {
+  payload = payload || {};
+  var fileId = String(payload.fileId || payload.attachmentId || '').trim();
+  if (!fileId) throw new Error('Thiếu mã tệp đính kèm');
+
+  ensureTaskSheetColumns_(ss);
+  var sheet = ss.getSheetByName('PROJECT_TASKS');
+  if (!sheet) throw new Error('PROJECT_TASKS sheet not found');
+  var rowIndex = findTaskRowIndex_(sheet, payload);
+  if (rowIndex === -1) throw new Error('Không tìm thấy tác vụ');
+
+  var list = getTaskAttachmentsFromRow_(sheet, rowIndex);
+  var next = list.filter(function(item) {
+    return String(item.fileId || extractDriveFileId_(item.url) || '') !== fileId;
+  });
+  if (next.length === list.length) {
+    throw new Error('Không tìm thấy tệp trong tác vụ');
+  }
+  saveTaskAttachmentsOnRow_(sheet, rowIndex, next);
+
+  try {
+    DriveApp.getFileById(fileId).setTrashed(true);
+  } catch (driveErr) {}
+
+  return {
+    fileId: fileId,
+    attachments: next,
+    tasks: getSheetDataAsObjects(ss, 'PROJECT_TASKS')
+  };
 }
 
 /**
@@ -2985,7 +3337,7 @@ function checkMutationPermission_(action, payload, session) {
   payload = payload || {};
   var pid = String(payload.PROJECT_ID || payload.id || payload.projectId || '').trim();
 
-  if (action === 'update-task' || action === 'delete-task') {
+  if (action === 'update-task' || action === 'delete-task' || action === 'upload-task-file' || action === 'remove-task-attachment') {
     if (!canEditTask_(session, payload)) {
       return 'Bạn chỉ được sửa công việc được phân công cho mình';
     }
@@ -3020,7 +3372,7 @@ function checkMutationPermission_(action, payload, session) {
 
   var projectMutations = [
     'update-project',
-    'update-risk', 'add-risk',
+    'update-risk', 'add-risk', 'delete-risk',
     'update-permit', 'add-permit',
     'update-design', 'add-design',
     'update-procurement', 'add-procurement',
@@ -3048,6 +3400,7 @@ function isProtectedMutation_(action) {
   if (action === 'login' || action === 'logout') return false;
   if (action === 'add-user' || action === 'update-user' || action === 'deactivate-user' || action === 'delete-user') return false;
   if (action === 'upload-image-chunk') return false;
+  if (action === 'upload-task-file-chunk') return false;
   return true;
 }
 
@@ -4365,7 +4718,7 @@ function ensureTaskSheetColumns_(ss) {
   if (!sheet) return;
   initializeSheetIfEmpty(sheet, 'PROJECT_TASKS');
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var needed = ['NGƯỜI_TẠO'];
+  var needed = ['NGƯỜI_TẠO', 'TỆP_ĐÍNH_KÈM'];
   for (var i = 0; i < needed.length; i++) {
     if (findColumnIndex(headers, needed[i]) === -1) {
       var col = sheet.getLastColumn() + 1;
@@ -4821,10 +5174,16 @@ function buildAuditSummary_(action, payload) {
       return 'Sửa task: ' + (payload.TÁC_VỤ || payload._matchTask || name) + (pid ? ' (' + pid + ')' : '');
     case 'delete-task':
       return 'Xóa task: ' + (payload.TÁC_VỤ || payload._matchTask || name) + (pid ? ' (' + pid + ')' : '');
+    case 'delete-risk':
+      return 'Xóa rủi ro: ' + (payload.NỘI_DUNG || name) + (pid ? ' (' + pid + ')' : '');
     case 'update-site-log':
       return 'Cập nhật nhật ký hiện trường — dự án ' + pid;
     case 'upload-site-image':
       return 'Upload ảnh hiện trường — dự án ' + pid;
+    case 'upload-task-file':
+      return 'Upload tệp task: ' + (payload.fileName || payload._matchTask || name);
+    case 'remove-task-attachment':
+      return 'Xóa tệp task: ' + (payload.fileName || payload._matchTask || name);
     case 'update-module-dates':
       return 'Cập nhật ngày module — dự án ' + pid;
     default:
