@@ -58,28 +58,14 @@ const writeBundleCache = (projectId, bundle) => {
   } catch { /* quota */ }
 };
 
-const pickLogSelections = (dailyRes = [], weeklyRes = [], monthlyRes = []) => {
-  let selectedDate = getTodayStr();
-  if (dailyRes.length > 0) {
-    const sorted = [...dailyRes].sort((a, b) => parseDateStr(a.LOG_DATE || a.NGÀY) - parseDateStr(b.LOG_DATE || b.NGÀY));
-    const latest = sorted[sorted.length - 1];
-    selectedDate = latest ? (latest.LOG_DATE || latest.NGÀY) : getTodayStr();
-  }
-
-  let selectedWeek = formatDateStr(getMondayOfDate(new Date()));
-  if (weeklyRes.length > 0) {
-    const latestWeekly = weeklyRes[weeklyRes.length - 1];
-    if (latestWeekly?.LOG_DATE) selectedWeek = latestWeekly.LOG_DATE;
-  }
-
-  let selectedMonth = `${String(new Date().getMonth() + 1).padStart(2, '0')}/${new Date().getFullYear()}`;
-  if (monthlyRes.length > 0) {
-    const latestMonthly = monthlyRes[monthlyRes.length - 1];
-    const parts = latestMonthly?.LOG_DATE?.split('/');
-    if (parts?.length === 3) selectedMonth = `${parts[1]}/${parts[2]}`;
-  }
-
-  return { selectedDate, selectedWeek, selectedMonth };
+/** Mặc định luôn hôm nay / tuần này / tháng này — không nhảy về ngày log cũ nhất */
+const pickLogSelections = () => {
+  const now = new Date();
+  return {
+    selectedDate: getTodayStr(),
+    selectedWeek: formatDateStr(getMondayOfDate(now)),
+    selectedMonth: `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`,
+  };
 };
 
 export default function ProjectDetailPage() {
@@ -90,11 +76,7 @@ export default function ProjectDetailPage() {
   const { isCollapsed, toggleSidebar } = useSidebar();
 
   const cachedBundle = readBundleCache(id);
-  const cachedSelections = pickLogSelections(
-    cachedBundle?.siteLogs,
-    cachedBundle?.weeklyLogs,
-    cachedBundle?.monthlyLogs
-  );
+  const cachedSelections = pickLogSelections();
 
   // Project & S-Curve State
   const [project, setProject] = useState(() => {
@@ -241,7 +223,7 @@ export default function ProjectDetailPage() {
       setWeeklyLogs(weeklyRes);
       setMonthlyLogs(monthlyRes);
 
-      const sel = pickLogSelections(dailyRes, weeklyRes, monthlyRes);
+      const sel = pickLogSelections();
       setSelectedDate(sel.selectedDate);
       setSelectedWeek(sel.selectedWeek);
       setSelectedMonth(sel.selectedMonth);
@@ -274,31 +256,16 @@ export default function ProjectDetailPage() {
           if (scurveRes) setScurveData(scurveRes);
           if (dailyRes) {
             setLogs(dailyRes);
-            if (dailyRes.length > 0) {
-              const sorted = [...dailyRes].sort((a, b) => parseDateStr(a.LOG_DATE || a.NGÀY) - parseDateStr(b.LOG_DATE || b.NGÀY));
-              const latest = sorted[sorted.length - 1];
-              const latestDate = latest ? (latest.LOG_DATE || latest.NGÀY) : getTodayStr();
-              setSelectedDate(latestDate);
-            } else {
-              setSelectedDate(getTodayStr());
-            }
+            setSelectedDate(getTodayStr());
           }
           if (weeklyRes) {
             setWeeklyLogs(weeklyRes);
-            if (weeklyRes.length > 0) {
-              const latestWeekly = weeklyRes[weeklyRes.length - 1];
-              setSelectedWeek(latestWeekly ? latestWeekly.LOG_DATE : formatDateStr(getMondayOfDate(new Date())));
-            }
+            setSelectedWeek(formatDateStr(getMondayOfDate(new Date())));
           }
           if (monthlyRes) {
             setMonthlyLogs(monthlyRes);
-            if (monthlyRes.length > 0) {
-              const latestMonthly = monthlyRes[monthlyRes.length - 1];
-              if (latestMonthly) {
-                const parts = latestMonthly.LOG_DATE.split('/');
-                if (parts.length === 3) setSelectedMonth(`${parts[1]}/${parts[2]}`);
-              }
-            }
+            const now = new Date();
+            setSelectedMonth(`${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`);
           }
         }
       } catch (error) {
