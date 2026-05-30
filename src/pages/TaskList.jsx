@@ -725,7 +725,7 @@ export default function TaskList() {
                   </div>
                 </>
               )}
-            </div>>
+            </div>
             {canCreateTask(user) && (
             <div className="flex rounded-md shadow-[0_0_15px_rgba(82,82,255,0.3)]">
               <button 
