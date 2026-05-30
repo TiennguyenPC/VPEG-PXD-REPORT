@@ -483,7 +483,7 @@ export function buildContractFlowState(data, moduleContext = null) {
     const softUnmet = (def.softRequires || []).filter((k) => !isStepAchieved(d, k, moduleContext));
     const track = def.parallelTrack || 'main';
 
-    let status = 'pending';
+    let status;
     if (done) {
       status = 'done';
     } else if (!requiresMet) {

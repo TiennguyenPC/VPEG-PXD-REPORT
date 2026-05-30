@@ -308,7 +308,7 @@ export default function RiskModule({ project, initialData }) {
                   Chưa có rủi ro nào. {canEdit ? 'Bấm "Thêm rủi ro" để ghi nhận.' : ''}
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
+                <div className="module-table-scroll rounded-lg border border-[var(--border-main)] -mx-0.5 px-0.5 pb-1">
                   <table className="w-full text-xs table-fixed min-w-[960px]">
                     <thead>
                       <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] border-b border-[var(--border-main)]">

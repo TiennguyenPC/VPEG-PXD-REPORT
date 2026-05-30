@@ -4,6 +4,23 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-vendor')) {
+            return 'vendor-charts';
+          }
+          if (id.includes('framer-motion')) return 'vendor-motion';
+          if (id.includes('lucide-react')) return 'vendor-icons';
+          if (id.includes('react-dom') || id.includes('react-router') || id.includes('/react/')) {
+            return 'vendor-react';
+          }
+        },
+      },
+    },
+  },
   plugins: [
     react(),
     VitePWA({
@@ -37,6 +54,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
+        globIgnores: ['**/vendor-charts-*.js', '**/TaskListCharts-*.js'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/share\//, /^\/huong-dan/, /^\/HUONG_DAN_SU_DUNG\.html/],
         runtimeCaching: [

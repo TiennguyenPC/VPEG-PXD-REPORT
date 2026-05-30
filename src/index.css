@@ -71,6 +71,19 @@
       padding-left: 1.25rem;
       padding-right: 1rem;
     }
+
+    /* Bảng module (cung ứng vật tư, GPXD, …): vuốt ngang trên điện thoại */
+    .module-table-scroll {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-x: contain;
+      touch-action: pan-x;
+    }
+  }
+
+  .module-table-scroll {
+    overflow-x: auto;
+    overflow-y: visible;
+    max-width: 100%;
   }
 }
 

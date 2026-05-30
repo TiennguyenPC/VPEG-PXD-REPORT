@@ -312,7 +312,7 @@ export default function DesignModule({ project, initialData, onProgressChange })
             transition={{ duration: 0.3 }}
           >
             <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
-              <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
+              <div className="module-table-scroll rounded-lg border border-[var(--border-main)] -mx-0.5 px-0.5 pb-1">
                 <table className="w-full text-left text-xs min-w-[950px]">
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">

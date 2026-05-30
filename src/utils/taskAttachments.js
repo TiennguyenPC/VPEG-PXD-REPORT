@@ -1,4 +1,4 @@
-import { extractDriveFileId } from './siteImageUrl';
+import { extractDriveFileId } from './driveFileId';
 
 export function parseTaskAttachments(raw) {
   if (!raw) return [];

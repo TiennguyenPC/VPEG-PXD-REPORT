@@ -1,5 +1,5 @@
 import { normalizeToDMY } from './timelineDates';
-import { extractDriveFileId } from './siteImageUrl';
+import { extractDriveFileId } from './driveFileId';
 
 export const CACHE_CONSENT_KEY = 'epc_local_cache_consent';
 

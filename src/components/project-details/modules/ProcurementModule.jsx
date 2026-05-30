@@ -277,7 +277,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
   };
 
   return (
-    <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)] overflow-hidden">
+    <div className="glass-panel rounded-xl shadow-lg border border-[var(--border-main)]">
       <button 
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex items-center justify-between p-4 bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] transition-colors"
@@ -328,10 +328,14 @@ export default function ProcurementModule({ project, initialData, onProgressChan
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
+            style={{ overflow: 'visible' }}
           >
-            <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)]">
-              <div className="overflow-x-auto rounded-lg border border-[var(--border-main)]">
-                <table className="w-full table-fixed text-left text-xs">
+            <div className="p-4 border-t border-[var(--border-main)] bg-[var(--bg-main)] min-w-0">
+              <p className="md:hidden text-[10px] text-[var(--text-muted)] mb-2">
+                Vuốt ngang để xem đủ cột
+              </p>
+              <div className="module-table-scroll rounded-lg border border-[var(--border-main)] -mx-0.5 px-0.5 pb-1">
+                <table className="w-full min-w-[920px] md:min-w-0 md:table-fixed text-left text-xs">
                   <colgroup>
                     <col className="w-[26%]" />
                     <col className="w-[13%]" />
@@ -342,7 +346,7 @@ export default function ProcurementModule({ project, initialData, onProgressChan
                   </colgroup>
                   <thead>
                     <tr className="bg-[var(--bg-panel)] text-[var(--text-muted)] font-bold uppercase tracking-wider border-b border-[var(--border-main)]">
-                      <th className="p-3 text-left align-bottom">{t('table.equipment')}</th>
+                      <th className="p-3 text-left align-bottom min-w-[200px]">{t('table.equipment')}</th>
                       <th className="p-3 text-center align-bottom">{t('table.expectedArrival')}</th>
                       <th className="p-3 text-center align-bottom">{t('table.actualArrival')}</th>
                       <th className="p-3 text-center align-bottom">{t('table.materialStatus')}</th>

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ChevronDown, Check } from 'lucide-react';
+import { ChevronDown, Check, Search } from 'lucide-react';
 import { parseAssignees } from '../utils/taskFields';
 import { getUserInitials, normalizePersonName } from '../utils/permissions';
 
@@ -38,6 +38,7 @@ export default function AssigneeMultiSelect({
   placeholder = 'Chọn nhân sự...',
 }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const rootRef = useRef(null);
 
   const selected = useMemo(() => parseAssignees(value), [value]);
@@ -55,8 +56,17 @@ export default function AssigneeMultiSelect({
     return [...seen.values()].sort((a, b) => a.localeCompare(b, 'vi'));
   }, [options, selected]);
 
+  const filteredOptions = useMemo(() => {
+    if (!searchQuery.trim()) return allOptions;
+    const lowerQ = searchQuery.toLowerCase();
+    return allOptions.filter(name => name.toLowerCase().includes(lowerQ));
+  }, [allOptions, searchQuery]);
+
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) {
+      setSearchQuery('');
+      return undefined;
+    }
     const onDoc = (e) => {
       if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
     };
@@ -106,10 +116,26 @@ export default function AssigneeMultiSelect({
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          {allOptions.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-slate-400">Không có nhân sự</p>
+          <div className={`px-2 pb-2 pt-1 sticky top-0 z-10 ${variant === 'light' ? 'bg-white' : 'bg-[var(--bg-panel)]'}`}>
+            <div className="relative">
+              <Search className={`w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 ${variant === 'light' ? 'text-slate-400' : 'text-slate-500'}`} />
+              <input 
+                type="text" 
+                placeholder="Tìm kiếm..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={`w-full pl-8 pr-2 py-1.5 text-xs rounded-md border focus:outline-none focus:ring-1 ${
+                  variant === 'light' 
+                    ? 'bg-slate-50 border-slate-200 text-slate-700 focus:border-blue-500 focus:ring-blue-500 placeholder:text-slate-400' 
+                    : 'bg-[var(--bg-main)] border-[var(--border-main)] text-slate-200 focus:border-[#5252ff] focus:ring-[#5252ff] placeholder:text-slate-500'
+                }`}
+              />
+            </div>
+          </div>
+          {filteredOptions.length === 0 ? (
+            <p className="px-3 py-2 text-xs text-slate-400">Không có nhân sự phù hợp</p>
           ) : (
-            allOptions.map((name) => {
+            filteredOptions.map((name) => {
               const active = isSelected(name, selected);
               return (
                 <button

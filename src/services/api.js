@@ -173,6 +173,7 @@ export function invalidateCache() {
 
 function invalidateTasksCache() {
   tasksCache = null;
+  tasksFetchGeneration += 1;
   localStorage.removeItem('epc_tasks_cache');
 }
 
@@ -210,10 +211,14 @@ async function fetchFromGAS(action, params = {}, useCache = false) {
   // Cache busting only when NOT using in-memory cache
   if (!useCache) url.searchParams.append('t', Date.now().toString());
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), GAS_FETCH_TIMEOUT_MS);
+
   try {
     const response = await fetch(url.toString(), {
       redirect: 'follow',
       method: 'GET',
+      signal: controller.signal,
     });
     const result = await response.json();
     if (result.status === 'error') {
@@ -222,8 +227,13 @@ async function fetchFromGAS(action, params = {}, useCache = false) {
     if (useCache) setCached(cacheKey, result.data);
     return result.data;
   } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`API ${action} quá thời gian chờ (${GAS_FETCH_TIMEOUT_MS / 1000}s). Thử lại sau.`);
+    }
     console.error(`Error fetching ${action}:`, error);
     throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -286,7 +296,9 @@ try {
 }
 
 const OVERVIEW_REFRESH_EVENT = 'epc-overview-refreshed';
+const GAS_FETCH_TIMEOUT_MS = 45_000;
 let projectsFetchGeneration = 0;
+let tasksFetchGeneration = 0;
 
 function projectMatchesId(project, projectId) {
   const id = String(projectId || '').trim();
@@ -299,7 +311,7 @@ function removeProjectFromCaches(projectId) {
   if (!id) return [];
 
   const keep = (p) => !projectMatchesId(p, id);
-  let next = [];
+  let next;
 
   try {
     const raw = localStorage.getItem('epc_projects_cache');
@@ -521,7 +533,7 @@ export const api = {
           const normalized = (data || []).map(normalizeProject);
           projectsCache = normalized;
           localStorage.setItem('epc_projects_cache', JSON.stringify(normalized));
-        } catch (e) { /* ignore background fetch error */ }
+        } catch { /* ignore background fetch error */ }
       }, 0);
       return projectsCache;
     }
@@ -541,7 +553,7 @@ export const api = {
           try {
             const data = await fetchFromGAS('employees');
             localStorage.setItem(cacheKey, JSON.stringify(data || []));
-          } catch (e) { /* ignore */ }
+          } catch { /* ignore background fetch error */ }
         }, 0);
         return JSON.parse(localEmps);
       }
@@ -573,7 +585,7 @@ export const api = {
         try {
           const data = await fetchFromGAS('risks', {}, true);
           localStorage.setItem('epc_risks_cache', JSON.stringify(data || []));
-        } catch (e) { }
+        } catch { /* ignore background fetch error */ }
       }, 0);
       return JSON.parse(localRisks);
     }
@@ -623,20 +635,51 @@ export const api = {
   getMilestones: (id) => fetchFromGAS('milestone', { id }),
   getSCurves: (id) => fetchFromGAS('scurve', { id }),
   getTasks: async (forceRefresh = false) => {
-    if (!forceRefresh && tasksCache && tasksCache.length > 0) {
+    const readCachedTasks = () => {
+      if (Array.isArray(tasksCache) && tasksCache.length > 0) return tasksCache;
+      const local = readLocalJson('epc_tasks_cache');
+      if (local.length) {
+        tasksCache = local;
+        return local;
+      }
+      return null;
+    };
+
+    const scheduleTasksRefresh = () => {
+      const gen = ++tasksFetchGeneration;
       setTimeout(async () => {
         try {
           const data = await fetchFromGAS('tasks');
+          if (gen !== tasksFetchGeneration) return;
           tasksCache = data || [];
           localStorage.setItem('epc_tasks_cache', JSON.stringify(tasksCache));
-        } catch (e) { }
+          dispatchOverviewRefresh({
+            projects: projectsCache ?? readLocalJson('epc_projects_cache'),
+            tasks: tasksCache,
+            risks: readLocalJson('epc_risks_cache'),
+          });
+        } catch { /* ignore background fetch error */ }
       }, 0);
-      return tasksCache;
+    };
+
+    if (!forceRefresh) {
+      const cached = readCachedTasks();
+      if (cached) {
+        scheduleTasksRefresh();
+        return cached;
+      }
     }
-    const data = await fetchFromGAS('tasks');
-    tasksCache = data || [];
-    localStorage.setItem('epc_tasks_cache', JSON.stringify(tasksCache));
-    return tasksCache;
+
+    try {
+      const data = await fetchFromGAS('tasks');
+      tasksCache = data || [];
+      localStorage.setItem('epc_tasks_cache', JSON.stringify(tasksCache));
+      return tasksCache;
+    } catch (err) {
+      const fallback = readCachedTasks();
+      if (fallback) return fallback;
+      throw err;
+    }
   },
 
   // POST (Updates)

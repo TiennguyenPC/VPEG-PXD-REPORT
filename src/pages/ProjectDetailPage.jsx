@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, lazy } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Activity, Briefcase, Folder, Sun, Moon
@@ -9,17 +9,19 @@ import Sidebar from "../components/Sidebar";
 import ProjectHeader from "../components/project-details/ProjectHeader";
 import ProjectSectionNav from "../components/project-details/ProjectSectionNav";
 import KPIOverview from "../components/project-details/KPIOverview";
-import MilestoneTimeline from "../components/project-details/MilestoneTimeline";
-import SCurveChart from "../components/project-details/SCurveChart";
-import SiteLogPanel from "../components/project-details/SiteLogPanel";
-import SitePhotosPanel from "../components/project-details/SitePhotosPanel";
-import WeeklyKPI from "../components/project-details/WeeklyKPI";
-import RiskModule from "../components/project-details/modules/RiskModule";
-import PermitModule from "../components/project-details/modules/PermitModule";
-import DesignModule from "../components/project-details/modules/DesignModule";
-import ProcurementModule from "../components/project-details/modules/ProcurementModule";
-import ConstructionModule from "../components/project-details/modules/ConstructionModule";
-import HandoverModule from "../components/project-details/modules/HandoverModule";
+
+const MilestoneTimeline = lazy(() => import("../components/project-details/MilestoneTimeline"));
+import LazySection from "../components/LazySection";
+const SiteLogPanel = lazy(() => import("../components/project-details/SiteLogPanel"));
+const WeeklyKPI = lazy(() => import("../components/project-details/WeeklyKPI"));
+const SitePhotosPanel = lazy(() => import("../components/project-details/SitePhotosPanel"));
+const SCurveChart = lazy(() => import("../components/project-details/SCurveChart"));
+const RiskModule = lazy(() => import("../components/project-details/modules/RiskModule"));
+const PermitModule = lazy(() => import("../components/project-details/modules/PermitModule"));
+const DesignModule = lazy(() => import("../components/project-details/modules/DesignModule"));
+const ProcurementModule = lazy(() => import("../components/project-details/modules/ProcurementModule"));
+const ConstructionModule = lazy(() => import("../components/project-details/modules/ConstructionModule"));
+const HandoverModule = lazy(() => import("../components/project-details/modules/HandoverModule"));
 import { api } from "../services/api";
 import { updateDashboardContext } from "../utils/dashboardContext";
 import { syncProgressToProjectsCache } from "../utils/projectProgress";
@@ -963,6 +965,7 @@ export default function ProjectDetailPage() {
 
           {/* SECTION 3 - MILESTONE TIMELINE */}
           <section id="section-timeline" className="scroll-mt-16">
+            <LazySection label="mốc tiến độ">
             <MilestoneTimeline
               project={enrichedProject}
               moduleProgress={moduleProgress}
@@ -976,12 +979,14 @@ export default function ProjectDetailPage() {
                 canEditContractTracking(user, id, project) ? handleContractTrackingSave : undefined
               }
             />
+            </LazySection>
           </section>
 
           {/* SECTION 4 - NHẬT KÝ & VẬN HÀNH (trước S-Curve để dễ thấy) */}
           <section id="section-site-log" className="scroll-mt-16">
           <div className="grid grid-cols-1 lg:grid-cols-3 print:grid-cols-3 gap-6">
             <div className={selectedView === 'day' ? 'lg:col-span-3 print:col-span-3' : 'lg:col-span-2 print:col-span-2'}>
+              <LazySection label="nhật ký">
               <SiteLogPanel
                 project={enrichedProject}
                 logs={logs}
@@ -1008,9 +1013,11 @@ export default function ProjectDetailPage() {
                   handovers: bundleData?.handovers,
                 }}
               />
+              </LazySection>
             </div>
             {selectedView !== 'day' && (
               <div className="lg:col-span-1 print:col-span-1">
+                <LazySection label="KPI tuần">
                 <WeeklyKPI
                   project={enrichedProject}
                   logs={logs}
@@ -1024,6 +1031,7 @@ export default function ProjectDetailPage() {
                   onUpdateLog={handleUpdateLog}
                   saveStatus={saveStatus}
                 />
+                </LazySection>
               </div>
             )}
           </div>
@@ -1031,6 +1039,7 @@ export default function ProjectDetailPage() {
 
           {/* SECTION 4b - ẢNH HIỆN TRƯỜNG (tách khỏi nhật ký) */}
           <section id="section-site-photos" className="scroll-mt-16">
+            <LazySection label="ảnh hiện trường">
             <SitePhotosPanel
               project={enrichedProject}
               logs={logs}
@@ -1041,10 +1050,12 @@ export default function ProjectDetailPage() {
               onLogsUpdated={handleLogsUpdated}
               onSaveStatusChange={updateSaveStatus}
             />
+            </LazySection>
           </section>
 
           {/* SECTION 5 - S-CURVE CHART (FULL WIDTH) */}
           <section id="section-scurve" className="scroll-mt-16">
+            <LazySection label="S-Curve">
             <SCurveChart
               project={enrichedProject}
               milestonesData={bundleData?.milestones || []}
@@ -1058,27 +1069,28 @@ export default function ProjectDetailPage() {
                 handovers: bundleData?.handovers,
               }}
             />
+            </LazySection>
           </section>
 
           {/* SECTION 6 - MAIN ACCORDION MODULES */}
           <section id="section-modules" className="scroll-mt-16 space-y-4 pt-4">
             <div id="module-risk" className="scroll-mt-16">
-              <RiskModule project={enrichedProject} initialData={bundleData?.risks} />
+              <LazySection label="rủi ro"><RiskModule project={enrichedProject} initialData={bundleData?.risks} /></LazySection>
             </div>
             <div id="module-permit" className="scroll-mt-16">
-              <PermitModule project={enrichedProject} initialData={bundleData?.permits} onProgressChange={(pct) => handleModuleProgressChange('permit', pct)} />
+              <LazySection label="GPXD"><PermitModule project={enrichedProject} initialData={bundleData?.permits} onProgressChange={(pct) => handleModuleProgressChange('permit', pct)} /></LazySection>
             </div>
             <div id="module-design" className="scroll-mt-16">
-              <DesignModule project={enrichedProject} initialData={bundleData?.designs} onProgressChange={(pct) => handleModuleProgressChange('design', pct)} />
+              <LazySection label="thiết kế"><DesignModule project={enrichedProject} initialData={bundleData?.designs} onProgressChange={(pct) => handleModuleProgressChange('design', pct)} /></LazySection>
             </div>
             <div id="module-procurement" className="scroll-mt-16">
-              <ProcurementModule project={enrichedProject} initialData={bundleData?.procurements} onProgressChange={(pct) => handleModuleProgressChange('procurement', pct)} />
+              <LazySection label="mua sắm"><ProcurementModule project={enrichedProject} initialData={bundleData?.procurements} onProgressChange={(pct) => handleModuleProgressChange('procurement', pct)} /></LazySection>
             </div>
             <div id="module-construction" className="scroll-mt-16">
-              <ConstructionModule project={enrichedProject} initialData={bundleData?.constructions} onProgressChange={(pct) => handleModuleProgressChange('construction', pct)} />
+              <LazySection label="thi công"><ConstructionModule project={enrichedProject} initialData={bundleData?.constructions} onProgressChange={(pct) => handleModuleProgressChange('construction', pct)} /></LazySection>
             </div>
             <div id="module-handover" className="scroll-mt-16">
-              <HandoverModule project={enrichedProject} initialData={bundleData?.handovers} onProgressChange={(pct) => handleModuleProgressChange('handover', pct)} />
+              <LazySection label="bàn giao"><HandoverModule project={enrichedProject} initialData={bundleData?.handovers} onProgressChange={(pct) => handleModuleProgressChange('handover', pct)} /></LazySection>
             </div>
           </section>
 

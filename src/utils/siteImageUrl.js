@@ -1,19 +1,6 @@
-/** Trích file id từ các dạng link Google Drive */
-export function extractDriveFileId(url) {
-  if (!url || typeof url !== 'string') return null;
-  const s = url.trim();
-  const patterns = [
-    /[?&]id=([\w-]+)/,
-    /\/file\/d\/([\w-]+)/,
-    /\/d\/([\w-]+)/,
-    /\/uc\?export=view&id=([\w-]+)/,
-  ];
-  for (const re of patterns) {
-    const m = s.match(re);
-    if (m?.[1]) return m[1];
-  }
-  return null;
-}
+import { extractDriveFileId } from './driveFileId';
+
+export { extractDriveFileId };
 
 /** Proxy ảnh Drive qua GAS — tránh bị chặn hotlink trên Vercel/production */
 export function buildGasImageProxyUrl(fileId) {
@@ -57,7 +44,7 @@ export function rememberWorkingImageUrl(fileId, variant, url) {
 }
 
 /** URL hiển thị grid — ưu tiên GAS proxy (ổn định trên production) rồi Drive thumbnail */
-export function toDisplayableImageUrl(url, size = 640) {
+export function toDisplayableImageUrl(url, _size = 640) {
   if (!url) return url;
   if (url.startsWith('blob:') || url.startsWith('data:')) return url;
 

@@ -1,27 +1,29 @@
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback, lazy } from 'react';
 import { 
   CheckCircle2, Circle, Clock, LayoutGrid, Calendar, 
-  BarChart3, Columns, Plus, Search, Filter, Download, 
+  BarChart3, Columns, Plus, Search, Filter, 
   ChevronDown, AlertTriangle, MoreHorizontal, Calendar as CalendarIcon,
-  PlayCircle, Flag, Star, MoreVertical, Bell, Sun, Moon, User, ClipboardList, X, Menu, ChevronLeft, Loader2, Paperclip
+  PlayCircle, Flag, Star, MoreVertical, ClipboardList, X, Loader2, Paperclip
 } from 'lucide-react';
 import PriorityBadge from '../components/PriorityBadge';
-import { api } from '../services/api';
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { api, OVERVIEW_REFRESH_EVENT } from '../services/api';
+import LazySection from '../components/LazySection';
 import { useTheme } from '../hooks/useTheme';
 import { useSidebar } from '../hooks/useSidebar';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import DateInputDMY from '../components/DateInputDMY';
 import { updateDashboardContext } from '../utils/dashboardContext';
 import { getTaskDescription, isSameTask, UI_ONLY_TASK_FIELDS, enrichTaskForUI, applyTaskFieldUpdate, enrichTaskProjectIds } from '../utils/taskFields';
-import { buildAssigneeOptionList, buildAssigneeStatusChartData } from '../utils/assigneeHelpers';
+import { buildAssigneeOptionList } from '../utils/assigneeHelpers';
+
+const TaskListCharts = lazy(() => import('../components/TaskListCharts'));
 import AssigneeDisplay from '../components/AssigneeDisplay';
 import AssigneeMultiSelect from '../components/AssigneeMultiSelect';
 import TaskMobileCard from '../components/TaskMobileCard';
 import TaskAttachmentsPanel from '../components/TaskAttachmentsPanel';
 import { parseTaskAttachments } from '../utils/taskAttachments';
-import { compareDateStrings, normalizeToDMY } from '../utils/timelineDates';
+import { compareDateStrings, normalizeToDMY, toDateKeyISO } from '../utils/timelineDates';
 import { useAuth } from '../context/AuthContext';
 import { canEditTask, canEditTaskField, canCreateTask, canDeleteTask, canViewTaskDetail, canToggleTaskComplete, hasFullTaskEditRights, canViewOfficeTasks, filterTasksForUser } from '../utils/permissions';
 
@@ -57,12 +59,26 @@ const tdWrap = 'py-2 px-2.5 text-xs align-top';
 const textClip = 'block truncate';
 const textWrapCell = 'block text-[11px] leading-snug break-words whitespace-pre-wrap';
 
+function getCalendarTaskBarStyles(status) {
+  switch (status) {
+    case 'Đã hoàn thành':
+      return { bg: 'bg-[#10b981]/10', border: 'border-[#10b981]/30', text: 'text-[#10b981] line-through' };
+    case 'Trễ':
+      return { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400' };
+    case 'Đang diễn ra':
+      return { bg: 'bg-[#3b82f6]/10', border: 'border-[#3b82f6]/30', text: 'text-[#3b82f6]' };
+    default:
+      return { bg: 'bg-[#1e293b]/50', border: 'border-[#263554]', text: 'text-slate-300' };
+  }
+}
+
+const MOBILE_FIXED_HEADER_VIEWS = new Set(['chart']);
+
 export default function TaskList() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const { isCollapsed, toggleSidebar } = useSidebar();
-  const { theme, toggleTheme, resolvedTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const isLightChart = resolvedTheme === 'light';
   const chartStyles = useMemo(() => ({
     tooltip: {
@@ -101,14 +117,12 @@ export default function TaskList() {
     } catch { return []; }
   });
   const [isLoading, setIsLoading] = useState(() => tasks.length === 0);
+  const [loadError, setLoadError] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // grid, board, calendar, chart
+  const urlSearchQuery = searchParams.get('q') || '';
   const [searchQuery, setSearchQuery] = useState('');
+  const effectiveSearchQuery = searchQuery || urlSearchQuery;
   const [sortConfig, setSortConfig] = useState({ key: 'computedStatus', direction: 'asc' });
-
-  useEffect(() => {
-    const q = searchParams.get('q');
-    if (q) setSearchQuery(q);
-  }, [searchParams]);
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -127,8 +141,8 @@ export default function TaskList() {
   const processedTasks = useMemo(() => {
     let filtered = filterTasksForUser(tasks, user, projects).map(enrichTaskForUI);
 
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
+    if (effectiveSearchQuery) {
+      const q = effectiveSearchQuery.toLowerCase();
       const projectFilter = (searchParams.get('project') || '').toLowerCase();
       filtered = filtered.filter(
         (t) => {
@@ -169,28 +183,54 @@ export default function TaskList() {
     }
     
     return filtered;
-  }, [tasks, user, projects, searchQuery, sortConfig, searchParams]);
+  }, [tasks, user, projects, effectiveSearchQuery, sortConfig, searchParams]);
 
-  // Fetch tasks, projects, employees
+  // Cập nhật khi Overview / Auth prefetch xong (tránh kẹt "Đang tải" trên localhost)
   useEffect(() => {
+    const onOverviewRefreshed = (e) => {
+      const bundle = e.detail || {};
+      if (Array.isArray(bundle.tasks)) setTasks(bundle.tasks);
+      if (Array.isArray(bundle.projects)) setProjects(bundle.projects);
+      setIsLoading(false);
+      setLoadError('');
+    };
+    window.addEventListener(OVERVIEW_REFRESH_EVENT, onOverviewRefreshed);
+    return () => window.removeEventListener(OVERVIEW_REFRESH_EVENT, onOverviewRefreshed);
+  }, []);
+
+  // Fetch tasks, projects, employees — 1 request overview + cache trước
+  useEffect(() => {
+    let cancelled = false;
     const fetchData = async () => {
       try {
         if (tasks.length === 0) setIsLoading(true);
-        const [tasksData, projData, empData] = await Promise.all([
-          api.getTasks().catch(() => []),
-          api.getProjects().catch(() => []),
-          api.getEmployees().catch(() => [])
+        setLoadError('');
+        const [overview, empData] = await Promise.all([
+          api.getOverviewData().catch(async (err) => {
+            const [tasksData, projData] = await Promise.all([
+              api.getTasks().catch(() => []),
+              api.getProjects().catch(() => []),
+            ]);
+            if (!tasksData?.length && !projData?.length) throw err;
+            return { tasks: tasksData || [], projects: projData || [], risks: [] };
+          }),
+          api.getEmployees().catch(() => []),
         ]);
-        if (tasksData && tasksData.length > 0) setTasks(tasksData);
-        if (projData && projData.length > 0) setProjects(projData);
-        if (empData && empData.length > 0) setEmployees(empData);
+        if (cancelled) return;
+        if (Array.isArray(overview?.tasks)) setTasks(overview.tasks);
+        if (Array.isArray(overview?.projects)) setProjects(overview.projects);
+        if (Array.isArray(empData)) setEmployees(empData);
       } catch (error) {
-        console.error("Failed to fetch data:", error);
+        console.error('Failed to fetch data:', error);
+        if (!cancelled) {
+          setLoadError(error.message || 'Không tải được dữ liệu công việc.');
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
     fetchData();
+    return () => { cancelled = true; };
   }, []);
 
   const [newTaskOpen, setNewTaskOpen] = useState(false);
@@ -202,7 +242,7 @@ export default function TaskList() {
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [taskSaveError, setTaskSaveError] = useState(null);
   const [isTaskMenuOpen, setIsTaskMenuOpen] = useState(false);
-  const taskMatchRef = useRef(null);
+  const [taskMatchTask, setTaskMatchTask] = useState(null);
   const saveTimerRef = useRef(null);
   const pendingSaveRef = useRef(null);
   const modalClosingRef = useRef(false);
@@ -229,8 +269,8 @@ export default function TaskList() {
   const taskContext = useMemo(() => ({ projects }), [projects]);
 
   const getActiveTask = useCallback(
-    () => taskMatchRef.current || draftTask,
-    [draftTask]
+    () => taskMatchTask || draftTask,
+    [taskMatchTask, draftTask]
   );
 
   const canEditTaskRow = useCallback(
@@ -364,11 +404,11 @@ export default function TaskList() {
   };
 
   const openTaskDetail = useCallback((task) => {
-    if (modalClosingRef.current || !canViewTaskDetail(user, task, taskContext)) return;
+    if (!canViewTaskDetail(user, task, taskContext)) return;
     const enriched = enrichTaskForUI(task);
     setDraftTask(enriched);
     setTaskDetailTab('details');
-    taskMatchRef.current = { ...enriched };
+    setTaskMatchTask({ ...enriched });
     const { picker, custom } = initDraftProjectPickerState(enriched, projects);
     setDraftProjectPicker(picker);
     setDraftCustomProject(custom);
@@ -394,7 +434,7 @@ export default function TaskList() {
       const base = synced ? { ...synced } : { ...prev, TỆP_ĐÍNH_KÈM: JSON.stringify(nextAttachments) };
       const enriched = enrichTaskForUI(base);
       if (synced) {
-        taskMatchRef.current = { ...synced };
+        setTaskMatchTask({ ...synced });
         const { picker, custom } = initDraftProjectPickerState(synced, projects);
         setDraftProjectPicker(picker);
         setDraftCustomProject(custom);
@@ -412,7 +452,7 @@ export default function TaskList() {
       setTasks(data || []);
       const synced = (data || []).find(t => t._rowIndex === updatedTask._rowIndex)
         || (data || []).find(t => isSameTask(t, updatedTask));
-      taskMatchRef.current = synced ? { ...synced } : { ...updatedTask };
+      setTaskMatchTask(synced ? { ...synced } : { ...updatedTask });
       if (synced) {
         setDraftTask(prev => {
           if (!prev || !isSameTask(prev, updatedTask)) return prev;
@@ -442,7 +482,7 @@ export default function TaskList() {
     setDraftProjectPicker('');
     setDraftCustomProject('');
     setDraftDirty(false);
-    taskMatchRef.current = null;
+    setTaskMatchTask(null);
     setTaskSaveError(null);
     setIsTaskMenuOpen(false);
     window.setTimeout(() => {
@@ -451,23 +491,23 @@ export default function TaskList() {
   }, [draftDirty]);
 
   const saveDraftTask = useCallback(async () => {
-    if (!draftTask || !taskMatchRef.current) return;
+    if (!draftTask || !taskMatchTask) return;
     if (!draftDirty) {
       requestCloseTaskDetail();
       return;
     }
     setIsSavingDraft(true);
     try {
-      const ok = await persistTaskUpdate(taskMatchRef.current, draftTask);
+      const ok = await persistTaskUpdate(taskMatchTask, draftTask);
       if (ok) requestCloseTaskDetail(true);
     } finally {
       setIsSavingDraft(false);
     }
-  }, [draftTask, draftDirty, persistTaskUpdate, requestCloseTaskDetail]);
+  }, [draftTask, draftDirty, taskMatchTask, persistTaskUpdate, requestCloseTaskDetail]);
 
   const updateDraftField = useCallback((field, value) => {
     if (!draftTask) return;
-    const activeTask = taskMatchRef.current || draftTask;
+    const activeTask = taskMatchTask || draftTask;
     if (field === 'TRẠNG_THÁI') {
       if (!canToggleTaskComplete(user, activeTask, taskContext)) return;
     } else if (field === 'PINNED') {
@@ -480,11 +520,11 @@ export default function TaskList() {
     if (!UI_ONLY_TASK_FIELDS.has(field)) {
       setDraftDirty(true);
     }
-  }, [draftTask, user, taskContext]);
+  }, [draftTask, taskMatchTask, user, taskContext]);
 
   const applyDraftProjectName = useCallback((projectName) => {
     if (!draftTask) return;
-    const activeTask = taskMatchRef.current || draftTask;
+    const activeTask = taskMatchTask || draftTask;
     if (!canEditTaskField(user, activeTask, 'TÊN_DỰ_ÁN', taskContext)) return;
     const trimmed = String(projectName || '').trim();
     const project = projects.find((p) => p.name === trimmed);
@@ -493,7 +533,7 @@ export default function TaskList() {
     updatedTask = enrichTaskForUI(applyTaskFieldUpdate(updatedTask, 'PROJECT_ID', projectId));
     setDraftTask(updatedTask);
     setDraftDirty(true);
-  }, [draftTask, user, taskContext, projects]);
+  }, [draftTask, taskMatchTask, user, taskContext, projects]);
 
   const handleDraftProjectPickerChange = useCallback((value) => {
     setDraftProjectPicker(value);
@@ -530,8 +570,8 @@ export default function TaskList() {
     }, 800);
   }, [persistTaskUpdate]);
 
-  const handleTaskUpdate = (task, field, value) => {
-    const activeTask = taskMatchRef.current || task;
+  const handleTaskUpdate = useCallback((task, field, value) => {
+    const activeTask = taskMatchTask || task;
     if (field === 'TRẠNG_THÁI') {
       if (!canToggleTaskComplete(user, activeTask, taskContext)) return;
     } else if (field === 'PINNED') {
@@ -543,22 +583,25 @@ export default function TaskList() {
     const updatedTask = applyTaskFieldUpdate(task, field, value);
 
     if (UI_ONLY_TASK_FIELDS.has(field)) {
-      setTasks(tasks.map(t => isSameTask(t, task) ? updatedTask : t));
+      setTasks((prev) => prev.map((t) => (isSameTask(t, task) ? updatedTask : t)));
       if (draftTask && isSameTask(draftTask, task)) setDraftTask(updatedTask);
       return;
     }
 
-    setTasks(tasks.map(t => isSameTask(t, task) ? { ...updatedTask } : t));
+    setTasks((prev) => prev.map((t) => (isSameTask(t, task) ? { ...updatedTask } : t)));
     if (draftTask && isSameTask(draftTask, task)) setDraftTask(updatedTask);
 
-    const originalForApi = taskMatchRef.current || task;
+    const originalForApi = taskMatchTask || task;
     queueTaskSave(originalForApi, updatedTask);
-  };
+  }, [user, taskContext, taskMatchTask, draftTask, queueTaskSave]);
 
-  const updateTaskStatus = (task, newStatus) => handleTaskUpdate(task, 'TRẠNG_THÁI', newStatus);
+  const updateTaskStatus = useCallback(
+    (task, newStatus) => handleTaskUpdate(task, 'TRẠNG_THÁI', newStatus),
+    [handleTaskUpdate],
+  );
 
   const handleTaskDelete = async (task) => {
-    if (!canDeleteTask(user, taskMatchRef.current || task, taskContext)) {
+    if (!canDeleteTask(user, taskMatchTask || task)) {
       alert('Chỉ người tạo task mới được xóa (Admin có toàn quyền)');
       return;
     }
@@ -597,11 +640,17 @@ export default function TaskList() {
           </div>
         </header>
 
-      {/* CONTENT AREA */}
-      <div className="flex-1 overflow-y-auto bg-[var(--bg-main)] p-4 md:p-6 pt-0 max-md:pb-28 mobile-content-compact">
+      {/* CONTENT AREA — mobile biểu đồ: khóa từ tìm kiếm trở lên, chỉ chart scroll */}
+      <div
+        className={`flex-1 min-h-0 bg-[var(--bg-main)] p-4 md:p-6 pt-0 max-md:pb-28 mobile-content-compact ${
+          MOBILE_FIXED_HEADER_VIEWS.has(viewMode)
+            ? 'max-md:flex max-md:flex-col max-md:overflow-hidden md:overflow-y-auto'
+            : 'overflow-y-auto'
+        }`}
+      >
         
-        {/* CONTROLS — mobile: chỉ cố định tab + tìm kiếm */}
-        <div className="max-md:sticky max-md:top-0 z-40 -mx-4 md:-mx-6 mb-3 space-y-2 bg-[var(--bg-main)] px-4 md:px-6 pt-2 pb-1.5 border-b border-[var(--border-main)]/60 max-md:shadow-sm">
+        {/* CONTROLS — mobile: cố định tab + tìm kiếm (APK) */}
+        <div className="max-md:sticky max-md:top-0 max-md:shrink-0 z-40 -mx-4 md:-mx-6 mb-3 space-y-2 bg-[var(--bg-main)] px-4 md:px-6 pt-2 pb-1.5 border-b border-[var(--border-main)]/60 max-md:shadow-sm">
         <div className="flex flex-col gap-2 md:flex-row md:justify-between md:items-center">
           <div className="flex bg-[var(--bg-panel)] p-1 rounded-md border border-[var(--border-main)] shadow-sm overflow-x-auto max-w-full">
             <button 
@@ -635,7 +684,7 @@ export default function TaskList() {
               <input 
                 type="text" 
                 placeholder="Tìm kiếm tác vụ..."
-                value={searchQuery}
+                value={effectiveSearchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-4 pr-10 py-2 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-md text-xs text-slate-200 focus:border-[#5252ff] outline-none w-64 transition-all"
               />
@@ -671,7 +720,7 @@ export default function TaskList() {
             <input
               type="text"
               placeholder="Tìm kiếm..."
-              value={searchQuery}
+              value={effectiveSearchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-3 pr-9 py-2 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-md text-xs text-slate-200 focus:border-[#5252ff] outline-none"
             />
@@ -694,8 +743,8 @@ export default function TaskList() {
         </div>
         </div>
 
-        {/* STAT CARDS — scroll cùng nội dung, không sticky */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-0 rounded-xl overflow-hidden border border-[var(--border-main)] bg-[var(--bg-panel)] shadow-sm mb-3 max-md:scale-[0.97] max-md:origin-top">
+        {/* STAT CARDS — ẩn trên mobile khi xem biểu đồ (gọn hơn) */}
+        <div className={`grid grid-cols-2 md:grid-cols-5 gap-0 rounded-xl overflow-hidden border border-[var(--border-main)] bg-[var(--bg-panel)] shadow-sm mb-3 max-md:scale-[0.97] max-md:origin-top ${MOBILE_FIXED_HEADER_VIEWS.has(viewMode) ? 'max-md:hidden' : ''}`}>
           <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
             <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#5252ff] shrink-0">
               <ClipboardList className="w-3.5 h-3.5" />
@@ -766,20 +815,40 @@ export default function TaskList() {
             ))}
           </div>
         )}
-        {viewMode === 'calendar' && (
-          <div className="rounded-xl border border-[var(--border-main)] bg-[var(--bg-panel)]/95 shadow-sm overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-[var(--border-main)]/60">
-              <h2 className="text-sm font-bold text-[var(--text-strong)] uppercase tracking-wider">
-                Tháng {new Date().getMonth() + 1} / {new Date().getFullYear()}
-              </h2>
-            </div>
-            <div className="grid grid-cols-7">
-              {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map(d => (
-                <div key={d} className="p-1.5 text-center text-[11px] font-bold text-slate-400 border-r border-[var(--border-main)]/30 uppercase last:border-r-0">
-                  {d}
-                </div>
-              ))}
-            </div>
+        {MOBILE_FIXED_HEADER_VIEWS.has(viewMode) ? (
+          <div className="max-md:flex-1 max-md:min-h-0 max-md:flex max-md:flex-col max-md:overflow-y-auto md:overflow-visible">
+            {loadError && !isLoading && (
+              <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <span>{loadError}</span>
+                <button
+                  type="button"
+                  className="shrink-0 rounded-md bg-[#5252ff] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#4141d6]"
+                  onClick={() => window.location.reload()}
+                >
+                  Tải lại
+                </button>
+              </div>
+            )}
+            {isLoading ? (
+              <div className="flex flex-1 justify-center items-center py-12 text-slate-400 text-sm">Đang tải công việc...</div>
+            ) : viewMode === 'chart' ? (
+              <LazySection label="biểu đồ">
+                <TaskListCharts tasks={processedTasks} chartStyles={chartStyles} />
+              </LazySection>
+            ) : null}
+          </div>
+        ) : (
+          <>
+        {loadError && !isLoading && (
+          <div className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200 flex flex-wrap items-center justify-between gap-2">
+            <span>{loadError}</span>
+            <button
+              type="button"
+              className="shrink-0 rounded-md bg-[#5252ff] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#4141d6]"
+              onClick={() => window.location.reload()}
+            >
+              Tải lại
+            </button>
           </div>
         )}
         {isLoading ? (
@@ -845,7 +914,6 @@ export default function TaskList() {
                   </thead>
                   <tbody className="divide-y divide-[var(--border-main)]/50 bg-[#0e1628]">
                     {processedTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((task) => {
-                      const taskEditable = canEditTaskRow(task);
                       const taskFullyEditable = canFullyEditTaskRow(task);
                       const canOpenTask = canViewTaskDetail(user, task, taskContext);
                       return (
@@ -985,14 +1053,18 @@ export default function TaskList() {
                   <div key={container} className="bg-[var(--bg-panel)] rounded-xl border border-[var(--border-main)] flex flex-col min-h-[200px] md:min-h-[calc(100vh-200px)] shadow-sm min-w-[280px] shrink-0 md:min-w-0 md:shrink">
                     <div className="p-2.5 space-y-2">
                       {processedTasks.filter(t => t.BỘ_CHỨA === container).map((task, idx) => {
-                        const taskEditable = canEditTaskRow(task);
+                        const rowCanEdit = canEditTask(user, task, taskContext);
                         const canOpenTask = canViewTaskDetail(user, task, taskContext);
                         return (
                         <div key={idx} className={`bg-[var(--bg-panel)] p-2.5 rounded-lg border border-[var(--border-main)] shadow-sm transition-all group ${canOpenTask ? 'hover:border-[#5252ff]/50 cursor-pointer' : ''}`} onClick={canOpenTask ? () => openTaskDetail(task) : undefined}>
                           <div className="flex items-start gap-2 mb-2">
                             <button
-                              className={!taskEditable ? 'opacity-40 pointer-events-none' : ''}
-                              onClick={(e) => { e.stopPropagation(); updateTaskStatus(task, task.computedStatus === 'Đã hoàn thành' ? '' : 'Đã hoàn thành'); }}
+                              className={!rowCanEdit ? 'opacity-40 pointer-events-none' : ''}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // eslint-disable-next-line react-hooks/refs -- chỉ chạy khi click
+                                updateTaskStatus(task, task.computedStatus === 'Đã hoàn thành' ? '' : 'Đã hoàn thành');
+                              }}
                             >
                               {task.computedStatus === 'Đã hoàn thành' ? <CheckCircle2 className="w-4 h-4 text-[#10b981] shrink-0 mt-0.5" /> : <Circle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />}
                             </button>
@@ -1055,18 +1127,40 @@ export default function TaskList() {
               
               const getDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
+              const taskRangeKeys = (t) => {
+                const startRaw = t.NGÀY_BẮT_ĐẦU_LOCAL || t.NGÀY_KẾT_THÚC_LOCAL;
+                const endRaw = t.NGÀY_KẾT_THÚC_LOCAL || t.NGÀY_BẮT_ĐẦU_LOCAL || startRaw;
+                const start = toDateKeyISO(startRaw);
+                const end = toDateKeyISO(endRaw) || start;
+                return { start, end };
+              };
+
               return (
                 <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] h-full flex flex-col shadow-2xl overflow-visible relative">
+                  <div className="px-4 py-2.5 border-b border-[var(--border-main)]/60 flex items-center justify-between gap-2">
+                    <h2 className="text-sm font-bold text-[var(--text-strong)] uppercase tracking-wider">
+                      Tháng {currentMonth + 1} / {currentYear}
+                    </h2>
+                    <span className="text-[10px] text-[var(--text-muted)]">
+                      {processedTasks.filter((t) => taskRangeKeys(t).start).length} tác vụ có ngày
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-7 border-b border-[var(--border-main)]/30">
+                    {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((d) => (
+                      <div key={d} className="p-1.5 text-center text-[11px] font-bold text-slate-400 border-r border-[var(--border-main)]/30 uppercase last:border-r-0">
+                        {d}
+                      </div>
+                    ))}
+                  </div>
                   <div className="flex flex-col flex-1 bg-[#0c1221]">
                     {weeks.map((week, wIdx) => {
                       const wStart = getDateStr(week[0]);
                       const wEnd = getDateStr(week[6]);
                       
                       const weekTasks = processedTasks.filter(t => {
-                        if (!t.NGÀY_BẮT_ĐẦU_LOCAL) return false;
-                        const tStart = t.NGÀY_BẮT_ĐẦU_LOCAL;
-                        const tEnd = t.NGÀY_KẾT_THÚC_LOCAL || tStart;
-                        return tStart <= wEnd && tEnd >= wStart;
+                        const { start, end } = taskRangeKeys(t);
+                        if (!start) return false;
+                        return start <= wEnd && end >= wStart;
                       });
 
                       weekTasks.sort((a, b) => compareDateStrings(a.NGÀY_BẮT_ĐẦU_LOCAL, b.NGÀY_BẮT_ĐẦU_LOCAL));
@@ -1076,11 +1170,9 @@ export default function TaskList() {
                         let placed = false;
                         for (let i = 0; i < slots.length; i++) {
                           const overlap = slots[i].some(existing => {
-                            const eStart = existing.NGÀY_BẮT_ĐẦU_LOCAL;
-                            const eEnd = existing.NGÀY_KẾT_THÚC_LOCAL || eStart;
-                            const tStart = t.NGÀY_BẮT_ĐẦU_LOCAL;
-                            const tEnd = t.NGÀY_KẾT_THÚC_LOCAL || tStart;
-                            return tStart <= eEnd && tEnd >= eStart;
+                            const e = taskRangeKeys(existing);
+                            const cur = taskRangeKeys(t);
+                            return cur.start <= e.end && cur.end >= e.start;
                           });
                           if (!overlap) {
                             slots[i].push(t);
@@ -1093,8 +1185,10 @@ export default function TaskList() {
                         }
                       });
 
+                      const weekMinH = Math.max(108, 40 + slots.length * 26);
+
                       return (
-                        <div key={wIdx} className="relative border-b border-[var(--border-main)]/30 min-h-[108px] flex">
+                        <div key={wIdx} className="relative border-b border-[var(--border-main)]/30 flex" style={{ minHeight: weekMinH }}>
                           {/* Background grid */}
                           <div className="absolute inset-0 grid grid-cols-7 pointer-events-none">
                             {week.map((d, i) => {
@@ -1115,20 +1209,20 @@ export default function TaskList() {
                           {/* Foreground tasks */}
                           <div className="relative w-full pt-8 pb-2 z-10">
                             {slots.map((rowTasks, rIdx) => (
-                              <div key={rIdx} className="relative h-5 mb-1">
+                              <div key={rIdx} className="relative h-6 mb-1.5">
                                 {rowTasks.map((t, tIdx) => {
-                                  const tStart = t.NGÀY_BẮT_ĐẦU_LOCAL;
-                                  const tEnd = t.NGÀY_KẾT_THÚC_LOCAL || tStart;
+                                  const { start: tStart, end: tEnd } = taskRangeKeys(t);
+                                  const tStartLabel = t.NGÀY_BẮT_ĐẦU_LOCAL || t.NGÀY_KẾT_THÚC_LOCAL;
+                                  const tEndLabel = t.NGÀY_KẾT_THÚC_LOCAL || tStartLabel;
                                   
                                   let startCol = week.findIndex(d => getDateStr(d) >= tStart);
-                                  if (startCol === -1 && tStart < wStart) startCol = 0; // Starts before this week
+                                  if (startCol === -1 && tStart < wStart) startCol = 0;
                                   
                                   let endCol = week.findIndex(d => getDateStr(d) === tEnd);
                                   if (endCol === -1) {
                                     if (tEnd > wEnd) endCol = 6;
                                     else {
-                                      // Find last day that is <= tEnd
-                                      for(let i=6; i>=0; i--) {
+                                      for (let i = 6; i >= 0; i--) {
                                         if (getDateStr(week[i]) <= tEnd) { endCol = i; break; }
                                       }
                                     }
@@ -1140,15 +1234,7 @@ export default function TaskList() {
                                   const leftPercent = (startCol / 7) * 100;
                                   const widthPercent = (colSpan / 7) * 100;
 
-                                  let bgClass = '';
-                                  let borderClass = '';
-                                  let textClass = '';
-                                  if (t.computedStatus === 'Đã hoàn thành') { bgClass='bg-[#10b981]/10'; borderClass='border-[#10b981]/30'; textClass='text-[#10b981] line-through'; }
-                                  else if (t.computedStatus === 'Trễ') { bgClass='bg-red-500/10'; borderClass='border-red-500/30'; textClass='text-red-400'; }
-                                  else if (t.computedStatus === 'Đang diễn ra') { bgClass='bg-[#3b82f6]/10'; borderClass='border-[#3b82f6]/30'; textClass='text-[#3b82f6]'; }
-                                  else { bgClass='bg-[#1e293b]/50'; borderClass='border-[#263554]'; textClass='text-slate-300'; }
-
-                                  const taskEditable = canEditTaskRow(t);
+                                  const { bg: bgClass, border: borderClass, text: textClass } = getCalendarTaskBarStyles(t.computedStatus);
                                   const canOpenTask = canViewTaskDetail(user, t, taskContext);
 
                                   return (
@@ -1156,7 +1242,7 @@ export default function TaskList() {
                                       key={tIdx} 
                                       className={`absolute h-full border ${bgClass} ${borderClass} rounded-md px-2 flex items-center transition-all shadow-sm ${canOpenTask ? 'cursor-pointer hover:opacity-80 hover:shadow-md hover:z-20' : ''}`}
                                       style={{ left: `calc(${leftPercent}% + 4px)`, width: `calc(${widthPercent}% - 8px)` }}
-                                      title={`${t.TÁC_VỤ}\nBắt đầu: ${tStart}\nKết thúc: ${tEnd}`}
+                                      title={`${t.TÁC_VỤ}\nBắt đầu: ${tStartLabel}\nKết thúc: ${tEndLabel}`}
                                       onClick={canOpenTask ? () => openTaskDetail(t) : undefined}
                                     >
                                       <div className={`text-[10px] font-semibold truncate ${textClass} flex items-center gap-1.5`}>
@@ -1177,118 +1263,8 @@ export default function TaskList() {
               );
             })()}
 
-            {/* CHART VIEW */}
-            {viewMode === 'chart' && (() => {
-              const statusData = [
-                { name: 'Chưa bắt đầu', value: processedTasks.filter(t => t.computedStatus === 'Chưa bắt đầu').length, color: '#a0a0ff' },
-                { name: 'Đang diễn ra', value: processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length, color: '#3b82f6' },
-                { name: 'Trễ', value: processedTasks.filter(t => t.computedStatus === 'Trễ').length, color: '#ef4444' },
-                { name: 'Đã hoàn thành', value: processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length, color: '#10b981' }
-              ].filter(d => d.value > 0);
-
-              const priorityData = ['Khẩn cấp', 'Important', 'Medium', 'Low'].map(p => {
-                const pts = processedTasks.filter(t => t.ƯU_TIÊN === p || (p === 'Khẩn cấp' && t.ƯU_TIÊN === 'Important'));
-                return {
-                  name: p,
-                  'Chưa bắt đầu': pts.filter(t => t.computedStatus === 'Chưa bắt đầu').length,
-                  'Đang diễn ra': pts.filter(t => t.computedStatus === 'Đang diễn ra').length,
-                  'Trễ': pts.filter(t => t.computedStatus === 'Trễ').length,
-                  'Đã hoàn thành': pts.filter(t => t.computedStatus === 'Đã hoàn thành').length
-                };
-              });
-
-              const assigneeData = buildAssigneeStatusChartData(processedTasks);
-
-              return (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full overflow-y-auto pb-4 pr-2">
-                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 shadow-lg">
-                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Trạng thái</h3>
-                    <div className="h-64 relative">
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none mb-6">
-                        <span className="text-3xl font-bold text-[var(--text-strong)]">{processedTasks.length}</span>
-                        <span className="text-[10px] text-[var(--text-muted)] uppercase">Tác vụ</span>
-                      </div>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={statusData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                            stroke="none"
-                          >
-                            {statusData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <RechartsTooltip
-                            contentStyle={chartStyles.tooltip}
-                            itemStyle={chartStyles.tooltipItem}
-                          />
-                          <Legend wrapperStyle={{ ...chartStyles.legend, paddingTop: '20px' }} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 lg:col-span-2 shadow-lg">
-                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Ưu tiên</h3>
-                    <div className="h-64 overflow-visible">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={priorityData} margin={chartStyles.margin}>
-                          <CartesianGrid strokeDasharray="3 3" stroke={chartStyles.grid} vertical={false} />
-                          <XAxis dataKey="name" stroke={chartStyles.axis} tick={{ ...chartStyles.tick, fontSize: 11 }} tickLine={false} />
-                          <YAxis stroke={chartStyles.axis} tick={{ ...chartStyles.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
-                          <RechartsTooltip
-                            cursor={chartStyles.cursor}
-                            contentStyle={chartStyles.tooltip}
-                            itemStyle={chartStyles.tooltipItem}
-                          />
-                          <Legend wrapperStyle={chartStyles.legend} />
-                          <Bar dataKey="Chưa bắt đầu" stackId="a" fill="#a0a0ff" radius={[0, 0, 4, 4]} maxBarSize={40} />
-                          <Bar dataKey="Đang diễn ra" stackId="a" fill="#3b82f6" maxBarSize={40} />
-                          <Bar dataKey="Trễ" stackId="a" fill="#ef4444" maxBarSize={40} />
-                          <Bar dataKey="Đã hoàn thành" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  <div className="border border-[var(--border-main)] rounded-lg bg-[var(--bg-panel)] p-4 col-span-1 lg:col-span-3 shadow-lg">
-                    <h3 className="text-[var(--text-strong)] font-bold mb-4 uppercase text-sm border-b border-[var(--border-main)] pb-2">Thành viên</h3>
-                    <div className="h-72 overflow-visible">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={assigneeData} margin={chartStyles.margin}>
-                          <CartesianGrid strokeDasharray="3 3" stroke={chartStyles.grid} vertical={false} />
-                          <XAxis
-                            dataKey="name"
-                            stroke={chartStyles.axis}
-                            tick={{ ...chartStyles.tick, fontSize: 11 }}
-                            tickLine={false}
-                            interval={0}
-                          />
-                          <YAxis stroke={chartStyles.axis} tick={{ ...chartStyles.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
-                          <RechartsTooltip
-                            cursor={chartStyles.cursor}
-                            contentStyle={chartStyles.tooltip}
-                            itemStyle={chartStyles.tooltipItem}
-                            labelFormatter={(_label, payload) => payload?.[0]?.payload?.fullName || _label}
-                          />
-                          <Legend wrapperStyle={chartStyles.legend} />
-                          <Bar dataKey="Chưa bắt đầu" stackId="a" fill="#a0a0ff" radius={[0, 0, 4, 4]} maxBarSize={40} />
-                          <Bar dataKey="Đang diễn ra" stackId="a" fill="#3b82f6" maxBarSize={40} />
-                          <Bar dataKey="Trễ" stackId="a" fill="#ef4444" maxBarSize={40} />
-                          <Bar dataKey="Đã hoàn thành" stackId="a" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
+          </>
+        )}
           </>
         )}
       </div>
@@ -1663,7 +1639,7 @@ export default function TaskList() {
                 <div className="ml-9 mb-8">
                   <TaskAttachmentsPanel
                     task={draftTask}
-                    originalTask={taskMatchRef.current}
+                    originalTask={taskMatchTask}
                     canUpload={canEditTaskRow(getActiveTask())}
                     onAttachmentsUpdated={handleAttachmentsUpdated}
                   />

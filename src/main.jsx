@@ -11,7 +11,15 @@ import { registerSW } from 'virtual:pwa-register'
 import PwaInstallPrompt from './components/PwaInstallPrompt.jsx'
 import { Capacitor } from '@capacitor/core'
 
-registerSW({ immediate: true })
+function registerServiceWorkerDeferred() {
+  const run = () => registerSW({ immediate: true });
+  if (typeof requestIdleCallback === 'function') {
+    requestIdleCallback(run, { timeout: 4000 });
+  } else {
+    setTimeout(run, 1500);
+  }
+}
+registerServiceWorkerDeferred()
 
 function applyViewportInsets() {
   const root = document.documentElement

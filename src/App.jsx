@@ -283,7 +283,6 @@ export default function App() {
     capacity: 1000,
     progress: 0,
     deviation: 0.0,
-    deviation: 0.0,
     kickoffDate: "",
     codDays: 90,
     codDate: "",
@@ -977,18 +976,16 @@ export default function App() {
                           priorityClass = "text-brand-green border-[#10b981]/30 bg-[#10b981]/5";
                       }
 
-                      // Map Risk badges — đồng bộ tone với module accordion
-                      let riskBadgeClass = "";
-                      switch (p.risk) {
-                        case "HIGH":
-                          riskBadgeClass = "text-red-500 bg-red-500/10 border border-red-500/25 font-semibold";
-                          break;
-                        case "MEDIUM":
-                          riskBadgeClass = "text-amber-600 bg-amber-500/10 border border-amber-500/25 font-semibold";
-                          break;
-                        default:
-                          riskBadgeClass = "text-emerald-600 bg-emerald-500/10 border border-emerald-500/25 font-semibold";
-                      }
+                      const riskBadgeClass = (() => {
+                        switch (p.risk) {
+                          case "HIGH":
+                            return "text-red-500 bg-red-500/10 border border-red-500/25 font-semibold";
+                          case "MEDIUM":
+                            return "text-amber-600 bg-amber-500/10 border border-amber-500/25 font-semibold";
+                          default:
+                            return "text-emerald-600 bg-emerald-500/10 border border-emerald-500/25 font-semibold";
+                        }
+                      })();
 
                       // Map issue color dots
                       let issueDotClass = "";

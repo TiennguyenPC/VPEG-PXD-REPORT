@@ -239,7 +239,7 @@ export function canCreateTask(user) {
 }
 
 /** Admin toàn quyền, còn lại chỉ người tạo task */
-export function canDeleteTask(user, task, context = {}) {
+export function canDeleteTask(user, task) {
   if (!task || !user) return false;
   if (isAdmin(user)) return true;
   return isTaskCreator(user, task);
