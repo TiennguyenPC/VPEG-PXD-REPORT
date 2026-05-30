@@ -500,18 +500,23 @@ Mỗi module là một **accordion** (mở/đóng). Click tiêu đề để mở
 
 Chuyển chế độ bằng các nút ở thanh công cụ phía trên.
 
-### 8.2. Thống kê nhanh (5 ô trên cùng)
+### 8.2. Thẻ thống kê (Stat cards) & Lọc nhanh
 
-- **Tổng task**
-- **Chưa bắt đầu**
+5 thẻ thống kê trên cùng hiển thị số lượng công việc theo trạng thái:
+- **Tổng công việc**
 - **Đang diễn ra**
 - **Trễ hạn**
 - **Hoàn thành**
+- **Ưu tiên cao**
 
-### 8.3. Tìm kiếm & lọc
+> **Mẹo Lọc Nhanh:** Bạn có thể **bấm trực tiếp** vào các thẻ thống kê này để ngay lập tức lọc danh sách công việc bên dưới theo trạng thái tương ứng.
 
-- Ô **Tìm kiếm:** theo tên task, mô tả, tên dự án.
-- Có thể vào từ Tổng quan kèm tham số `?q=...` hoặc `?project=...`.
+### 8.3. Tìm kiếm & lọc nâng cao
+
+- Ô **Tìm kiếm:** Gõ từ khóa để tìm theo tên tác vụ, mô tả hoặc tên dự án.
+- Nút **Lọc:** Nằm cạnh ô tìm kiếm, cho phép chọn menu trạng thái (Tất cả, Đang diễn ra, Trễ hạn, Hoàn thành, Ưu tiên cao) — tác dụng tương tự như bấm vào thẻ thống kê.
+- Lọc theo **Nhân sự**: Trong các menu chọn nhân sự (khi thêm/sửa tác vụ), nay đã có ô tìm kiếm giúp gõ tên để tìm nhanh người cần giao.
+- Có thể vào từ Tổng quan kèm tham số `?q=...` hoặc `?project=...` để lọc sẵn.
 
 ### 8.4. Thêm công việc mới *(PM/SM/Admin)*
 
