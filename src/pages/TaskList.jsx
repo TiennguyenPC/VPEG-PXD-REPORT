@@ -123,6 +123,8 @@ export default function TaskList() {
   const [searchQuery, setSearchQuery] = useState('');
   const effectiveSearchQuery = searchQuery || urlSearchQuery;
   const [sortConfig, setSortConfig] = useState({ key: 'computedStatus', direction: 'asc' });
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
 
   const handleSort = (key) => {
     let direction = 'asc';
@@ -138,7 +140,7 @@ export default function TaskList() {
   }, [tasks, user, projects]);
   
   // Process tasks dynamically for status
-  const processedTasks = useMemo(() => {
+  const searchedTasks = useMemo(() => {
     let filtered = filterTasksForUser(tasks, user, projects).map(enrichTaskForUI);
 
     if (effectiveSearchQuery) {
@@ -156,6 +158,19 @@ export default function TaskList() {
             (t.TÊN_DỰ_ÁN || '').toLowerCase().includes(projectFilter);
         }
       );
+    }
+    return filtered;
+  }, [tasks, user, projects, effectiveSearchQuery, searchParams]);
+
+  const processedTasks = useMemo(() => {
+    let filtered = [...searchedTasks];
+    
+    if (statusFilter !== 'all') {
+       if (statusFilter === 'priority') {
+         filtered = filtered.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao');
+       } else {
+         filtered = filtered.filter(t => t.computedStatus === statusFilter);
+       }
     }
     
     if (sortConfig.key) {
@@ -183,7 +198,7 @@ export default function TaskList() {
     }
     
     return filtered;
-  }, [tasks, user, projects, effectiveSearchQuery, sortConfig, searchParams]);
+  }, [searchedTasks, statusFilter, sortConfig]);
 
   // Cập nhật khi Overview / Auth prefetch xong (tránh kẹt "Đang tải" trên localhost)
   useEffect(() => {
@@ -690,10 +705,27 @@ export default function TaskList() {
               />
               <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
             </div>
-            <button className="bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-slate-200 border border-[var(--border-main)] px-4 py-2 rounded-md flex items-center gap-2 transition-all shadow-sm">
-              <Filter className="w-4 h-4" />
-              <span className="text-sm font-semibold">Lọc</span>
-            </button>
+            <div className="relative">
+              <button 
+                onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
+                className={`bg-[var(--bg-panel)] hover:bg-[var(--bg-hover)] text-slate-200 border border-[var(--border-main)] px-4 py-2 rounded-md flex items-center gap-2 transition-all shadow-sm ${statusFilter !== 'all' ? 'bg-[#5252ff]/10 border-[#5252ff]/30 text-[#a0a0ff]' : ''}`}
+              >
+                <Filter className="w-4 h-4" />
+                <span className="text-sm font-semibold">Lọc {statusFilter !== 'all' && '*'}</span>
+              </button>
+              {isFilterMenuOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsFilterMenuOpen(false)}></div>
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-[var(--bg-panel)] border border-[var(--border-main)] rounded-md shadow-xl py-1 z-50">
+                    <button className={`w-full text-left px-4 py-2 text-sm ${statusFilter === 'all' ? 'text-[#5252ff] bg-[#5252ff]/10 font-medium' : 'text-slate-300 hover:bg-[var(--bg-hover)]'}`} onClick={() => { setStatusFilter('all'); setIsFilterMenuOpen(false); }}>Tất cả</button>
+                    <button className={`w-full text-left px-4 py-2 text-sm ${statusFilter === 'Đang diễn ra' ? 'text-[#5252ff] bg-[#5252ff]/10 font-medium' : 'text-slate-300 hover:bg-[var(--bg-hover)]'}`} onClick={() => { setStatusFilter('Đang diễn ra'); setIsFilterMenuOpen(false); }}>Đang diễn ra</button>
+                    <button className={`w-full text-left px-4 py-2 text-sm ${statusFilter === 'Trễ' ? 'text-[#5252ff] bg-[#5252ff]/10 font-medium' : 'text-slate-300 hover:bg-[var(--bg-hover)]'}`} onClick={() => { setStatusFilter('Trễ'); setIsFilterMenuOpen(false); }}>Trễ hạn</button>
+                    <button className={`w-full text-left px-4 py-2 text-sm ${statusFilter === 'Đã hoàn thành' ? 'text-[#5252ff] bg-[#5252ff]/10 font-medium' : 'text-slate-300 hover:bg-[var(--bg-hover)]'}`} onClick={() => { setStatusFilter('Đã hoàn thành'); setIsFilterMenuOpen(false); }}>Hoàn thành</button>
+                    <button className={`w-full text-left px-4 py-2 text-sm border-t border-[var(--border-main)] mt-1 pt-2 ${statusFilter === 'priority' ? 'text-[#5252ff] bg-[#5252ff]/10 font-medium' : 'text-slate-300 hover:bg-[var(--bg-hover)]'}`} onClick={() => { setStatusFilter('priority'); setIsFilterMenuOpen(false); }}>Ưu tiên cao</button>
+                  </div>
+                </>
+              )}
+            </div>>
             {canCreateTask(user) && (
             <div className="flex rounded-md shadow-[0_0_15px_rgba(82,82,255,0.3)]">
               <button 
@@ -745,53 +777,68 @@ export default function TaskList() {
 
         {/* STAT CARDS — ẩn trên mobile khi xem biểu đồ (gọn hơn) */}
         <div className={`grid grid-cols-2 md:grid-cols-5 gap-0 rounded-xl overflow-hidden border border-[var(--border-main)] bg-[var(--bg-panel)] shadow-sm mb-3 max-md:scale-[0.97] max-md:origin-top ${MOBILE_FIXED_HEADER_VIEWS.has(viewMode) ? 'max-md:hidden' : ''}`}>
-          <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
+          <div 
+            onClick={() => setStatusFilter('all')}
+            className={`p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5 cursor-pointer transition-colors hover:bg-[var(--bg-hover)] ${statusFilter === 'all' ? 'bg-[var(--bg-hover)] shadow-[inset_0_2px_0_0_#5252ff]' : ''}`}
+          >
             <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#5252ff] shrink-0">
               <ClipboardList className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Tổng công việc</div>
-              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.length}</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{searchedTasks.length}</div>
             </div>
           </div>
-          <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
+          <div 
+            onClick={() => setStatusFilter('Đang diễn ra')}
+            className={`p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5 cursor-pointer transition-colors hover:bg-[var(--bg-hover)] ${statusFilter === 'Đang diễn ra' ? 'bg-[var(--bg-hover)] shadow-[inset_0_2px_0_0_#3b82f6]' : ''}`}
+          >
             <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#3b82f6] shrink-0">
               <PlayCircle className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Đang diễn ra</div>
-              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length}</div>
-              <div className="text-[8px] md:text-[9px] text-[#3b82f6] font-semibold mt-0.5 md:mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{searchedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length}</div>
+              <div className="text-[8px] md:text-[9px] text-[#3b82f6] font-semibold mt-0.5 md:mt-1">{Math.round((searchedTasks.filter(t => t.computedStatus === 'Đang diễn ra').length / (searchedTasks.length || 1)) * 100) || 0}% tổng công việc</div>
             </div>
           </div>
-          <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
+          <div 
+            onClick={() => setStatusFilter('Trễ')}
+            className={`p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5 cursor-pointer transition-colors hover:bg-[var(--bg-hover)] ${statusFilter === 'Trễ' ? 'bg-[var(--bg-hover)] shadow-[inset_0_2px_0_0_#ef4444]' : ''}`}
+          >
             <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-red-400 shrink-0">
               <Clock className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Trễ hạn</div>
-              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Trễ').length}</div>
-              <div className="text-[8px] md:text-[9px] text-red-400 font-semibold mt-0.5 md:mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Trễ').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{searchedTasks.filter(t => t.computedStatus === 'Trễ').length}</div>
+              <div className="text-[8px] md:text-[9px] text-red-400 font-semibold mt-0.5 md:mt-1">{Math.round((searchedTasks.filter(t => t.computedStatus === 'Trễ').length / (searchedTasks.length || 1)) * 100) || 0}% tổng công việc</div>
             </div>
           </div>
-          <div className="p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5">
+          <div 
+            onClick={() => setStatusFilter('Đã hoàn thành')}
+            className={`p-2 md:p-2.5 border-r border-[var(--border-main)] flex items-center gap-2 max-md:gap-1.5 cursor-pointer transition-colors hover:bg-[var(--bg-hover)] ${statusFilter === 'Đã hoàn thành' ? 'bg-[var(--bg-hover)] shadow-[inset_0_2px_0_0_#10b981]' : ''}`}
+          >
             <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-[#10b981] shrink-0">
               <CheckCircle2 className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Hoàn thành</div>
-              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length}</div>
-              <div className="text-[8px] md:text-[9px] text-[#10b981] font-semibold mt-0.5 md:mt-1">{Math.round((processedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{searchedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length}</div>
+              <div className="text-[8px] md:text-[9px] text-[#10b981] font-semibold mt-0.5 md:mt-1">{Math.round((searchedTasks.filter(t => t.computedStatus === 'Đã hoàn thành').length / (searchedTasks.length || 1)) * 100) || 0}% tổng công việc</div>
             </div>
           </div>
-          <div className="p-2 md:p-2.5 flex items-center gap-2 max-md:gap-1.5 col-span-2 md:col-span-1">
+          <div 
+            onClick={() => setStatusFilter('priority')}
+            className={`p-2 md:p-2.5 flex items-center gap-2 max-md:gap-1.5 col-span-2 md:col-span-1 cursor-pointer transition-colors hover:bg-[var(--bg-hover)] ${statusFilter === 'priority' ? 'bg-[var(--bg-hover)] shadow-[inset_0_2px_0_0_#eab308]' : ''}`}
+          >
             <div className="w-7 h-7 md:w-8 md:h-8 rounded-full bg-[#1e293b] border border-slate-700 flex items-center justify-center text-yellow-500 shrink-0">
               <Flag className="w-3.5 h-3.5" />
             </div>
             <div>
               <div className="text-[9px] md:text-[10px] text-slate-400 font-medium mb-0.5">Ưu tiên cao</div>
-              <div className="text-base md:text-lg font-bold text-white leading-none">{processedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length}</div>
-              <div className="text-[8px] md:text-[9px] text-yellow-500 font-semibold mt-0.5 md:mt-1">{Math.round((processedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length / (processedTasks.length || 1)) * 100)}% tổng công việc</div>
+              <div className="text-base md:text-lg font-bold text-white leading-none">{searchedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length}</div>
+              <div className="text-[8px] md:text-[9px] text-yellow-500 font-semibold mt-0.5 md:mt-1">{Math.round((searchedTasks.filter(t => t.ƯU_TIÊN === 'Important' || t.ƯU_TIÊN === 'Khẩn cấp' || t.ƯU_TIÊN === 'Cao').length / (searchedTasks.length || 1)) * 100) || 0}% tổng công việc</div>
             </div>
           </div>
         </div>
